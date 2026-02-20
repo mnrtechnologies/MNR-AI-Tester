@@ -1,24 +1,17 @@
-import logo from './logo.svg';
-import './App.css';
+import { Routes, Route } from "react-router-dom";
+
+import AutomationTesting from "./pages/Dashboard/Testing/AutomationTesting";
+import TestHome from "./pages/Dashboard/Testing/TestHome";
+import FunctionalTesting from "./pages/Dashboard/Testing/FunctionalTesting";
 
 function App() {
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <Routes>
+      {/* Automation Testing */}
+      <Route path="/" element={<TestHome />} />
+      <Route path="/automation-testing" element={<AutomationTesting />} />
+      <Route path="/functional-testing" element={<FunctionalTesting />} />
+    </Routes>
   );
 }
 
