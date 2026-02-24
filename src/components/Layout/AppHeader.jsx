@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { authService } from "../../services/authService";
 import { Sun, Settings, User, ChevronDown, Key, LogOut } from 'lucide-react';
 
 const AppHeader = () => {
@@ -18,10 +19,9 @@ const AppHeader = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    navigate("/login");
-  };
+const handleLogout = () => {
+  authService.logout();
+};
 
   return (
     <header className="h-16 border-b bg-white flex items-center justify-between px-6 sticky top-0 z-50">

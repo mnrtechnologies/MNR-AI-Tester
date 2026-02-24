@@ -1,63 +1,52 @@
-// src/services/authService.js
-const AUTH_BASE = process.env.REACT_APP_AUTH_URL || "http://localhost:4000/api/auth";
+import axios from "axios";
 
-// Helper to get the token for protected routes
-const getAuthHeaders = () => {
-  const token = localStorage.getItem("token");
-  return {
+const AUTH_BASE = process.env.REACT_APP_AUTH_URL || "http://localhost:4000/api";
+
+const api = axios.create({
+  baseURL: AUTH_BASE,
+  headers: {
     "Content-Type": "application/json",
-    ...(token ? { "Authorization": `Bearer ${token}` } : {})
-  };
-};
+  },
+});
+
+// attach token automatically
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem("token");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
 export const authService = {
-  // Public: Register
   register: async (userData) => {
-    const res = await fetch(`${AUTH_BASE}/register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(userData),
-    });
-    return res.json();
+    const res = await api.post("/register", userData);
+    return res.data;
   },
 
-  // Public: Login
   login: async (email, password) => {
-    const res = await fetch(`${AUTH_BASE}/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-    const data = await res.json();
-    if (data.success) {
-      localStorage.setItem("token", data.token); // Store JWT for protected routes
-      localStorage.setItem("user", JSON.stringify(data.user));
+    const res = await api.post("/login", { email, password });
+
+    if (res.data.success) {
+      localStorage.setItem("token", res.data.token);
+      localStorage.setItem("user", JSON.stringify(res.data.user));
     }
-    return data;
+
+    return res.data;
   },
 
-  // Protected: Get User Details
   getUserDetails: async () => {
-    const res = await fetch(`${AUTH_BASE}/getUserDetails`, {
-      method: "GET",
-      headers: getAuthHeaders(),
-    });
-    return res.json();
+    const res = await api.get("/getUserDetails");
+    return res.data;
   },
 
-  // Protected: Update Profile
   updateProfile: async (profileData) => {
-    const res = await fetch(`${AUTH_BASE}/update-profile`, {
-      method: "PUT",
-      headers: getAuthHeaders(),
-      body: JSON.stringify(profileData),
-    });
-    return res.json();
+    const res = await api.put("/update-profile", profileData);
+    return res.data;
   },
 
   logout: () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    localStorage.clear();
     window.location.href = "/login";
-  }
+  },
 };
