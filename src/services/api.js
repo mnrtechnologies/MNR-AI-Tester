@@ -1,6 +1,6 @@
 // for functional testing
 
-const API_BASE = process.env.REACT_APP_AI_TESTER_BACKEND_URL || "http://localhost:8000";
+const API_BASE = process.env.REACT_APP_AI_TESTER_BACKEND_URL || "http://localhost:4000";
 
 export const api = {
   startTest: async (mode, url, goal) => {

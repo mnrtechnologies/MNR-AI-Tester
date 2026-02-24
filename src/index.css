@@ -15,3 +15,42 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+
+/* --- CALENDAR FIXES (DATES & MONTHS) --- */
+.custom-calendar-container .react-calendar {
+  background: transparent !important;
+  border: none !important;
+  color: white !important;
+}
+
+/* Makes sure the Month/Year at the top is visible */
+.custom-calendar-container .react-calendar__navigation button {
+  color: white !important;
+  font-size: 1.1rem !important;
+  font-weight: bold !important;
+  background: none !important;
+}
+
+/* Makes sure the Weekdays (Sun, Mon) and Dates are visible */
+.custom-calendar-container .react-calendar__month-view__days__day,
+.custom-calendar-container .react-calendar__month-view__weekdays__weekday {
+  color: white !important;
+}
+
+.custom-calendar-container .react-calendar__month-view__weekdays__weekday abbr {
+  text-decoration: none !important;
+  text-transform: capitalize;
+}
+
+
+.custom-calendar-container .react-calendar__tile--active {
+  background: white !important;
+  color: #14b8a6 !important;
+  border-radius: 99px !important;
+}
+
+.custom-calendar-container .react-calendar__tile:hover {
+  background: rgba(255, 255, 255, 0.2) !important;
+  border-radius: 99px !important;
+}
