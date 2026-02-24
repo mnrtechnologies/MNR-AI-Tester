@@ -5,7 +5,7 @@ import { LayoutDashboard, Bot } from 'lucide-react';
 const Sidebar = () => {
   const menuItems = [
     { name: 'Dashboard', icon: <LayoutDashboard size={20}/>, path: '/dashboard' },
-    { name: 'SensuQ Auto Pilot', icon: <Bot size={20}/>, path: '/autopilot' },
+    { name: 'MNR AT Auto Pilot', icon: <Bot size={20}/>, path: '/autopilot' },
   ];
 
   return (
@@ -18,7 +18,7 @@ const Sidebar = () => {
               className={({ isActive }) =>
                 `w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
                   isActive
-                    ? 'bg-teal-50 text-teal-600 shadow-sm'
+                    ? 'bg-orange-50 text-orange-600 shadow-sm'
                     : 'text-gray-400 hover:bg-gray-50 hover:text-gray-600'
                 }`
               }

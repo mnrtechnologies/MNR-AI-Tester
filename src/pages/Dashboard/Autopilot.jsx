@@ -19,7 +19,7 @@ const AutoPilot = () => {
     <div className="p-6 max-w-[1400px] mx-auto space-y-6">
       {/* Page Header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-800">SensuQ Auto Pilot</h1>
+        <h1 className="text-2xl font-bold text-slate-800">MNR AT Auto Pilot</h1>
         <p className="text-sm text-slate-500">AI-Powered Autonomous Web Testing Platform</p>
         <div className="h-px w-full bg-slate-100 mt-4 border-b border-dashed border-slate-200"></div>
       </div>
@@ -130,12 +130,12 @@ const AutoPilot = () => {
       </div>
 
       {/* Live Execution---> */}
-      <div className="pt-8">
+      {/* <div className="pt-8">
         <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-4">
           🚀 Live Test Execution
         </h3>
         <div className="h-0.5 w-full bg-slate-100"></div>
-      </div>
+      </div> */}
     </div>
   );
 };

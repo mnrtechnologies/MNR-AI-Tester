@@ -14,16 +14,30 @@ const Signup = () => {
   });
 
   const [loading, setLoading] = useState(false);
+  const [emailError, setEmailError] = useState("");
 
   const handleChange = (e) => {
+    const { name, value } = e.target;
+
     setForm((prev) => ({
       ...prev,
-      [e.target.name]: e.target.value,
+      [name]: value,
     }));
+
+
+    if (name === "email") {
+      if (value && !value.endsWith("@mnrtechnologies.com")) {
+        setEmailError("Only @mnrtechnologies.com emails are allowed");
+      } else {
+        setEmailError("");
+      }
+    }
   };
 
   const onSignupSubmit = async (e) => {
     e.preventDefault();
+
+    if (emailError) return;
 
     if (
       !form.name ||
@@ -65,11 +79,11 @@ const Signup = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="w-full max-w-md p-8 bg-white rounded-2xl shadow-sm border">
+    <div className="min-h-screen flex items-center justify-center bg-orange-50">
+      <div className="w-full max-w-md p-8 bg-white rounded-2xl shadow-md border border-orange-100">
         <div className="text-center mb-10">
           <div className="font-bold text-3xl mb-2 text-slate-800">
-            sensu<span className="text-orange-500">Q</span>
+            MNR <span className="text-orange-500">AT</span>
           </div>
           <p className="text-gray-500">Create your account</p>
         </div>
@@ -83,11 +97,12 @@ const Signup = () => {
               type="text"
               name="name"
               onChange={handleChange}
-              className="w-full px-4 py-3 border rounded-xl outline-none focus:ring-2 focus:ring-teal-500"
+              className="w-full px-4 py-3 border border-orange-100 rounded-xl outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40"
               placeholder="John Doe"
             />
           </div>
 
+          {/* EMAIL */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Email
@@ -96,9 +111,18 @@ const Signup = () => {
               type="email"
               name="email"
               onChange={handleChange}
-              className="w-full px-4 py-3 border rounded-xl outline-none focus:ring-2 focus:ring-teal-500"
-              placeholder="john@company.com"
+              className={`w-full px-4 py-3 border rounded-xl outline-none focus:ring-2 
+              ${emailError 
+                ? "border-red-300 focus:ring-red-400 bg-red-50" 
+                : "border-orange-100 focus:ring-orange-400 bg-orange-50/40"}`}
+              placeholder="name@mnrtechnologies.com"
             />
+
+            {emailError && (
+              <p className="text-red-500 text-xs mt-1 font-medium">
+                {emailError}
+              </p>
+            )}
           </div>
 
           <div>
@@ -109,7 +133,7 @@ const Signup = () => {
               type="text"
               name="mobile"
               onChange={handleChange}
-              className="w-full px-4 py-3 border rounded-xl outline-none focus:ring-2 focus:ring-teal-500"
+              className="w-full px-4 py-3 border border-orange-100 rounded-xl outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40"
               placeholder="9876543210"
             />
           </div>
@@ -122,7 +146,7 @@ const Signup = () => {
               type="password"
               name="password"
               onChange={handleChange}
-              className="w-full px-4 py-3 border rounded-xl outline-none focus:ring-2 focus:ring-teal-500"
+              className="w-full px-4 py-3 border border-orange-100 rounded-xl outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40"
               placeholder="••••••••"
             />
           </div>
@@ -135,15 +159,15 @@ const Signup = () => {
               type="password"
               name="confirmPassword"
               onChange={handleChange}
-              className="w-full px-4 py-3 border rounded-xl outline-none focus:ring-2 focus:ring-teal-500"
+              className="w-full px-4 py-3 border border-orange-100 rounded-xl outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40"
               placeholder="••••••••"
             />
           </div>
 
           <button
             type="submit"
-            disabled={loading}
-            className="w-full bg-teal-500 text-white py-3 rounded-xl font-bold hover:bg-teal-600 transition shadow-md mt-4"
+            disabled={loading || emailError}
+            className="w-full bg-orange-500 text-white py-3 rounded-xl font-bold hover:bg-orange-600 transition shadow-md mt-4 disabled:opacity-50"
           >
             {loading ? "Creating..." : "Sign Up"}
           </button>
@@ -153,7 +177,7 @@ const Signup = () => {
           Already have an account?{" "}
           <Link
             to="/login"
-            className="text-teal-600 font-bold hover:underline"
+            className="text-orange-500 font-bold hover:underline"
           >
             Log in
           </Link>

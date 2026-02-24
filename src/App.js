@@ -34,6 +34,7 @@ function App() {
     <Routes>
       {/* --- PUBLIC ROUTES */}
       <Route path="/" element={<Home />} />
+        {/* Public auth pages */}
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
 
