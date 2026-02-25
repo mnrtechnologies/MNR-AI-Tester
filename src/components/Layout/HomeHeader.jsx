@@ -12,13 +12,13 @@ const HomeHeader = () => {
   const activeStyle = "bg-orange-500 text-white shadow-sm";
 
   return (
-    <nav className="flex items-center justify-between px-16 py-8 bg-transparent">
+    <nav className="flex items-center justify-between px-8 py-6 bg-transparent ">
       {/* Logo */}
-      <Link to="/" className="flex items-center gap-2">
+      <Link to="/" className="flex items-center gap-2 ">
         <img
           src={logo}
           alt="MNR AT"
-          className="h-20 w-auto object-contain rounded-2xl rounded-2xl p-1 border border-blue-900"
+          className="h-14 w-auto object-contain rounded-2xl  p-1 border border-blue-900 "
         />
       </Link>
 

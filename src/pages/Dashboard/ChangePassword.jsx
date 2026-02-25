@@ -38,7 +38,7 @@ const ChangePassword = () => {
     try {
       const token = localStorage.getItem("token");
       const response = await axios.post(
-        `${AUTH_BASE}/change-password`,
+        `${AUTH_BASE}/auth/change-password`,
         {
           oldPassword: formData.oldPassword,
           newPassword: formData.newPassword,
@@ -51,7 +51,7 @@ const ChangePassword = () => {
 
       if (response.data.success) {
         setMessage({ type: "success", text: "Password changed successfully!" });
-        setFormData({ oldPassword: "", newPassword: "", confirmPassword: "" }); // Clear form
+        setFormData({ oldPassword: "", newPassword: "", confirmPassword: "" });
       }
     } catch (error) {
       setMessage({

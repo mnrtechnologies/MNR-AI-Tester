@@ -15,9 +15,10 @@ const Profile = () => {
   });
 
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
   const [message, setMessage] = useState({ type: "", text: "" });
-  const [fetching, setFetching] = useState(true); // for initial load
 
+  //Fetch profile
   useEffect(() => {
     const fetchProfile = async () => {
       try {
@@ -29,15 +30,20 @@ const Profile = () => {
           return;
         }
 
-        const response = await axios.get(`${AUTH_BASE}/getUserDetails`, {
+        const response = await axios.get(`${AUTH_BASE}/auth/getUserDetails`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
         console.log("PROFILE RESPONSE:", response.data);
 
-        if (response.data.success) {
-          const user = response.data.user;
+        // Handle different backend response formats
+        const user =
+          response.data?.user ||
+          response.data?.data?.user ||
+          response.data?.data ||
+          response.data;
 
+        if (user) {
           setFormData({
             name: user.name || "",
             email: user.email || "",
@@ -57,6 +63,7 @@ const Profile = () => {
     fetchProfile();
   }, []);
 
+  //-- Handle input change
   const handleChange = (e) => {
     setFormData((prev) => ({
       ...prev,
@@ -64,6 +71,7 @@ const Profile = () => {
     }));
   };
 
+  // --Update profile
   const handleUpdate = async () => {
     if (!formData.name || !formData.email) {
       setMessage({ type: "error", text: "Name and Email are required." });
@@ -77,28 +85,33 @@ const Profile = () => {
       const token = localStorage.getItem("token");
 
       const response = await axios.put(
-        `${AUTH_BASE}/update-profile`,
+        `${AUTH_BASE}/auth/update-profile`,
         formData,
         {
           headers: { Authorization: `Bearer ${token}` },
-        }
+        },
       );
+
+      console.log("UPDATE RESPONSE:", response.data);
 
       if (response.data.success) {
         setMessage({ type: "success", text: response.data.message });
 
-        const updated = response.data.data;
+        const updatedUser =
+          response.data.data || response.data.user || response.data;
 
-        setFormData({
-          name: updated.name || "",
-          email: updated.email || "",
-          mobile: updated.mobile || "",
-          country: updated.country || "",
-          state: updated.state || "",
-          city: updated.city || "",
-        });
+        setFormData((prev) => ({
+          ...prev,
+          name: updatedUser.name || "",
+          email: updatedUser.email || "",
+          mobile: updatedUser.mobile || "",
+          country: updatedUser.country || "",
+          state: updatedUser.state || "",
+          city: updatedUser.city || "",
+        }));
       }
     } catch (error) {
+      console.error("Update error:", error);
       setMessage({
         type: "error",
         text: error.response?.data?.message || "Update failed",
@@ -118,7 +131,6 @@ const Profile = () => {
 
   return (
     <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100 max-w-5xl mx-auto mt-4">
-      {/* Message */}
       {message.text && (
         <div
           className={`mb-6 p-3 rounded text-sm font-bold ${
@@ -131,37 +143,33 @@ const Profile = () => {
         </div>
       )}
 
-      <div className="flex flex-col md:flex-row gap-8">
-        <div className="flex-1">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-            {["name", "email", "mobile", "country", "state", "city"].map(
-              (field) => (
-                <div className="space-y-1" key={field}>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">
-                    {field}
-                  </label>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {["name", "email", "mobile", "country", "state", "city"].map(
+          (field) => (
+            <div key={field}>
+              <label className="text-xs font-bold text-slate-400 uppercase">
+                {field}
+              </label>
 
-                  <input
-                    name={field}
-                    type={field === "email" ? "email" : "text"}
-                    value={formData[field]}
-                    onChange={handleChange}
-                    className="w-full border border-slate-200 p-2.5 rounded-lg text-sm focus:ring-1 focus:ring-teal-500 outline-none"
-                  />
-                </div>
-              )
-            )}
-          </div>
-
-          <button
-            onClick={handleUpdate}
-            disabled={loading}
-            className="bg-teal-500 hover:bg-teal-600 text-white text-xs font-bold px-8 py-3 rounded-lg mt-8 transition-all disabled:opacity-50"
-          >
-            {loading ? "Updating..." : "Save Changes"}
-          </button>
-        </div>
+              <input
+                name={field}
+                type={field === "email" ? "email" : "text"}
+                value={formData[field]}
+                onChange={handleChange}
+                className="w-full border border-slate-200 p-2.5 rounded-lg text-sm focus:ring-1 focus:ring-orange-500 outline-none"
+              />
+            </div>
+          ),
+        )}
       </div>
+
+      <button
+        onClick={handleUpdate}
+        disabled={loading}
+        className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold px-8 py-3 rounded-lg mt-8 transition-all disabled:opacity-50"
+      >
+        {loading ? "Updating..." : "Save Changes"}
+      </button>
     </div>
   );
 };

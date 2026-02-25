@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { apiConnector } from "../../services/apiConnector"; 
+import { apiConnector } from "../../services/apiConnector";
 import logo from "../../assets/MNR_AT.png";
+import { Eye, EyeOff } from "lucide-react";
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -16,6 +17,9 @@ const Signup = () => {
 
   const [loading, setLoading] = useState(false);
   const [emailError, setEmailError] = useState("");
+
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -67,7 +71,7 @@ const Signup = () => {
       }
     } catch (error) {
       alert(
-        error.response?.data?.message || "Signup failed. Please try again."
+        error.response?.data?.message || "Signup failed. Please try again.",
       );
     } finally {
       setLoading(false);
@@ -76,12 +80,7 @@ const Signup = () => {
 
   return (
     <div className="min-h-screen bg-orange-50">
-
-
-      <div
-        className="p-6 cursor-pointer"
-        onClick={() => navigate("/")}
-      >
+      <div className="p-6 cursor-pointer" onClick={() => navigate("/")}>
         <img
           src={logo}
           alt="MNR AT"
@@ -92,10 +91,9 @@ const Signup = () => {
       {/* Signup Card */}
       <div className="flex items-center justify-center px-4">
         <div className="w-full max-w-md p-8 bg-white rounded-2xl shadow-md border border-orange-100">
-          
           <div className="text-center mb-10">
-            <div className="font-bold text-3xl mb-2 text-slate-800">
-              MNR <span className="text-orange-500">AT</span>
+            <div className="font-bold text-xl mb-2 text-blue-950">
+              MNR <span className="text-orange-500 text-2xl">AT</span>
             </div>
             <p className="text-gray-500">Create your account</p>
           </div>
@@ -156,26 +154,48 @@ const Signup = () => {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Password
               </label>
-              <input
-                type="password"
-                name="password"
-                onChange={handleChange}
-                className="w-full px-4 py-3 border border-orange-100 rounded-xl outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40"
-                placeholder="••••••••"
-              />
+
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  name="password"
+                  onChange={handleChange}
+                  className="w-full px-4 py-3 border border-orange-100 rounded-xl outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 pr-12"
+                  placeholder="••••••••"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-orange-500"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Confirm Password
               </label>
-              <input
-                type="password"
-                name="confirmPassword"
-                onChange={handleChange}
-                className="w-full px-4 py-3 border border-orange-100 rounded-xl outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40"
-                placeholder="••••••••"
-              />
+
+              <div className="relative">
+                <input
+                  type={showConfirm ? "text" : "password"}
+                  name="confirmPassword"
+                  onChange={handleChange}
+                  className="w-full px-4 py-3 border border-orange-100 rounded-xl outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 pr-12"
+                  placeholder="••••••••"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setShowConfirm(!showConfirm)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-orange-500"
+                >
+                  {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
             <button

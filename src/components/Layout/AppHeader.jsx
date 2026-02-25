@@ -1,15 +1,14 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { authService } from "../../services/authService";
+import { useAuth } from "../../context/AuthContext";
 import { Sun, Settings, User, ChevronDown, Key, LogOut } from "lucide-react";
 import logo from "../../assets/MNR_AT.png";
 
 const AppHeader = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef(null); // Reference for "click-away" logic
+  const dropdownRef = useRef(null);
   const navigate = useNavigate();
 
-  // Handle closing the dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -20,23 +19,26 @@ const AppHeader = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleLogout = () => {
-    authService.logout();
+  const { handleLogout } = useAuth();
+
+  const logoutUser = () => {
+    handleLogout();
+    navigate("/");
   };
 
   return (
     <header className="h-16 border-b bg-white flex items-center justify-between px-6 sticky top-0 z-50">
       <div className="flex items-center gap-8">
-<div
-  className="flex items-center gap-2 cursor-pointer"
-  onClick={() => navigate("/")}
->
-  <img
-    src={logo}
-    alt="MNR AT"
-    className="h-14 w-auto object-contain rounded-2xl p-1 border border-blue-900"
-  />
-</div>
+        <div
+          className="flex items-center gap-2 cursor-pointer"
+          onClick={() => navigate("/dashboard")}
+        >
+          <img
+            src={logo}
+            alt="MNR AT"
+            className="h-14 w-auto object-contain rounded-2xl p-1 border border-blue-900"
+          />
+        </div>
         <nav className="text-sm text-gray-400">
           HOME /{" "}
           <span className="text-gray-900 font-medium uppercase text-[10px] tracking-widest">
@@ -46,15 +48,6 @@ const AppHeader = () => {
       </div>
 
       <div className="flex items-center gap-4">
-        {/* <div className="flex items-center gap-3 pr-4 border-r border-slate-100">
-          <button className="p-2 hover:bg-gray-50 rounded-lg text-slate-400 transition-colors">
-            <Sun size={20}/>
-          </button>
-          <button className="p-2 hover:bg-gray-50 rounded-lg text-slate-400 transition-colors">
-            <Settings size={20}/>
-          </button>
-        </div> */}
-
         {/* Dropdown Container */}
         <div className="relative" ref={dropdownRef}>
           <button
@@ -98,7 +91,7 @@ const AppHeader = () => {
               <div className="my-1 border-t border-slate-50"></div>
 
               <button
-                onClick={handleLogout}
+                onClick={logoutUser}
                 className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-400 hover:bg-red-50 transition-colors"
               >
                 <LogOut size={16} />
