@@ -8,6 +8,7 @@ app.use(express.json());
 app.use(cookieParser());
 const allowedOrigins = [
   "http://localhost:3000",
+  "http://localhost:12737",
   "https://aitesting.mnrpureai.com" 
 ];
 app.use(
