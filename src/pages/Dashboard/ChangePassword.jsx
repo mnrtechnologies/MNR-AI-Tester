@@ -94,7 +94,7 @@ const ChangePassword = () => {
               name="oldPassword"
               value={formData.oldPassword}
               onChange={handleChange}
-              className="w-full border border-slate-200 p-3 rounded-lg text-sm focus:ring-1 focus:ring-teal-500 outline-none transition-all"
+              className="w-full border border-slate-200 p-3 rounded-lg text-sm focus:ring-1 focus:ring-orange-500 outline-none transition-all"
               placeholder="••••••••"
             />
           </div>
@@ -108,7 +108,7 @@ const ChangePassword = () => {
               name="newPassword"
               value={formData.newPassword}
               onChange={handleChange}
-              className="w-full border border-slate-200 p-3 rounded-lg text-sm focus:ring-1 focus:ring-teal-500 outline-none transition-all"
+              className="w-full border border-slate-200 p-3 rounded-lg text-sm focus:ring-1 focus:ring-orange-500 outline-none transition-all"
               placeholder="••••••••"
             />
           </div>
@@ -122,7 +122,7 @@ const ChangePassword = () => {
               name="confirmPassword"
               value={formData.confirmPassword}
               onChange={handleChange}
-              className="w-full border border-slate-200 p-3 rounded-lg text-sm focus:ring-1 focus:ring-teal-500 outline-none transition-all"
+              className="w-full border border-slate-200 p-3 rounded-lg text-sm focus:ring-1 focus:ring-orange-500 outline-none transition-all"
               placeholder="••••••••"
             />
           </div>
@@ -131,7 +131,7 @@ const ChangePassword = () => {
             <button
               onClick={handlePasswordChange}
               disabled={loading}
-              className="bg-[#00c2a8] hover:bg-[#00ad96] text-white px-8 py-3 rounded-lg font-bold text-xs uppercase tracking-widest transition-all disabled:opacity-50"
+              className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 rounded-lg font-bold text-xs uppercase tracking-widest transition-all disabled:opacity-50"
             >
               {loading ? "Processing..." : "Change Password"}
             </button>
