@@ -27,12 +27,16 @@ const AppHeader = () => {
   return (
     <header className="h-16 border-b bg-white flex items-center justify-between px-6 sticky top-0 z-50">
       <div className="flex items-center gap-8">
-        <div
-          className="flex items-center gap-2 "
-          
-        >
-          <img src={logo} alt="MNR AT" className="h-9 w-auto object-contain" />
-        </div>
+<div
+  className="flex items-center gap-2 cursor-pointer"
+  onClick={() => navigate("/")}
+>
+  <img
+    src={logo}
+    alt="MNR AT"
+    className="h-14 w-auto object-contain rounded-2xl p-1 border border-blue-900"
+  />
+</div>
         <nav className="text-sm text-gray-400">
           HOME /{" "}
           <span className="text-gray-900 font-medium uppercase text-[10px] tracking-widest">
@@ -95,7 +99,7 @@ const AppHeader = () => {
 
               <button
                 onClick={handleLogout}
-                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-500 hover:bg-red-50 transition-colors"
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-400 hover:bg-red-50 transition-colors"
               >
                 <LogOut size={16} />
                 <span className="font-bold">Log Out</span>

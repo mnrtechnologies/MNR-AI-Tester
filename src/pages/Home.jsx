@@ -1,13 +1,7 @@
 import React from "react";
 import HomeHeader from "../components/Layout/HomeHeader.jsx";
-import {
-  MousePointer2,
-  Zap,
-  LayoutGrid,
-} from "lucide-react";
+import { MousePointer2, Zap, LayoutGrid } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-
-
 
 const Home = () => {
   const navigate = useNavigate();
@@ -22,21 +16,24 @@ const Home = () => {
         </h1>
 
         <p className="text-slate-500 text-lg mb-10 max-w-2xl">
-          <span className="font-semibold text-orange-500">MNR AT</span> is an
-          intelligent testing platform that autonomously performs functional,
-          API, UI/UX, database, regression, load and stress testing - detecting
-          defects before users do.
+          <span className="font-semibold">
+            <span className="text-blue-950 text-md ">MNR</span>{" "}
+            <span className="text-orange-600 text-xl ">AT</span>
+          </span>{" "}
+          is an intelligent testing platform that autonomously performs
+          functional, API, UI/UX, database, regression, load and stress testing
+          - detecting defects before users do.
         </p>
 
         {/* CTA */}
-<div className="flex gap-4 mb-12">
-  <button
-    onClick={() => navigate("/login")}
-    className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-xl font-bold transition"
-  >
-    Start Testing
-  </button>
-</div>
+        <div className="flex gap-4 mb-12">
+          <button
+            onClick={() => navigate("/login")}
+            className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-xl font-bold transition"
+          >
+            Start Testing
+          </button>
+        </div>
 
         {/* Hero Image */}
         {/* <div className="w-full max-w-4xl bg-orange-50 rounded-3xl p-4 border border-orange-100 shadow-sm">
@@ -48,7 +45,7 @@ const Home = () => {
 
       {/* KEYWORDS */}
       <section className="max-w-6xl mx-auto px-6 py-16 text-center">
-        <h3 className="text-2xl font-bold mb-6">
+        <h3 className="text-2xl font-bold mb-6 text-blue-950">
           Autonomous AI Testing Across the Entire Stack
         </h3>
 
@@ -86,7 +83,8 @@ const Home = () => {
           Features
         </span>
         <h2 className="text-4xl font-bold mt-2 mb-16">
-          Why Choose MNR AT?
+          Why Choose <span className="text-blue-900 text-3xl">MNR</span>{" "}
+          <span className="text-orange-600">AT</span>?
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -113,7 +111,11 @@ const Home = () => {
       {/* FUTURE */}
       <section className="text-center py-20 bg-orange-50">
         <h2 className="text-3xl font-bold mb-4">
-          The Future of Software Quality with MNR AT
+          The Future of Software Quality with{" "}
+          <span className="font-bold text-slate-900 text-2xl tracking-wide">
+            MNR
+          </span>{" "}
+          <span className="font-black text-orange-500 text-3xl italic">AT</span>
         </h2>
         <p className="text-slate-500 max-w-3xl mx-auto">
           MNR AT transforms quality assurance from manual and reactive into

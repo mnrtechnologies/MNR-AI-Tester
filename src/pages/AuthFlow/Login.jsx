@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiConnector } from '../../services/apiConnector';
 import { useAuth } from '../../context/AuthContext'; 
+import logo from "../../assets/MNR_AT.png";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -49,7 +50,20 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-orange-50">
+    <div className="min-h-screen flex items-center justify-center bg-orange-50 relative">
+
+
+      <div
+        className="absolute top-8 left-10 cursor-pointer"
+        onClick={() => navigate("/")}
+      >
+        <img
+          src={logo}
+          alt="MNR AT"
+          className="h-14 w-auto object-contain rounded-2xl p-1 border border-blue-900"
+        />
+      </div>
+
       <div className="w-full max-w-md p-8 bg-white rounded-2xl shadow-md border border-orange-100">
         
         <div className="text-center mb-10">

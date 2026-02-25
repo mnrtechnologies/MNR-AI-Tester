@@ -1,26 +1,27 @@
-import React from 'react';
-import { NavLink, Link } from 'react-router-dom';
-import { User } from 'lucide-react';
+import React from "react";
+import { NavLink, Link } from "react-router-dom";
+import { User } from "lucide-react";
 import logo from "../../assets/MNR_AT.png";
 
 const HomeHeader = () => {
+  const baseStyle =
+    "flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 font-medium text-sm";
+  const inactiveStyle =
+    "text-gray-500 hover:bg-orange-100 hover:text-slate-800";
 
-  const baseStyle = "flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 font-medium text-sm";
-    const inactiveStyle = "text-gray-500 hover:bg-orange-100 hover:text-slate-800";
-  
   const activeStyle = "bg-orange-500 text-white shadow-sm";
 
   return (
     <nav className="flex items-center justify-between px-16 py-8 bg-transparent">
       {/* Logo */}
       <Link to="/" className="flex items-center gap-2">
-        <img 
-          src={logo} 
-          alt="MNR AT" 
-          className="h-10 w-auto object-contain"
+        <img
+          src={logo}
+          alt="MNR AT"
+          className="h-20 w-auto object-contain rounded-2xl rounded-2xl p-1 border border-blue-900"
         />
       </Link>
-      
+
       {/* Navigation Options */}
       <div className="flex items-center gap-4">
         {/* <NavLink 
@@ -51,17 +52,21 @@ const HomeHeader = () => {
           Contact
         </NavLink> */}
 
-        <NavLink 
-          to="/signup" 
-          className={({ isActive }) => `${baseStyle} ${isActive ? activeStyle : inactiveStyle}`}
+        <NavLink
+          to="/signup"
+          className={({ isActive }) =>
+            `${baseStyle} ${isActive ? activeStyle : inactiveStyle}`
+          }
         >
           Sign up
         </NavLink>
 
         {/* The Log In Button with the Icon */}
-        <NavLink 
-          to="/login" 
-          className={({ isActive }) => `${baseStyle} ${isActive ? activeStyle : "bg-orange-500 text-white hover:bg-orange-600"}`}
+        <NavLink
+          to="/login"
+          className={({ isActive }) =>
+            `${baseStyle} ${isActive ? activeStyle : "bg-orange-500 text-white hover:bg-orange-600"}`
+          }
         >
           <User size={18} />
           <span>Log in</span>
