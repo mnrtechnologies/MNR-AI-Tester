@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { apiConnector } from "../../services/apiConnector";
 import { useAuth } from "../../context/AuthContext";
@@ -7,6 +7,16 @@ import { Eye, EyeOff } from "lucide-react";
 
 const Login = () => {
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    const user = localStorage.getItem("user");
+
+    if (token && user) {
+      navigate("/dashboard");
+    }
+  }, [navigate]);
+
   const { handleLogin } = useAuth();
 
   const [formData, setFormData] = useState({ email: "", password: "" });

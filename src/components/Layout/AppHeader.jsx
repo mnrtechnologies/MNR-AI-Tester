@@ -19,7 +19,7 @@ const AppHeader = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const { handleLogout } = useAuth();
+  const { handleLogout, user } = useAuth();
 
   const logoutUser = () => {
     handleLogout();
@@ -31,7 +31,7 @@ const AppHeader = () => {
       <div className="flex items-center gap-8">
         <div
           className="flex items-center gap-2 cursor-pointer"
-          onClick={() => navigate("/dashboard")}
+          onClick={() => navigate("/")}
         >
           <img
             src={logo}
@@ -52,11 +52,22 @@ const AppHeader = () => {
         <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className={`flex items-center gap-2 p-1 px-2 rounded-full border transition-all ${isOpen ? "border-orange-200 bg-orange-50/30" : "border-slate-100"}`}
+            className={`flex items-center gap-3 p-1 px-3 rounded-full border transition-all ${isOpen ? "border-orange-200 bg-orange-50/30" : "border-slate-100"}`}
           >
             <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center border border-orange-200">
               <User size={18} className="text-orange-600" />
             </div>
+
+            {/* USER name */}
+            <div className="flex flex-col text-left leading-tight">
+              <span className="text-xs font-semibold text-slate-800">
+                {user?.name || "User"}
+              </span>
+              {/* <span className="text-[10px] text-slate-400">
+                {user?.email?.split("@")[0]}
+              </span> */}
+            </div>
+
             <ChevronDown
               size={14}
               className={`text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
