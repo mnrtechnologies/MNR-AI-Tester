@@ -10,9 +10,8 @@ const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:12737",
   "https://mnr-at.com",
-  "https://mnr-ai-tester.onrender.com",
-  "mnr-at.com" ,
-  "www.mnr-at.com"
+  "https://www.mnr-at.com",
+  "https://mnr-ai-tester.onrender.com"
 ];
 app.use(
   cors({
