@@ -284,4 +284,27 @@ exports.updateBasicInfo = async (req, res) => {
   }
 };
 
+// Get all users with total count
+exports.getAllUser = async (req, res) => {
+  try {
+   
+    const allUsers = await User.find({}).select("-password -token");
+    const count = await User.countDocuments();
+
+    return res.status(200).json({
+      success: true,
+      message: "Users fetched successfully",
+      count,
+      users: allUsers,
+    });
+  } catch (error) {
+    console.error("Error fetching all users:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while fetching all users",
+      error: error.message,
+    });
+  }
+};
+
 
