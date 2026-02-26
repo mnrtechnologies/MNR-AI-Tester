@@ -9,7 +9,9 @@ app.use(cookieParser());
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:12737",
-  "https://mnr-at.com" 
+  "https://mnr-at.com",
+  "mnr-at.com" ,
+  "www.mnr-at.com"
 ];
 app.use(
   cors({
