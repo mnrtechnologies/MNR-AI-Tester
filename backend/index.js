@@ -22,7 +22,12 @@ app.use(helmet());
 app.use(compression()); 
 
 // Logging for development (standard format)
-if (process.env.NODE_ENV === "development") {
+// Check the environment
+if (process.env.NODE_ENV === "production") {
+  // 'combined' is the standard Apache-style logging for production
+  app.use(morgan("combined")); 
+} else {
+  // 'dev' is concise and color-coded for your terminal
   app.use(morgan("dev"));
 }
 
