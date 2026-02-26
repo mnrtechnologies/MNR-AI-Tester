@@ -1,76 +1,54 @@
 import React from "react";
-import { NavLink, Link } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { User } from "lucide-react";
 import logo from "../../assets/MNR_AT.png";
 
 const HomeHeader = () => {
-  const baseStyle =
-    "flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 font-medium text-sm";
-  const inactiveStyle =
-    "text-gray-500 hover:bg-orange-100 hover:text-slate-800";
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  const activeStyle = "bg-orange-500 text-white shadow-sm";
+  const handleScroll = (id) => {
+    if (location.pathname !== "/") {
+      navigate("/");
+      setTimeout(() => {
+        const element = document.getElementById(id);
+        if (element) element.scrollIntoView({ behavior: "smooth" });
+      }, 100);
+    } else {
+      const element = document.getElementById(id);
+      if (element) element.scrollIntoView({ behavior: "smooth" });
+    }
+  };
 
   return (
-    <nav className="flex items-center justify-between px-8 py-6 bg-transparent ">
-      {/* Logo */}
-      <Link to="/" className="flex items-center gap-2 ">
-        <img
-          src={logo}
-          alt="MNR AT"
-          className="h-14 w-auto object-contain rounded-2xl  p-1 border border-blue-900 "
-        />
+    <nav className="sticky top-0 z-50 flex items-center justify-between px-12 py-6 bg-white/80 backdrop-blur-md border-b border-orange-100">
+      {/* Brand Logo */}
+      <Link to="/" className="flex items-center">
+        <img src={logo} alt="MNR AT" className="h-10 w-auto object-contain" />
       </Link>
 
-      {/* Navigation Options */}
-      <div className="flex items-center gap-4">
-        {/* <NavLink 
-          to="/" 
-          className={({ isActive }) => `${baseStyle} ${isActive ? activeStyle : inactiveStyle}`}
-        >
-          Home
-        </NavLink> */}
+      {/* Navigation - Orange hover states */}
+      <div className="hidden md:flex items-center gap-10">
+        {["Home", "Features", "About", "Contact"].map((item) => (
+          <button 
+            key={item}
+            onClick={() => handleScroll(item.toLowerCase())}
+            className="text-sm font-semibold text-slate-500 hover:text-orange-600 transition-colors"
+          >
+            {item === "Features" ? "MNR AT" : item}
+          </button>
+        ))}
+      </div>
 
-        {/* <NavLink 
-          to="/" 
-          className={({ isActive }) => `${baseStyle} ${isActive ? activeStyle : inactiveStyle}`}
-        >
-          MNR-AT
-        </NavLink> */}
-
-        {/* <NavLink 
-          to="/about" 
-          className={({ isActive }) => `${baseStyle} ${isActive ? activeStyle : inactiveStyle}`}
-        >
-          About
-        </NavLink>
-
-        <NavLink 
-          to="/contact" 
-          className={({ isActive }) => `${baseStyle} ${isActive ? activeStyle : inactiveStyle}`}
-        >
-          Contact
-        </NavLink> */}
-
-        <NavLink
-          to="/signup"
-          className={({ isActive }) =>
-            `${baseStyle} ${isActive ? activeStyle : inactiveStyle}`
-          }
-        >
-          Sign up
-        </NavLink>
-
-        {/* The Log In Button with the Icon */}
-        <NavLink
+      <div className="flex items-center gap-8">
+        <Link to="/signup" className="text-sm font-medium text-slate-400 hover:text-orange-600">Sign up</Link>
+        <Link
           to="/login"
-          className={({ isActive }) =>
-            `${baseStyle} ${isActive ? activeStyle : "bg-orange-500 text-white hover:bg-orange-600"}`
-          }
+          className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 rounded-full text-sm font-bold transition-all shadow-lg shadow-orange-100"
         >
-          <User size={18} />
+          <User size={16} strokeWidth={3} />
           <span>Log in</span>
-        </NavLink>
+        </Link>
       </div>
     </nav>
   );

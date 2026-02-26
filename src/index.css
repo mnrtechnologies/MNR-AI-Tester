@@ -54,3 +54,67 @@ code {
   background: rgba(255, 255, 255, 0.2) !important;
   border-radius: 99px !important;
 }
+
+
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@layer utilities {
+  .hero-glass-container {
+    background: rgba(255, 255, 255, 0.4); /* Transparent white */
+    backdrop-filter: blur(16px) saturate(180%); /* The "Glass" effect */
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.6); /* Thin light border */
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.05);
+  }
+}
+
+/* Soft gradient background like the green UI */
+.hero-bg {
+  background: radial-gradient(
+      circle at 10% 20%,
+      rgba(249, 115, 22, 0.08),
+      transparent 40%
+    ),
+    linear-gradient(
+      135deg,
+      #fffaf5 0%,
+      #ffffff 40%,
+      #fff3e8 100%
+    );
+}
+
+
+/* Glass card (better version than your current one) */
+.hero-glass {
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 28px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.05);
+}
+
+
+/* Soft orange underline curve */
+.hero-curve {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    #f97316,
+    #fb923c,
+    #fdba74
+  );
+  opacity: 0.5;
+}
+
+
+/* Floating self-healing badge */
+.hero-badge {
+  background: white;
+  border-radius: 18px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+}
