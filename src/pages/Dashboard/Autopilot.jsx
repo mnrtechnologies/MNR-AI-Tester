@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import {
   Monitor, Play, Square, RotateCcw, Globe, Loader2, 
-  WifiOff, Activity, Brain, CheckCircle2, RefreshCw, Layers, Download
+  WifiOff, Activity, Brain, CheckCircle2, RefreshCw, Layers, Download, ClipboardCheck
 } from "lucide-react";
 
 const BACKEND_URL = process.env.REACT_APP_AI_TESTER_BACKEND_URL || "http://localhost:8000";
@@ -20,8 +20,9 @@ const AutoPilot = () => {
   const [currentUrl, setCurrentUrl] = useState("");
   const [progress, setProgress] = useState({ completed: 0, total: 0 });
   
-  // NEW: Report State
+  // Report State
   const [reportData, setReportData] = useState({ base64: null, url: null, filename: null });
+  const [copied, setCopied] = useState(false);
 
   const ws = useRef(null);
 
@@ -39,15 +40,39 @@ const AutoPilot = () => {
     } catch (e) { setBackendStatus("offline"); }
   };
 
-  // Logic to handle Base64 Download
+  // FIX: Local Blob Download (Bypasses 127.0.0.1 Refused connection)
   const downloadExcel = () => {
     if (reportData.base64) {
-      const link = document.createElement("a");
-      link.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${reportData.base64}`;
-      link.download = reportData.filename || "test_report.xlsx";
-      link.click();
-    } else if (reportData.url) {
-      window.open(reportData.url, "_blank");
+      try {
+        const byteCharacters = atob(reportData.base64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { 
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" 
+        });
+
+        const blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = blobUrl;
+        link.download = reportData.filename || `report_${new Date().getTime()}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(blobUrl);
+      } catch (error) {
+        console.error("Blob download failed:", error);
+      }
+    }
+  };
+
+  const copyBase64 = () => {
+    if (reportData.base64) {
+      navigator.clipboard.writeText(reportData.base64);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     }
   };
 
@@ -56,7 +81,7 @@ const AutoPilot = () => {
     try {
       setIsRunning(true);
       setIsDisconnected(false);
-      setReportData({ base64: null, url: null, filename: null }); // Reset report
+      setReportData({ base64: null, url: null, filename: null });
       setStatus("Initializing Pipeline...");
       setLiveImage(null);
 
@@ -98,11 +123,11 @@ const AutoPilot = () => {
       }
 
       if (data.type === "done") {
-        setStatus(data.message || "Pipeline Completed!");
+        setStatus(data.message || "Execution Finished");
         setIsRunning(false);
         
-        // NEW: Extract Excel Data from "done" message
-        if (data.excel_base64 || data.download_url) {
+        // Extract Excel Data from "done" message
+        if (data.excel_base64) {
           setReportData({
             base64: data.excel_base64,
             url: data.download_url,
@@ -127,8 +152,8 @@ const AutoPilot = () => {
 
   const convertToOrchestrator = async (id) => {
     try {
-      const res = await fetch(`${BACKEND_URL}/semantic/${id}/convert-to-orchestrator`, { method: "POST" });
-      if(res.ok) setStatus("✅ Tests Live in Orchestrator");
+      await fetch(`${BACKEND_URL}/semantic/${id}/convert-to-orchestrator`, { method: "POST" });
+      setStatus("✅ Tests Live in Orchestrator");
     } catch (e) { setStatus("⚠️ Conversion Failed"); }
   };
 
@@ -203,7 +228,7 @@ const AutoPilot = () => {
         )}
       </div>
 
-      {/* Command Center */}
+      {/* Bottom Command Center */}
       <div className="mt-8 bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-slate-200/50">
         <div className="flex flex-col lg:flex-row gap-4">
           <input
@@ -240,20 +265,22 @@ const AutoPilot = () => {
             </div>
           </div>
           
-          {/* NEW: Download Report Button appears when file is ready */}
-          {(reportData.base64 || reportData.url) && (
-            <button 
-              onClick={downloadExcel}
-              className="mt-4 sm:mt-0 px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold text-xs flex items-center gap-2 hover:bg-emerald-700 animate-bounce shadow-lg shadow-emerald-200"
-            >
-              <Download size={16} /> DOWNLOAD EXCEL REPORT
-            </button>
-          )}
-
-          {isRunning && mode === 'checking' && (
-             <div className="text-right mt-4 sm:mt-0">
-                <p className="text-sm font-mono font-bold text-blue-600">{progress.completed} / {progress.total || '∞'} URLs</p>
-             </div>
+          {/* Report Delivery Options */}
+          {reportData.base64 && (
+            <div className="flex gap-2 mt-4 sm:mt-0">
+              <button 
+                onClick={downloadExcel}
+                className="px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold text-xs flex items-center gap-2 hover:bg-emerald-700 shadow-lg shadow-emerald-200"
+              >
+                <Download size={16} /> DOWNLOAD EXCEL
+              </button>
+              <button 
+                onClick={copyBase64}
+                className={`px-4 py-3 rounded-xl font-bold text-xs flex items-center gap-2 transition-all ${copied ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}
+              >
+                <ClipboardCheck size={16} /> {copied ? 'COPIED!' : 'COPY DATA'}
+              </button>
+            </div>
           )}
         </div>
       </div>
