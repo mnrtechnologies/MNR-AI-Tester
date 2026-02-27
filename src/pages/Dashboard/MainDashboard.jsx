@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Calendar from "react-calendar";
-
+import axios from "axios";
 import "react-calendar/dist/Calendar.css";
 import {
   Users,
@@ -11,19 +11,56 @@ import {
   PieChart,
   History,
   Key,
-  UserPlus,
   Trash2,
   Edit3,
   ArrowRight,
 } from "lucide-react";
 
+const AUTH_BASE =
+  process.env.REACT_APP_AUTH_URL || "http://localhost:4000/api";
+
 const MainDashboard = () => {
   const [date, setDate] = useState(new Date());
+  const [onboardedCount, setOnboardedCount] = useState(0);
+
+
+useEffect(() => {
+  const fetchUsers = async () => {
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      console.warn("No token yet, skipping API call");
+      return;
+    }
+
+    try {
+      const response = await axios.get(
+        `${AUTH_BASE}/auth/get-all-users`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      const users =
+        response.data?.users ||
+        response.data?.data?.users ||
+        response.data?.data ||
+        response.data ||
+        [];
+
+      setOnboardedCount(Array.isArray(users) ? users.length : 0);
+    } catch (err) {
+      console.error("Failed to fetch onboarded users", err);
+    }
+  };
+
+  fetchUsers();
+}, []);
 
   const topStats = [
     {
       label: "On Boarded Users",
-      value: "5",
+      value: onboardedCount,
       color: "bg-orange-500",
       icon: <Users size={16} />,
     },

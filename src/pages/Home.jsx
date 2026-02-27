@@ -3,6 +3,8 @@ import { motion } from "framer-motion";
 import { Zap, Cpu, Layout, Globe, LineChart, Shield, Lock } from "lucide-react";
 import HomeHeader from "../components/Layout/HomeHeader";
 import heroImg from "../assets/homeImage.jpg";
+import ContactPage from "../components/UI/ContactPage";
+import { useNavigate } from "react-router-dom";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 50 },
@@ -10,6 +12,8 @@ const fadeUp = {
 };
 
 const Home = () => {
+  const navigate = useNavigate();
+
   return (
     <div className="overflow-x-hidden">
       <HomeHeader />
@@ -17,7 +21,6 @@ const Home = () => {
       {/* ================= HERO ================= */}
       <section id="home" className="hero-bg relative pt-36 pb-28">
         <div className="max-w-[1400px] mx-auto px-6 md:px-12 grid lg:grid-cols-12 gap-12 items-center">
-          
           {/* LEFT GLASS */}
           <motion.div
             variants={fadeUp}
@@ -37,18 +40,23 @@ const Home = () => {
             <div className="hero-curve w-[70%] mb-6" />
 
             <p className="text-slate-600 leading-relaxed mb-8">
-              Discover the future of software testing. MNR AT’s AI-driven platform
-              automates functional, UI, API, and regression workflows with
-              intelligent defect detection.
+              Discover the future of software testing.{" "}
+              <span className="text-blue-800 font-semibold">MNR</span>{" "}
+              <span className="text-orange-500 font-bold text-lg">AT</span>
+              ’s AI-driven platform automates functional, UI, API, and
+              regression workflows with intelligent defect detection.
             </p>
 
             <div className="flex gap-4 flex-wrap">
-              <button className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 rounded-full shadow-lg shadow-orange-200 transition active:scale-95">
+              <button
+                onClick={() =>
+                  document
+                    .getElementById("contact")
+                    ?.scrollIntoView({ behavior: "smooth" })
+                }
+                className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 rounded-full shadow-lg shadow-orange-200 transition active:scale-95"
+              >
                 Contact Us
-              </button>
-
-              <button className="border border-orange-200 text-orange-600 px-8 py-3 rounded-full hover:bg-orange-50 transition">
-                Learn More
               </button>
             </div>
           </motion.div>
@@ -71,8 +79,7 @@ const Home = () => {
               animate={{ y: [0, -12, 0] }}
               transition={{ repeat: Infinity, duration: 4 }}
               className="hero-badge absolute -bottom-6 left-10 flex items-center gap-3 p-4"
-            >
-            </motion.div>
+            ></motion.div>
           </motion.div>
         </div>
       </section>
@@ -133,68 +140,71 @@ const Home = () => {
             <p className="text-orange-500 uppercase tracking-widest text-xs font-bold mb-3">
               Capabilities
             </p>
-            <h2 className="text-3xl md:text-5xl font-black">Unlock the Power</h2>
+            <h2 className="text-3xl md:text-5xl font-black">
+              Unlock the Power of{" "}
+              <span className="text-orange-500">Automation Testing</span>
+            </h2>
           </motion.div>
 
           <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-8">
-            <Card icon={<Cpu />} title="Discovery" />
-            <Card icon={<Layout />} title="UI / UX" />
-            <Card icon={<Globe />} title="Cloud Native" />
-            <Card icon={<LineChart />} title="Load Testing" />
-            <Card icon={<Shield />} title="Regression" />
-            <Card icon={<Lock />} title="Enterprise Security" />
+            <Card
+              icon={<Cpu />}
+              title="Intelligent Discovery"
+              description="AI-driven requirement analysis, risk prioritization, and smart test coverage planning."
+            />
+
+            <Card
+              icon={<Layout />}
+              title="Experience Validation"
+              description="Autonomous UI, UX, accessibility, and visual regression testing across devices."
+            />
+
+            <Card
+              icon={<Globe />}
+              title="Cloud & DevOps Ready"
+              description="Seamless automation for cloud-native, microservices, and CI/CD pipelines."
+            />
+
+            <Card
+              icon={<LineChart />}
+              title="Performance Intelligence"
+              description="AI-powered load, stress, and scalability testing with predictive insights."
+            />
+
+            <Card
+              icon={<Shield />}
+              title="Self-Healing Automation"
+              description="Adaptive tests that evolve with application changes, reducing maintenance overhead."
+            />
+
+            <Card
+              icon={<Lock />}
+              title="Enterprise-Grade Security"
+              description="Secure, compliant, and scalable testing for mission-critical applications."
+            />
           </div>
         </div>
       </section>
 
       {/* ================= >>FOOTER <<================= */}
-      <footer id="contact" className="bg-slate-900 text-white px-6 md:px-12 py-24">
-        <div className="max-w-7xl mx-auto grid md:grid-cols-2 gap-14">
-          <motion.div variants={fadeUp} initial="hidden" whileInView="show">
-            <h2 className="text-3xl md:text-5xl font-bold mb-6">
-              The Future of Software Quality with MNR AT
-            </h2>
-            <p className="text-slate-300 italic mb-8">
-              MNR AT transforms quality assurance from manual and reactive into autonomous and predictive. Our AI-driven engine continuously discovers risks, prioritizes tests, and prevents production failures before they impact users.
-            </p>
-
-          </motion.div>
-
-          <motion.div
-            variants={fadeUp}
-            initial="hidden"
-            whileInView="show"
-            className="hero-glass p-10 rounded-3xl"
-          >
-            <h3 className="text-xl font-bold mb-6">Request Demo</h3>
-
-            <input
-              placeholder="Work Email"
-              className="w-full mb-4 p-3 rounded-xl bg-white/80 text-slate-900"
-            />
-
-            <textarea
-              placeholder="Tell us about your project..."
-              className="w-full mb-6 p-3 rounded-xl bg-white/80 text-slate-900"
-            />
-
-            <button className="w-full bg-orange-500 py-3 rounded-xl font-semibold hover:bg-orange-600 transition">
-              Submit
-            </button>
-          </motion.div>
-        </div>
-      </footer>
+      {/* ================= CONTACT ================= */}
+      <section id="contact">
+        <ContactPage />
+      </section>
     </div>
   );
 };
 
-const Card = ({ icon, title }) => (
+const Card = ({ icon, title, description }) => (
   <motion.div
     whileHover={{ y: -10 }}
-    className="bg-white p-8 rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl transition"
+    className="bg-white p-8 rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl transition h-full"
   >
     <div className="text-orange-500 mb-4">{icon}</div>
-    <h4 className="font-semibold">{title}</h4>
+
+    <h4 className="font-semibold mb-2">{title}</h4>
+
+    <p className="text-slate-500 text-sm leading-relaxed">{description}</p>
   </motion.div>
 );
 
