@@ -21,6 +21,8 @@ const AUTH_BASE = process.env.REACT_APP_AUTH_URL || "http://localhost:4000/api";
 const MainDashboard = () => {
   const [date, setDate] = useState(new Date());
   const [onboardedCount, setOnboardedCount] = useState(0);
+  const [users, setUsers] = useState([]);
+  const [hoveredCard, setHoveredCard] = useState(null);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -42,7 +44,7 @@ const MainDashboard = () => {
           response.data?.data ||
           response.data ||
           [];
-
+        setUsers(Array.isArray(users) ? users : []);
         setOnboardedCount(Array.isArray(users) ? users.length : 0);
       } catch (err) {
         console.error("Failed to fetch onboarded users", err);
@@ -54,6 +56,7 @@ const MainDashboard = () => {
 
   const topStats = [
     {
+      key: "users",
       label: "On Boarded Users",
       value: onboardedCount,
       color: "bg-orange-500",
@@ -86,15 +89,45 @@ const MainDashboard = () => {
         {topStats.map((stat, i) => (
           <div
             key={i}
-            className="bg-white p-4 rounded-xl shadow-sm border border-orange-100 flex justify-between items-center"
+            onMouseEnter={() => stat.key && setHoveredCard(stat.key)}
+            onMouseLeave={() => setHoveredCard(null)}
+            className="relative bg-white p-4 rounded-xl shadow-sm border border-orange-100 flex justify-between items-center"
           >
             <div>
               <p className="text-2xl font-bold text-slate-800">{stat.value}</p>
               <p className="text-xs text-slate-500 font-medium">{stat.label}</p>
             </div>
+
             <div className={`p-2 rounded-lg text-white ${stat.color}`}>
               {stat.icon}
             </div>
+
+            {/* ✅ Hover popup uses SAME API data */}
+            {hoveredCard === stat.key && stat.key === "users" && (
+              <div className="absolute top-full left-0 mt-2 w-60 max-h-64 overflow-y-auto bg-white border border-orange-100 rounded-lg shadow-lg p-3 z-50">
+                <p className="text-xs font-semibold text-slate-500 mb-2">
+                  Onboarded Users
+                </p>
+
+                {users.length === 0 ? (
+                  <p className="text-xs text-slate-400">No users found</p>
+                ) : (
+                  users.map((user, idx) => (
+                    <div
+                      key={idx}
+                      className="py-1 border-b last:border-none flex flex-col"
+                    >
+                      <span className="text-xs text-slate-800 font-medium">
+                        {user.name || "Unnamed"}
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        {user.email}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -219,112 +252,111 @@ const DynamicMonthlyChart = () => {
     { coverage: 97, defects: 85, saved: 100 },
   ]);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setData((prev) =>
+        prev.map((m) => ({
+          coverage: Math.min(
+            98,
+            Math.max(45, m.coverage + (Math.random() * 3 - 1.5)),
+          ),
+          defects: Math.max(
+            15,
+            Math.min(90, m.defects + (Math.random() * 6 - 3)),
+          ),
+          saved: Math.min(
+            95,
+            Math.max(25, m.saved + (Math.random() * 3 - 1.5)),
+          ),
+        })),
+      );
+    }, 3500);
 
-useEffect(() => {
-  const interval = setInterval(() => {
-    setData((prev) =>
-      prev.map((m) => ({
-        coverage: Math.min(
-          98,
-          Math.max(45, m.coverage + (Math.random() * 3 - 1.5))
-        ),
-        defects: Math.max(
-          15,
-          Math.min(90, m.defects + (Math.random() * 6 - 3))
-        ),
-        saved: Math.min(
-          95,
-          Math.max(25, m.saved + (Math.random() * 3 - 1.5))
-        ),
-      }))
-    );
-  }, 3500);
+    return () => clearInterval(interval);
+  }, []);
 
-  return () => clearInterval(interval);
-}, []);
+  return (
+    <div className="lg:col-span-2 bg-[#1e293b] rounded-2xl p-6 text-white shadow-xl">
+      <h3 className="flex items-center gap-2 font-medium mb-6 text-sm">
+        <BarChart3 size={18} className="text-orange-400" />
+        Autopilot AI Coverage • Defects Detected • Time Saved
+      </h3>
 
-return (
-  <div className="lg:col-span-2 bg-[#1e293b] rounded-2xl p-6 text-white shadow-xl">
-    <h3 className="flex items-center gap-2 font-medium mb-6 text-sm">
-      <BarChart3 size={18} className="text-orange-400" />
-      Autopilot AI Coverage • Defects Detected • Time Saved
-    </h3>
+      {/* Grid background */}
+      <div className="relative h-56">
+        <div className="absolute inset-0 flex flex-col justify-between text-[10px] text-slate-600">
+          {[100, 75, 50, 25, 0].map((v, i) => (
+            <div key={i} className="border-t border-slate-700/40" />
+          ))}
+        </div>
 
-    {/* Grid background */}
-    <div className="relative h-56">
-      <div className="absolute inset-0 flex flex-col justify-between text-[10px] text-slate-600">
-        {[100, 75, 50, 25, 0].map((v, i) => (
-          <div key={i} className="border-t border-slate-700/40" />
-        ))}
-      </div>
+        {/* Bars */}
+        <div className="h-full flex items-end justify-between gap-6 px-2 relative overflow-x-auto">
+          {data.map((month, i) => (
+            <div
+              key={i}
+              className="flex flex-col items-center gap-2 min-w-[70px]"
+            >
+              <div className="flex gap-2 items-end w-full justify-center h-40">
+                {/* AI Coverage */}
+                <div className="flex flex-col items-center justify-end h-full">
+                  <div
+                    className="w-4 bg-emerald-500 rounded-md transition-all duration-700"
+                    style={{ height: `${month.coverage}%` }}
+                  />
+                  <span className="text-[9px] text-emerald-400 mt-1">
+                    {Math.round(month.coverage)}%
+                  </span>
+                </div>
 
-      {/* Bars */}
-      <div className="h-full flex items-end justify-between gap-6 px-2 relative overflow-x-auto">
-        {data.map((month, i) => (
-          <div key={i} className="flex flex-col items-center gap-2 min-w-[70px]">
+                {/* Defects */}
+                <div className="flex flex-col items-center justify-end h-full">
+                  <div
+                    className="w-4 bg-orange-500 rounded-md transition-all duration-700"
+                    style={{ height: `${month.defects}%` }}
+                  />
+                  <span className="text-[9px] text-orange-300 mt-1">
+                    {Math.round(month.defects)}
+                  </span>
+                </div>
 
-           <div className="flex gap-2 items-end w-full justify-center h-40">
-
-              {/* AI Coverage */}
-             <div className="flex flex-col items-center justify-end h-full">
-                <div
-                  className="w-4 bg-emerald-500 rounded-md transition-all duration-700"
-                  style={{ height: `${month.coverage}%` }}
-                />
-                <span className="text-[9px] text-emerald-400 mt-1">
-                  {Math.round(month.coverage)}%
-                </span>
+                {/* Time Saved */}
+                <div className="flex flex-col items-center justify-end h-full">
+                  <div
+                    className="w-4 bg-blue-400 rounded-md transition-all duration-700"
+                    style={{ height: `${month.saved}%` }}
+                  />
+                  <span className="text-[9px] text-blue-300 mt-1">
+                    {Math.round(month.saved)}%
+                  </span>
+                </div>
               </div>
 
-              {/* Defects */}
-              <div className="flex flex-col items-center justify-end h-full">
-                <div
-                  className="w-4 bg-orange-500 rounded-md transition-all duration-700"
-                  style={{ height: `${month.defects}%` }}
-                />
-                <span className="text-[9px] text-orange-300 mt-1">
-                  {Math.round(month.defects)}
-                </span>
-              </div>
-
-              {/* Time Saved */}
-              <div className="flex flex-col items-center justify-end h-full">
-                <div
-                  className="w-4 bg-blue-400 rounded-md transition-all duration-700"
-                  style={{ height: `${month.saved}%` }}
-                />
-                <span className="text-[9px] text-blue-300 mt-1">
-                  {Math.round(month.saved)}%
-                </span>
-              </div>
-
+              <span className="text-[10px] text-slate-400 font-bold mt-2">
+                {["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG"][i]}
+              </span>
             </div>
+          ))}
+        </div>
+      </div>
 
-            <span className="text-[10px] text-slate-400 font-bold mt-2">
-              {["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG"][i]}
-            </span>
-          </div>
-        ))}
+      {/* Legend */}
+      <div className="flex gap-6 mt-5 text-xs text-slate-400">
+        <div className="flex items-center gap-2">
+          <span className="w-3 h-3 bg-emerald-500 rounded-sm" />
+          AI Coverage
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-3 h-3 bg-orange-500 rounded-sm" />
+          Defects Detected
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-3 h-3 bg-blue-400 rounded-sm" />
+          Time Saved
+        </div>
       </div>
     </div>
-
-    {/* Legend */}
-    <div className="flex gap-6 mt-5 text-xs text-slate-400">
-      <div className="flex items-center gap-2">
-        <span className="w-3 h-3 bg-emerald-500 rounded-sm" />
-        AI Coverage
-      </div>
-      <div className="flex items-center gap-2">
-        <span className="w-3 h-3 bg-orange-500 rounded-sm" />
-        Defects Detected
-      </div>
-      <div className="flex items-center gap-2">
-        <span className="w-3 h-3 bg-blue-400 rounded-sm" />
-        Time Saved
-      </div>
-    </div>
-  </div>
-);
+  );
 };
 
 const DynamicTraffic = () => {
@@ -336,10 +368,7 @@ const DynamicTraffic = () => {
   });
 
   const total =
-    traffic.organic +
-    traffic.direct +
-    traffic.referral +
-    traffic.paid;
+    traffic.organic + traffic.direct + traffic.referral + traffic.paid;
 
   const organic = (traffic.organic / total) * 100;
   const direct = (traffic.direct / total) * 100;
@@ -357,8 +386,6 @@ const DynamicTraffic = () => {
 
     return () => clearInterval(interval);
   }, []);
-
-
 
   return (
     <div className="bg-white rounded-2xl p-6 shadow-sm border border-orange-100 flex flex-col items-center">
@@ -414,7 +441,9 @@ const DynamicTraffic = () => {
         </svg>
 
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <p className="text-xl font-bold text-slate-800">{organic.toFixed(0)}%</p>
+          <p className="text-xl font-bold text-slate-800">
+            {organic.toFixed(0)}%
+          </p>
           <p className="text-xs text-slate-400">Organic</p>
         </div>
       </div>
@@ -425,7 +454,5 @@ const DynamicTraffic = () => {
     </div>
   );
 };
-
-
 
 export default MainDashboard;
