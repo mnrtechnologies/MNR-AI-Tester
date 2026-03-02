@@ -289,7 +289,7 @@ function LogPanel({ logs }) {
       ref={ref} 
       className="terminal-container" 
       // Set a fixed height here (e.g., 350px) to prevent it from growing
-      style={{ height: 450, overflowY: "auto" }} 
+      style={{ height: 550, overflowY: "auto" }} 
     >
       {logs.length === 0
         ? <div style={{ color: "#a1a1aa", fontSize: 13 }}>Waiting for output...<span className="font-mono" style={{ animation: "blink 1s step-end infinite" }}>_</span></div>

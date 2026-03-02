@@ -38,6 +38,8 @@ const MainDashboard = () => {
           headers: { Authorization: `Bearer ${token}` },
         });
 
+        console.log("users",response)
+
         const users =
           response.data?.users ||
           response.data?.data?.users ||
