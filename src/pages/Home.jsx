@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Zap, Cpu, Layout, Globe, LineChart, Shield, Lock } from "lucide-react";
 import HomeHeader from "../components/Layout/HomeHeader";
 import heroImg from "../assets/homeImage.jpg";
+import aiImg from "../assets/Intell_automation_image.jpg";
 import ContactPage from "../components/UI/ContactPage";
 import { useNavigate } from "react-router-dom";
 
@@ -103,7 +104,7 @@ const Home = () => {
 
         <div className="grid md:grid-cols-2 gap-14 items-center">
           <motion.img
-            src={heroImg}
+            src={aiImg}
             alt="features"
             className="rounded-3xl shadow-lg border border-white"
             variants={fadeUp}
@@ -121,7 +122,10 @@ const Home = () => {
               workflows accelerate your release cycle.
             </p>
 
-            <button className="bg-slate-900 text-white px-8 py-3 rounded-full font-semibold hover:bg-orange-600 transition">
+            <button
+              onClick={() => navigate("/signup")}
+              className="bg-slate-900 text-white px-8 py-3 rounded-full font-semibold hover:bg-orange-600 transition"
+            >
               Start your journey
             </button>
           </motion.div>
