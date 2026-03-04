@@ -23,6 +23,10 @@ const MainDashboard = () => {
   const [onboardedCount, setOnboardedCount] = useState(0);
   const [users, setUsers] = useState([]);
   const [hoveredCard, setHoveredCard] = useState(null);
+  const [projectUrl, setProjectUrl] = useState("");
+
+  const [organizations, setOrganizations] = useState([]);
+  const [projects, setProjects] = useState([]);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -38,14 +42,13 @@ const MainDashboard = () => {
           headers: { Authorization: `Bearer ${token}` },
         });
 
-        console.log("users",response)
-
         const users =
           response.data?.users ||
           response.data?.data?.users ||
           response.data?.data ||
           response.data ||
           [];
+
         setUsers(Array.isArray(users) ? users : []);
         setOnboardedCount(Array.isArray(users) ? users.length : 0);
       } catch (err) {
@@ -56,6 +59,23 @@ const MainDashboard = () => {
     fetchUsers();
   }, []);
 
+  useEffect(() => {
+    const storedTarget =
+      localStorage.getItem("targetUrl") || sessionStorage.getItem("targetUrl");
+
+    if (storedTarget) {
+      setProjectUrl(storedTarget);
+
+      // axios.get("/organizations")
+      setProjects([{ url: storedTarget }]);
+    }
+    // axios.get("/projects")
+    setOrganizations([{ name: "MNR Technologies Pvt. Ltd." }]);
+  }, []);
+
+  // const projects = JSON.parse(localStorage.getItem("projects")) || [];
+  // setProjectCount(projects.length);
+
   const topStats = [
     {
       key: "users",
@@ -65,20 +85,16 @@ const MainDashboard = () => {
       icon: <Users size={16} />,
     },
     {
-      label: "Mapped Users",
-      value: "2",
-      color: "bg-orange-400",
-      icon: <CheckCircle2 size={16} />,
-    },
-    {
+      key: "projects",
       label: "Projects",
-      value: "3",
+      value: projects.length,
       color: "bg-orange-300",
       icon: <LayoutGrid size={16} />,
     },
     {
+      key: "orgs",
       label: "Organizations",
-      value: "2",
+      value: organizations.length,
       color: "bg-orange-200",
       icon: <Network size={16} />,
     },
@@ -104,7 +120,7 @@ const MainDashboard = () => {
               {stat.icon}
             </div>
 
-            {/* ✅ Hover popup uses SAME API data */}
+            {/* USERS HOVER */}
             {hoveredCard === stat.key && stat.key === "users" && (
               <div className="absolute top-full left-0 mt-2 w-60 max-h-64 overflow-y-auto bg-white border border-orange-100 rounded-lg shadow-lg p-3 z-50">
                 <p className="text-xs font-semibold text-slate-500 mb-2">
@@ -130,6 +146,46 @@ const MainDashboard = () => {
                 )}
               </div>
             )}
+
+            {/* PROJECTS HOVER */}
+            {hoveredCard === stat.key && stat.key === "projects" && (
+              <div className="absolute top-full left-0 mt-2 w-60 bg-white border border-orange-100 rounded-lg shadow-lg p-3 z-50">
+                <p className="text-xs font-semibold text-slate-500 mb-2">
+                  Project URL
+                </p>
+
+                <span className="text-[11px] text-slate-800 break-all">
+                  {projects.map((p, i) => (
+                    <span
+                      key={i}
+                      className="text-[11px] text-slate-800 break-all block"
+                    >
+                      {p.url}
+                    </span>
+                  ))}
+                </span>
+              </div>
+            )}
+
+            {/* ORGANIZATION HOVER */}
+            {hoveredCard === stat.key && stat.key === "orgs" && (
+              <div className="absolute top-full left-0 mt-2 w-60 bg-white border border-orange-100 rounded-lg shadow-lg p-3 z-50">
+                <p className="text-xs font-semibold text-slate-500 mb-2">
+                  Organization
+                </p>
+
+                <span className="text-xs text-slate-800 font-medium">
+                  {organizations.map((org, i) => (
+                    <span
+                      key={i}
+                      className="text-xs text-slate-800 font-medium block"
+                    >
+                      {org.name}
+                    </span>
+                  ))}
+                </span>
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -151,6 +207,7 @@ const MainDashboard = () => {
               you by MNR Technologies Global Pvt. Ltd.
             </p>
           </div>
+
           <div className="w-32 h-32 bg-orange-50 rounded-2xl flex items-center justify-center p-4">
             <div className="text-orange-600 font-black text-xl italic tracking-tighter">
               MNR<span className="text-orange-400 text-2xl ">AT</span>
@@ -164,10 +221,12 @@ const MainDashboard = () => {
             alt="Autopilot"
             className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
           />
+
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent p-6 flex flex-col justify-end">
             <h3 className="text-xl font-bold text-white mb-2">
               MNR AT Autopilot
             </h3>
+
             <button className="flex items-center gap-2 bg-white/20 backdrop-blur-md text-white px-4 py-2 rounded-lg text-xs font-semibold hover:bg-white/30 transition-all w-fit">
               Explore Auto Pilot <ArrowRight size={14} />
             </button>
@@ -177,10 +236,7 @@ const MainDashboard = () => {
 
       {/* --- CHARTS SECTION --- */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Monthly Bar Chart */}
         <DynamicMonthlyChart />
-
-        {/* Traffic Sources */}
         <DynamicTraffic />
       </div>
 
@@ -200,6 +256,7 @@ const MainDashboard = () => {
           <h3 className="font-medium text-slate-700 mb-6 border-b pb-4">
             📚 Activity Log
           </h3>
+
           <div className="space-y-6">
             <ActivityItem
               bg="bg-orange-500"
@@ -207,12 +264,14 @@ const MainDashboard = () => {
               title="Super Admin logged in"
               time="03:30 PM"
             />
+
             <ActivityItem
               bg="bg-orange-400"
               icon={<Edit3 size={14} />}
               title="Updated user permissions"
               time="08:00 PM"
             />
+
             <ActivityItem
               bg="bg-red-500"
               icon={<Trash2 size={14} />}
@@ -225,7 +284,6 @@ const MainDashboard = () => {
     </div>
   );
 };
-
 const ActivityItem = ({ icon, bg, title, time }) => (
   <div className="flex items-start gap-4">
     <div
@@ -284,7 +342,6 @@ const DynamicMonthlyChart = () => {
         Autopilot AI Coverage • Defects Detected • Time Saved
       </h3>
 
-      {/* Grid background */}
       <div className="relative h-56">
         <div className="absolute inset-0 flex flex-col justify-between text-[10px] text-slate-600">
           {[100, 75, 50, 25, 0].map((v, i) => (
@@ -292,7 +349,6 @@ const DynamicMonthlyChart = () => {
           ))}
         </div>
 
-        {/* Bars */}
         <div className="h-full flex items-end justify-between gap-6 px-2 relative overflow-x-auto">
           {data.map((month, i) => (
             <div
@@ -300,7 +356,6 @@ const DynamicMonthlyChart = () => {
               className="flex flex-col items-center gap-2 min-w-[70px]"
             >
               <div className="flex gap-2 items-end w-full justify-center h-40">
-                {/* AI Coverage */}
                 <div className="flex flex-col items-center justify-end h-full">
                   <div
                     className="w-4 bg-emerald-500 rounded-md transition-all duration-700"
@@ -311,7 +366,6 @@ const DynamicMonthlyChart = () => {
                   </span>
                 </div>
 
-                {/* Defects */}
                 <div className="flex flex-col items-center justify-end h-full">
                   <div
                     className="w-4 bg-orange-500 rounded-md transition-all duration-700"
@@ -322,7 +376,6 @@ const DynamicMonthlyChart = () => {
                   </span>
                 </div>
 
-                {/* Time Saved */}
                 <div className="flex flex-col items-center justify-end h-full">
                   <div
                     className="w-4 bg-blue-400 rounded-md transition-all duration-700"
@@ -342,7 +395,6 @@ const DynamicMonthlyChart = () => {
         </div>
       </div>
 
-      {/* Legend */}
       <div className="flex gap-6 mt-5 text-xs text-slate-400">
         <div className="flex items-center gap-2">
           <span className="w-3 h-3 bg-emerald-500 rounded-sm" />

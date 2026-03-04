@@ -1,11 +1,15 @@
-import React from 'react';
-import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Bot } from 'lucide-react';
+import React from "react";
+import { NavLink } from "react-router-dom";
+import { LayoutDashboard, Bot } from "lucide-react";
 
 const Sidebar = () => {
   const menuItems = [
-    { name: 'Dashboard', icon: <LayoutDashboard size={20}/>, path: '/dashboard' },
-    { name: 'MNR AT Auto Pilot', icon: <Bot size={20}/>, path: '/autopilot' },
+    {
+      name: "Dashboard",
+      icon: <LayoutDashboard size={20} />,
+      path: "/dashboard",
+    },
+    { name: "MNR AT Auto Pilot", icon: <Bot size={20} />, path: "/autopilot" },
   ];
 
   return (
@@ -15,11 +19,26 @@ const Sidebar = () => {
           <li key={idx}>
             <NavLink
               to={item.path}
+              onClick={(e) => {
+                const running =
+                  localStorage.getItem("autopilotRunning") === "true";
+                const goingToAutopilot = item.path === "/autopilot";
+
+                if (running && !goingToAutopilot) {
+                  const confirmLeave = window.confirm(
+                    "An Autopilot test is currently running. Leaving this page may interrupt the process. Continue?",
+                  );
+
+                  if (!confirmLeave) {
+                    e.preventDefault();
+                  }
+                }
+              }}
               className={({ isActive }) =>
                 `w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
                   isActive
-                    ? 'bg-orange-50 text-orange-600 shadow-sm'
-                    : 'text-gray-400 hover:bg-gray-50 hover:text-gray-600'
+                    ? "bg-orange-50 text-orange-600 shadow-sm"
+                    : "text-gray-400 hover:bg-gray-50 hover:text-gray-600"
                 }`
               }
             >
