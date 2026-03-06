@@ -1139,6 +1139,7 @@ function PhaseValidation({ source }) {
   const [activeId, setActiveId] = useState(null);
   const [screenshot, setScreenshot] = useState(null);
   const [logs, setLogs] = useState([]);
+  const [summaries, setSummaries] = useState({});
   const wsRef = useRef(null);
   const knownIds = useRef(new Set());
   const activeWsRef = useRef(null);
@@ -1157,8 +1158,27 @@ function PhaseValidation({ source }) {
         setTests((p) => [...p, { id, status: d[id].status }]);
         pushLog(`Task initialized: ${id}`, "cyan");
       });
-      setTests((p) =>
-        p.map((t) => ({ ...t, status: d[t.id]?.status || t.status })),
+      setTests(p =>
+        p.map(t => {
+          const newStatus = d[t.id]?.status || t.status;
+
+          // If just completed and summary not fetched yet
+          if (newStatus === "completed" && !summaries[t.id]) {
+            fetch(`${API}/tests/${t.id}/status`)
+              .then(r => r.json())
+              .then(data => {
+                if (data.summary) {
+                  setSummaries(prev => ({
+                    ...prev,
+                    [t.id]: data.summary ?? "No summary available"
+                  }));
+                }
+              })
+              .catch(() => {});
+          }
+
+          return { ...t, status: newStatus };
+        })
       );
     } catch {}
   }, 4000);
@@ -1288,121 +1308,149 @@ function PhaseValidation({ source }) {
             )}
           </div>
 
-          <div
-            style={{
-              maxHeight: 280,
-              overflowY: "auto",
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-              paddingRight: 4,
-            }}
-          >
-            {tests.map((t) => (
-              <div
-                key={t.id}
-                className={cx("test-item", t.id === activeId ? "active" : "")}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: 16,
-                  }}
-                >
-                  {t.status === "completed" ? (
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke={C.green}
-                      strokeWidth="3"
-                    >
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                  ) : t.status === "failed" ? (
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke={C.red}
-                      strokeWidth="3"
-                    >
-                      <line x1="18" y1="6" x2="6" y2="18" />
-                      <line x1="6" y1="6" x2="18" y2="18" />
-                    </svg>
-                  ) : t.status === "running" ? (
-                    <span
-                      className="spinner"
-                      style={{
-                        width: 12,
-                        height: 12,
-                        borderWidth: "2px",
-                        borderColor: `transparent transparent ${C.accent} ${C.accent}`,
-                      }}
-                    />
-                  ) : (
-                    <div
-                      style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: "50%",
-                        background: C.muted,
-                      }}
-                    />
-                  )}
-                </div>
-                <span
-                  style={{
-                    color: t.id === activeId ? "#000000" : C.muted,
-                    flex: 1,
-                    fontSize: 13,
-                  }}
-                  className="font-mono"
-                >
-                  {t.id}
-                </span>
-                <span
-                  className={cx(
-                    "badge",
-                    t.status === "completed"
-                      ? "badge-done"
-                      : t.status === "failed"
-                        ? "badge-failed"
-                        : t.status === "running"
-                          ? "badge-running"
-                          : "badge-idle",
-                  )}
-                  style={{ fontSize: 10, padding: "2px 8px" }}
-                >
-                  {t.status}
-                </span>
-              </div>
-            ))}
-            {tests.length === 0 && (
-              <div
-                style={{
-                  color: C.muted,
-                  fontSize: 13,
-                  padding: "16px",
-                  textAlign: "center",
-                  border: `1px dashed ${C.border}`,
-                  borderRadius: 8,
-                }}
-              >
-                Orchestrator is preparing tests...
-                <span
-                  className="font-mono"
-                  style={{ animation: "blink 1s step-end infinite" }}
-                >
-                  _
-                </span>
-              </div>
-            )}
-          </div>
+  <div
+  style={{
+    maxHeight: 280,
+    overflowY: "auto",
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+    paddingRight: 4,
+  }}
+>
+  {tests.map((t) => (
+    <div
+      key={t.id}
+      className={cx("test-item", t.id === activeId ? "active" : "")}
+      style={{
+        display: "flex",
+        flexDirection: "column", // Changed to column to stack header and summary
+        gap: 4,
+        padding: "8px 12px", // Added padding for better containment
+      }}
+    >
+      {/* Test Header: Icon, ID, and Badge */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 16,
+          }}
+        >
+          {t.status === "completed" ? (
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={C.green}
+              strokeWidth="3"
+            >
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          ) : t.status === "failed" ? (
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={C.red}
+              strokeWidth="3"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          ) : t.status === "running" ? (
+            <span
+              className="spinner"
+              style={{
+                width: 12,
+                height: 12,
+                borderWidth: "2px",
+                borderColor: `transparent transparent ${C.accent} ${C.accent}`,
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                background: C.muted,
+              }}
+            />
+          )}
+        </div>
+        
+        <span
+          style={{
+            color: t.id === activeId ? "#000000" : C.muted,
+            flex: 1,
+            fontSize: 13,
+          }}
+          className="font-mono"
+        >
+          {t.id}
+        </span>
+
+        <span
+          className={cx(
+            "badge",
+            t.status === "completed"
+              ? "badge-done"
+              : t.status === "failed"
+              ? "badge-failed"
+              : t.status === "running"
+              ? "badge-running"
+              : "badge-idle"
+          )}
+          style={{ fontSize: 10, padding: "2px 8px" }}
+        >
+          {t.status}
+        </span>
+      </div>
+
+      {/* Summary Section: Appears only when completed and summary exists */}
+      {t.status === "completed" && summaries[t.id] && (
+        <div
+          style={{
+            marginTop: 4,
+            marginLeft: 26, // Aligns summary text under the ID (past the icon)
+            fontSize: 11,
+            color: C.green,
+            lineHeight: 1.6,
+          }}
+        >
+          {summaries[t.id]}
+        </div>
+      )}
+    </div>
+  ))}
+
+  {tests.length === 0 && (
+    <div
+      style={{
+        color: C.muted,
+        fontSize: 13,
+        padding: "16px",
+        textAlign: "center",
+        border: `1px dashed ${C.border}`,
+        borderRadius: 8,
+      }}
+    >
+      Orchestrator is preparing tests...
+      <span
+        className="font-mono"
+        style={{ animation: "blink 1s step-end infinite" }}
+      >
+        _
+      </span>
+    </div>
+  )}
+</div>
+
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
