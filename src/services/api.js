@@ -1,37 +1,25 @@
-// for functional testing
+const BASE_URL = process.env.REACT_APP_AUTH_URL;
+//const AI_BASE_URL = process.env.REACT_APP_AI_TESTER_BACKEND_URL ;
 
-const API_BASE = process.env.REACT_APP_AI_TESTER_BACKEND_URL || "http://localhost:4000";
+const AUTH_PATH = `${BASE_URL}/auth`;
 
-export const api = {
-  startTest: async (mode, url, goal) => {
-    const res = await fetch(`${API_BASE}/tests/start`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode, url, goal, steps: [], headless: true }),
-    });
-    return res.json();
-  },
+export const endpoints = {
+  // AUTH (Public)
+  SIGNUP_API: `${AUTH_PATH}/signup`,
+  LOGIN_API: `${AUTH_PATH}/login`,
+  
+  // PASSWORD RESET (Public)
+  RESETPASSTOKEN_API: `${AUTH_PATH}/reset-password-token`,
+  RESET_PASSWORD_API: `${AUTH_PATH}/reset-password`,
 
-  getStatus: async (testId) => {
-    const res = await fetch(`${API_BASE}/tests/${testId}/status`);
-    return res.json();
-  },
+  // USER PROFILE (Protected - Requires Auth Middleware)
+  GET_USER_DETAILS_API: `${AUTH_PATH}/getUserDetails`, 
+  UPDATE_INFO_API: `${AUTH_PATH}/update-profile`, 
+  GET_ALL_USERS_API: `${AUTH_PATH}/get-all-users`, 
+  CHANGED_PASSWORD_API: `${AUTH_PATH}/change-password`,
+  
+};
 
-  getReport: async (testId) => {
-    const res = await fetch(`${API_BASE}/tests/${testId}/report`);
-    return res.json();
-  },
+export const aiEndpoints = {
 
-  checkWaiting: async (testId) => {
-    const res = await fetch(`${API_BASE}/tests/${testId}/waiting`);
-    return res.json();
-  },
-
-  sendInput: async (testId, elementId, value) => {
-    return fetch(`${API_BASE}/tests/${testId}/input`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ element_id: elementId, value }),
-    });
-  },
 };

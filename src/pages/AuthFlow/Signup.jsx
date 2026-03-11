@@ -1,11 +1,17 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { apiConnector } from "../../services/apiConnector";
+import { useDispatch, useSelector } from "react-redux"; // Added Redux hooks
+import { signUp } from "../../services/operations/authAPIs"; // Import Redux action
 import logo from "../../assets/MNR_AT.png";
 import { Eye, EyeOff } from "lucide-react";
+import { toast } from "react-hot-toast";
 
 const Signup = () => {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
+
+  // Get loading state from Redux
+  const { loading } = useSelector((state) => state.auth);
 
   const [form, setForm] = useState({
     name: "",
@@ -15,11 +21,11 @@ const Signup = () => {
     mobile: "",
   });
 
-  const [loading, setLoading] = useState(false);
   const [emailError, setEmailError] = useState("");
-
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+
+  const { name, email, password, confirmPassword, mobile } = form;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -39,43 +45,25 @@ const Signup = () => {
     }
   };
 
-  const onSignupSubmit = async (e) => {
+  const onSignupSubmit = (e) => {
     e.preventDefault();
 
     if (emailError) return;
 
-    if (
-      !form.name ||
-      !form.email ||
-      !form.password ||
-      !form.confirmPassword ||
-      !form.mobile
-    ) {
-      alert("Please fill all fields");
+    if (!name || !email || !password || !confirmPassword || !mobile) {
+      toast.error("Please fill all fields");
       return;
     }
 
-    if (form.password !== form.confirmPassword) {
-      alert("Passwords do not match");
+    if (password !== confirmPassword) {
+      toast.error("Passwords do not match");
       return;
     }
 
-    setLoading(true);
-
-    try {
-      const response = await apiConnector("POST", "/auth/register", form);
-
-      if (response.data.success) {
-        alert("Account created successfully!");
-        navigate("/login");
-      }
-    } catch (error) {
-      alert(
-        error.response?.data?.message || "Signup failed. Please try again.",
-      );
-    } finally {
-      setLoading(false);
-    }
+    // Dispatching the signUp action from authAPI.js
+    // Note: If your backend needs 'mobile', ensure your authAPI.js signUp function 
+    // is updated to accept it as well.
+    dispatch(signUp(name, email, password, confirmPassword,mobile, navigate));
   };
 
   return (
@@ -88,8 +76,7 @@ const Signup = () => {
         />
       </div>
 
-      {/* Signup Card */}
-      <div className="flex items-center justify-center px-4">
+      <div className="flex items-center justify-center px-4 pb-12">
         <div className="w-full max-w-md p-8 bg-white rounded-2xl shadow-md border border-orange-100">
           <div className="text-center mb-10">
             <div className="font-bold text-xl mb-2 text-blue-950">
@@ -106,6 +93,7 @@ const Signup = () => {
               <input
                 type="text"
                 name="name"
+                value={name}
                 onChange={handleChange}
                 className="w-full px-4 py-3 border border-orange-100 rounded-xl outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40"
                 placeholder="John Doe"
@@ -120,6 +108,7 @@ const Signup = () => {
               <input
                 type="email"
                 name="email"
+                value={email}
                 onChange={handleChange}
                 className={`w-full px-4 py-3 border rounded-xl outline-none focus:ring-2 
                 ${
@@ -144,6 +133,7 @@ const Signup = () => {
               <input
                 type="text"
                 name="mobile"
+                value={mobile}
                 onChange={handleChange}
                 className="w-full px-4 py-3 border border-orange-100 rounded-xl outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40"
                 placeholder="9876543210"
@@ -159,6 +149,7 @@ const Signup = () => {
                 <input
                   type={showPassword ? "text" : "password"}
                   name="password"
+                  value={password}
                   onChange={handleChange}
                   className="w-full px-4 py-3 border border-orange-100 rounded-xl outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 pr-12"
                   placeholder="••••••••"
@@ -183,6 +174,7 @@ const Signup = () => {
                 <input
                   type={showConfirm ? "text" : "password"}
                   name="confirmPassword"
+                  value={confirmPassword}
                   onChange={handleChange}
                   className="w-full px-4 py-3 border border-orange-100 rounded-xl outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 pr-12"
                   placeholder="••••••••"

@@ -1,16 +1,17 @@
 import { Routes, Route, Navigate } from "react-router-dom";
+import { useSelector } from "react-redux"; // Added Redux hook
 import AppHeader from "./components/Layout/AppHeader.jsx";
 import Sidebar from "./components/Layout/Sidebar.jsx";
 import Home from "./pages/Home.jsx";
 import Login from "./pages/AuthFlow/Login.jsx";
 import Signup from "./pages/AuthFlow/Signup.jsx";
-import TestHome from "./pages/Dashboard/Testing/TestHome";
-import AutomationTesting from "./pages/Dashboard/Testing/AutomationTesting.jsx";
-import FunctionalTesting from "./pages/Dashboard/Testing/FunctionalTesting";
+
 import MainDashboard from "./pages/Dashboard/MainDashboard.jsx";
 import Profile from "./pages/Dashboard/Profile.jsx";
 import ChangePassword from "./pages/Dashboard/ChangePassword.jsx";
 import AutoPilot from "./pages/Dashboard/Autopilot.jsx";
+import ForgotPassword from "./pages/AuthFlow/ForgotPassword.jsx";
+import UpdatePassword from "./pages/AuthFlow/UpdatePassword.jsx";
 
 // Layout for Dashboard pages ONLY
 const DashboardLayout = ({ children }) => (
@@ -25,42 +26,84 @@ const DashboardLayout = ({ children }) => (
 
 // Protected Route helper
 const ProtectedRoute = ({ children }) => {
-  const token = localStorage.getItem("token");
-  return token ? children : <Navigate to="/login" replace />;
+  // Grab the token from Redux state
+  const { token } = useSelector((state) => state.auth);
+  // Fallback to localStorage in case Redux hasn't rehydrated yet after a page refresh
+  const localToken = localStorage.getItem("token");
+
+  // If user is logged in, allow access to the route
+  if (token !== null || localToken !== null) {
+    return children;
+  }
+  
+  // If no user is logged in, redirect to the home page (or login page)
+  return <Navigate to="/" replace />;
+};
+
+// Optional: Open Route helper to prevent logged-in users from seeing Auth pages
+const OpenRoute = ({ children }) => {
+  const { token } = useSelector((state) => state.auth);
+  const localToken = localStorage.getItem("token");
+
+  if (token === null && localToken === null) {
+    return children;
+  }
+  
+  // If user is ALREADY logged in, redirect them to the dashboard
+  return <Navigate to="/dashboard" replace />;
 };
 
 function App() {
   return (
     <Routes>
-      {/* --- PUBLIC ROUTES */}
-      <Route path="/" element={<Home />} />
-        {/* Public auth pages */}
-      <Route path="/login" element={<Login />} />
-      <Route path="/signup" element={<Signup />} />
+      {/* --- PUBLIC ROUTES --- */}
+      <Route path="/" element={
+        <OpenRoute>
+          <Home />
+        </OpenRoute>
+      } />
+      
+      {/* Public auth pages */}
+      <Route path="/login" element={
+        <OpenRoute>
+          <Login />
+        </OpenRoute>
+      } />
+      <Route path="/signup" element={
+        <OpenRoute>
+          <Signup />
+        </OpenRoute>
+      } />
+      <Route path="/forgot-password" element={
+        <OpenRoute>
+          <ForgotPassword />
+        </OpenRoute>
+      } />
+      <Route path="/update-password/:token" element={
+        <OpenRoute>
+          <UpdatePassword />
+        </OpenRoute>
+      } />
 
-      {/* --- PRIVATE ROUTES: Dashboard and Testing  */}
+      {/* --- PRIVATE ROUTES: Dashboard and Testing --- */}
       <Route path="/dashboard" element={
         <ProtectedRoute>
           <DashboardLayout>
-            {/* <TestHome /> */}
             <MainDashboard />
           </DashboardLayout>
         </ProtectedRoute>
       } />
+      
       {/* Autopilot page */}
       <Route path="/autopilot" element={
         <ProtectedRoute>
-          <DashboardLayout><AutoPilot /></DashboardLayout>
+          <DashboardLayout>
+            <AutoPilot />
+          </DashboardLayout>
         </ProtectedRoute>
       } />
 
-      <Route path="/functional-testing" element={
-        <ProtectedRoute>
-          <DashboardLayout><FunctionalTesting /></DashboardLayout>
-        </ProtectedRoute>
-      } />
-
-      {/* --- New Profile Route --- */}
+      {/* --- Profile Route --- */}
       <Route path="/profile" element={
         <ProtectedRoute>
           <DashboardLayout>
@@ -69,7 +112,7 @@ function App() {
         </ProtectedRoute>
       } />
 
-      {/* --- New Change Password Route --- */}
+      {/* --- Change Password Route --- */}
       <Route path="/change-password" element={
         <ProtectedRoute>
           <DashboardLayout>
@@ -78,6 +121,7 @@ function App() {
         </ProtectedRoute>
       } />
 
+      {/* Catch-all route for undefined URLs */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

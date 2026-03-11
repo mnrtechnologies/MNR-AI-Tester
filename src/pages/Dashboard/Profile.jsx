@@ -1,10 +1,16 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
-
-// Backend base URL
-const AUTH_BASE = process.env.REACT_APP_AUTH_URL || "http://localhost:4000/api";
+import { useDispatch, useSelector } from "react-redux";
+import { getUserDetails, updateBasicInfo } from "../../services/operations/authAPIs";
+import { toast } from "react-hot-toast";
 
 const Profile = () => {
+  const dispatch = useDispatch();
+  
+  // Grab user and loading state from Redux
+  const { user } = useSelector((state) => state.profile);
+  const { loading } = useSelector((state) => state.auth);
+
+  const [fetching, setFetching] = useState(true);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -14,56 +20,35 @@ const Profile = () => {
     city: "",
   });
 
-  const [loading, setLoading] = useState(false);
-  const [fetching, setFetching] = useState(true);
-  const [message, setMessage] = useState({ type: "", text: "" });
-
-  //Fetch profile
+  // Fetch profile on mount if not already in Redux store
   useEffect(() => {
     const fetchProfile = async () => {
-      try {
-        const token = localStorage.getItem("token");
-
-        if (!token) {
-          console.warn("No token found");
-          setFetching(false);
-          return;
-        }
-
-        const response = await axios.get(`${AUTH_BASE}/auth/getUserDetails`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        console.log("PROFILE RESPONSE:", response.data);
-
-        // Handle different backend response formats
-        const user =
-          response.data?.user ||
-          response.data?.data?.user ||
-          response.data?.data ||
-          response.data;
-
-        if (user) {
-          setFormData({
-            name: user.name || "",
-            email: user.email || "",
-            mobile: user.mobile || "",
-            country: user.country || "",
-            state: user.state || "",
-            city: user.city || "",
-          });
-        }
-      } catch (err) {
-        console.error("Failed to fetch profile", err);
-      } finally {
-        setFetching(false);
+      setFetching(true);
+      // If user isn't in Redux yet, fetch it
+      if (!user) {
+        await dispatch(getUserDetails());
       }
+      setFetching(false);
     };
 
     fetchProfile();
-  }, []);
+  }, [dispatch, user]);
 
-  //-- Handle input change
+  // Sync Redux user state with local form data
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        name: user.name || "",
+        email: user.email || "",
+        mobile: user.mobile || "",
+        country: user.country || "",
+        state: user.state || "",
+        city: user.city || "",
+      });
+    }
+  }, [user]);
+
+  // Handle input change
   const handleChange = (e) => {
     setFormData((prev) => ({
       ...prev,
@@ -71,54 +56,16 @@ const Profile = () => {
     }));
   };
 
-  // --Update profile
-  const handleUpdate = async () => {
+  // Update profile
+  const handleUpdate = () => {
     if (!formData.name || !formData.email) {
-      setMessage({ type: "error", text: "Name and Email are required." });
+      toast.error("Name and Email are required.");
       return;
     }
 
-    setLoading(true);
-    setMessage({ type: "", text: "" });
-
-    try {
-      const token = localStorage.getItem("token");
-
-      const response = await axios.put(
-        `${AUTH_BASE}/auth/update-profile`,
-        formData,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
-
-      console.log("UPDATE RESPONSE:", response.data);
-
-      if (response.data.success) {
-        setMessage({ type: "success", text: response.data.message });
-
-        const updatedUser =
-          response.data.data || response.data.user || response.data;
-
-        setFormData((prev) => ({
-          ...prev,
-          name: updatedUser.name || "",
-          email: updatedUser.email || "",
-          mobile: updatedUser.mobile || "",
-          country: updatedUser.country || "",
-          state: updatedUser.state || "",
-          city: updatedUser.city || "",
-        }));
-      }
-    } catch (error) {
-      console.error("Update error:", error);
-      setMessage({
-        type: "error",
-        text: error.response?.data?.message || "Update failed",
-      });
-    } finally {
-      setLoading(false);
-    }
+    // Dispatch the Redux action
+    // It automatically handles the API call, Redux state update, and Toasts
+    dispatch(updateBasicInfo(formData));
   };
 
   if (fetching) {
@@ -131,18 +78,6 @@ const Profile = () => {
 
   return (
     <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100 max-w-5xl mx-auto mt-4">
-      {message.text && (
-        <div
-          className={`mb-6 p-3 rounded text-sm font-bold ${
-            message.type === "success"
-              ? "bg-green-50 text-green-600 border border-green-100"
-              : "bg-red-50 text-red-600 border border-red-100"
-          }`}
-        >
-          {message.text}
-        </div>
-      )}
-
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {["name", "email", "mobile", "country", "state", "city"].map(
           (field) => (
@@ -156,10 +91,10 @@ const Profile = () => {
                 type={field === "email" ? "email" : "text"}
                 value={formData[field]}
                 onChange={handleChange}
-                className="w-full border border-slate-200 p-2.5 rounded-lg text-sm focus:ring-1 focus:ring-orange-500 outline-none"
+                className="w-full border border-slate-200 p-2.5 rounded-lg text-sm focus:ring-1 focus:ring-orange-500 outline-none transition-all"
               />
             </div>
-          ),
+          )
         )}
       </div>
 

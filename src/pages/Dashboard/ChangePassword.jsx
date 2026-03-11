@@ -1,66 +1,64 @@
 import React, { useState } from "react";
-import axios from "axios";
-
-const AUTH_BASE = process.env.REACT_APP_AUTH_URL || "http://localhost:4000/api";
+import { useDispatch, useSelector } from "react-redux";
+import { changePassword } from "../../services/operations/authAPIs"; // Adjust path as needed
+import { toast } from "react-hot-toast";
+import { Eye, EyeOff } from "lucide-react"; // Imported Icons
 
 const ChangePassword = () => {
+  const dispatch = useDispatch();
+  
+  // Access loading state from Redux (auth slice)
+  const { loading } = useSelector((state) => state.auth);
+
   const [formData, setFormData] = useState({
     oldPassword: "",
     newPassword: "",
     confirmPassword: "",
   });
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState({ type: "", text: "" });
+
+  // State for toggling password visibility
+  const [showOldPassword, setShowOldPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handlePasswordChange = async () => {
+  const handlePasswordChange = (e) => {
+    e.preventDefault();
+
     // 1. Frontend Validation
     if (
       !formData.oldPassword ||
       !formData.newPassword ||
       !formData.confirmPassword
     ) {
-      setMessage({ type: "error", text: "All fields are required." });
+      toast.error("All fields are required.");
       return;
     }
 
     if (formData.newPassword !== formData.confirmPassword) {
-      setMessage({ type: "error", text: "New passwords do not match." });
+      toast.error("New passwords do not match.");
       return;
     }
 
-    setLoading(true);
-    setMessage({ type: "", text: "" });
-
-    try {
-      const token = localStorage.getItem("token");
-      const response = await axios.post(
-        `${AUTH_BASE}/auth/change-password`,
-        {
-          oldPassword: formData.oldPassword,
-          newPassword: formData.newPassword,
-          confirmPassword: formData.confirmPassword,
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
-
-      if (response.data.success) {
-        setMessage({ type: "success", text: "Password changed successfully!" });
-        setFormData({ oldPassword: "", newPassword: "", confirmPassword: "" });
-      }
-    } catch (error) {
-      setMessage({
-        type: "error",
-        text: error.response?.data?.message || "Failed to change password.",
-      });
-    } finally {
-      setLoading(false);
-    }
+    // 2. Dispatch Redux Action
+    dispatch(
+      changePassword(
+        formData.oldPassword, 
+        formData.newPassword, 
+        formData.confirmPassword, 
+        () => {
+          // Clears the form on success
+          setFormData({ oldPassword: "", newPassword: "", confirmPassword: "" });
+          // Reset visibility toggles
+          setShowOldPassword(false);
+          setShowNewPassword(false);
+          setShowConfirmPassword(false);
+        }
+      )
+    );
   };
 
   return (
@@ -71,72 +69,90 @@ const ChangePassword = () => {
       </div>
 
       <div className="bg-white p-10 rounded-2xl shadow-sm border border-slate-100">
-        {/* Success/Error Message Area */}
-        {message.text && (
-          <div
-            className={`mb-6 p-4 rounded-lg text-xs font-bold border ${
-              message.type === "success"
-                ? "bg-green-50 text-green-600 border-green-100"
-                : "bg-red-50 text-red-600 border-red-100"
-            }`}
-          >
-            {message.text}
-          </div>
-        )}
-
-        <div className="space-y-6">
+        <form onSubmit={handlePasswordChange} className="space-y-6">
+          
+          {/* OLD PASSWORD */}
           <div className="space-y-1.5">
             <label className="text-[11px] font-bold text-slate-400 uppercase tracking-tight">
               Old Password
             </label>
-            <input
-              type="password"
-              name="oldPassword"
-              value={formData.oldPassword}
-              onChange={handleChange}
-              className="w-full border border-slate-200 p-3 rounded-lg text-sm focus:ring-1 focus:ring-orange-500 outline-none transition-all"
-              placeholder="••••••••"
-            />
+            <div className="relative">
+              <input
+                type={showOldPassword ? "text" : "password"}
+                name="oldPassword"
+                value={formData.oldPassword}
+                onChange={handleChange}
+                className="w-full border border-slate-200 p-3 pr-10 rounded-lg text-sm focus:ring-1 focus:ring-orange-500 outline-none transition-all"
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowOldPassword(!showOldPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-orange-500 transition-colors"
+              >
+                {showOldPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
 
+          {/* NEW PASSWORD */}
           <div className="space-y-1.5">
             <label className="text-[11px] font-bold text-slate-400 uppercase tracking-tight">
               New Password
             </label>
-            <input
-              type="password"
-              name="newPassword"
-              value={formData.newPassword}
-              onChange={handleChange}
-              className="w-full border border-slate-200 p-3 rounded-lg text-sm focus:ring-1 focus:ring-orange-500 outline-none transition-all"
-              placeholder="••••••••"
-            />
+            <div className="relative">
+              <input
+                type={showNewPassword ? "text" : "password"}
+                name="newPassword"
+                value={formData.newPassword}
+                onChange={handleChange}
+                className="w-full border border-slate-200 p-3 pr-10 rounded-lg text-sm focus:ring-1 focus:ring-orange-500 outline-none transition-all"
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowNewPassword(!showNewPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-orange-500 transition-colors"
+              >
+                {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
 
+          {/* CONFIRM NEW PASSWORD */}
           <div className="space-y-1.5">
             <label className="text-[11px] font-bold text-slate-400 uppercase tracking-tight">
               Confirm New Password
             </label>
-            <input
-              type="password"
-              name="confirmPassword"
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              className="w-full border border-slate-200 p-3 rounded-lg text-sm focus:ring-1 focus:ring-orange-500 outline-none transition-all"
-              placeholder="••••••••"
-            />
+            <div className="relative">
+              <input
+                type={showConfirmPassword ? "text" : "password"}
+                name="confirmPassword"
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                className="w-full border border-slate-200 p-3 pr-10 rounded-lg text-sm focus:ring-1 focus:ring-orange-500 outline-none transition-all"
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-orange-500 transition-colors"
+              >
+                {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
 
           <div className="pt-4">
             <button
-              onClick={handlePasswordChange}
+              type="submit"
               disabled={loading}
               className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 rounded-lg font-bold text-xs uppercase tracking-widest transition-all disabled:opacity-50"
             >
               {loading ? "Processing..." : "Change Password"}
             </button>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
+import { useDispatch, useSelector } from "react-redux"; // Added Redux hooks
+import { logout, getUserDetails } from "../../services/operations/authAPIs"; // Imported actions
 import { Sun, Settings, User, ChevronDown, Key, LogOut } from "lucide-react";
 import logo from "../../assets/MNR_AT.png";
 
@@ -8,6 +9,17 @@ const AppHeader = () => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
+  const dispatch = useDispatch();
+
+  // Access user data from your Redux store (assuming it's in the profile slice)
+  const { user } = useSelector((state) => state.profile);
+
+  // Fetch user details on mount if they aren't already in the Redux store
+  useEffect(() => {
+    if (!user) {
+      dispatch(getUserDetails());
+    }
+  }, [dispatch, user]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -19,11 +31,10 @@ const AppHeader = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const { handleLogout, user } = useAuth();
-
   const logoutUser = () => {
-    handleLogout();
-    navigate("/");
+    // Dispatch the Redux logout action and pass navigate
+    dispatch(logout(navigate));
+    setIsOpen(false);
   };
 
   return (
@@ -52,7 +63,9 @@ const AppHeader = () => {
         <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className={`flex items-center gap-3 p-1 px-3 rounded-full border transition-all ${isOpen ? "border-orange-200 bg-orange-50/30" : "border-slate-100"}`}
+            className={`flex items-center gap-3 p-1 px-3 rounded-full border transition-all ${
+              isOpen ? "border-orange-200 bg-orange-50/30" : "border-slate-100"
+            }`}
           >
             <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center border border-orange-200">
               <User size={18} className="text-orange-600" />
@@ -63,14 +76,18 @@ const AppHeader = () => {
               <span className="text-xs font-semibold text-slate-800">
                 {user?.name || "User"}
               </span>
-              {/* <span className="text-[10px] text-slate-400">
-                {user?.email?.split("@")[0]}
-              </span> */}
+              {user?.email && (
+                <span className="text-[10px] text-slate-400">
+                  {user.email.split("@")[0]}
+                </span>
+              )}
             </div>
 
             <ChevronDown
               size={14}
-              className={`text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
+              className={`text-slate-400 transition-transform ${
+                isOpen ? "rotate-180" : ""
+              }`}
             />
           </button>
 

@@ -1,6 +1,9 @@
 const User = require("../models/User");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const { signupEmail } = require("../mail/templates/signupEmail");
+const mailSender = require("../utils/mailSender");
+
 
 //register
 exports.register = async (req, res) => {
@@ -60,6 +63,16 @@ exports.register = async (req, res) => {
     });
 
     user.password = undefined;
+
+        try {
+      await mailSender(
+        email,
+        "Welcome to MNR AI Tester - Account Created",
+        signupEmail(email, name),
+      );
+    } catch (mailError) {
+      console.error("Mail sending failed:", mailError.message);
+    }
 
     return res.status(201).json({
       success: true,
@@ -235,14 +248,17 @@ exports.updateBasicInfo = async (req, res) => {
 
     const updatedData = {};
 
-    if (name?.trim()) updatedData.name = name.trim();
-    if (mobile?.trim()) updatedData.mobile = mobile.trim();
-    if (country?.trim()) updatedData.country = country.trim();
-    if (state?.trim()) updatedData.state = state.trim();
-    if (city?.trim()) updatedData.city = city.trim();
+    // 1. Mandatory Fields (Must not be empty)
+    if (name && name.trim()) updatedData.name = name.trim();
 
-    // email duplicate check
-    if (email?.trim()) {
+    // 2. Optional Fields (Allow them to be updated to empty strings "")
+    if (mobile !== undefined) updatedData.mobile = mobile.trim();
+    if (country !== undefined) updatedData.country = country.trim();
+    if (state !== undefined) updatedData.state = state.trim();
+    if (city !== undefined) updatedData.city = city.trim();
+
+    // 3. Email duplicate check
+    if (email && email.trim()) {
       const existingEmail = await User.findOne({
         email: email.trim(),
         _id: { $ne: userId },
@@ -254,10 +270,10 @@ exports.updateBasicInfo = async (req, res) => {
           message: "Email already in use",
         });
       }
-
       updatedData.email = email.trim();
     }
 
+    // 4. Check if there's anything to update
     if (Object.keys(updatedData).length === 0) {
       return res.status(400).json({
         success: false,
@@ -265,11 +281,12 @@ exports.updateBasicInfo = async (req, res) => {
       });
     }
 
+    // 5. Update Database
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       updatedData,
       { new: true }
-    ).select("-password -token")
+    ).select("-password -token");
 
     return res.status(200).json({
       success: true,

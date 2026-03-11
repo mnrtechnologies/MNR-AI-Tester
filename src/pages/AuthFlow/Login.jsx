@@ -1,28 +1,30 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { apiConnector } from "../../services/apiConnector";
-import { useAuth } from "../../context/AuthContext";
+import { useDispatch, useSelector } from "react-redux"; // Added Redux hooks
+import { login } from "../../services/operations/authAPIs"; // Import your login action
 import logo from "../../assets/MNR_AT.png";
 import { Eye, EyeOff } from "lucide-react";
 
 const Login = () => {
   const navigate = useNavigate();
+  const dispatch = useDispatch(); // Initialize dispatch
+  
+  // Get loading state from Redux slice (optional, replaces local loading)
+  const { loading } = useSelector((state) => state.auth);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-    const user = localStorage.getItem("user");
-
-    if (token && user) {
+    // If token exists, redirect to dashboard
+    if (token) {
       navigate("/dashboard");
     }
   }, [navigate]);
 
-  const { handleLogin } = useAuth();
-
   const [formData, setFormData] = useState({ email: "", password: "" });
-  const [loading, setLoading] = useState(false);
   const [emailError, setEmailError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+
+  const { email, password } = formData;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -41,24 +43,13 @@ const Login = () => {
     }
   };
 
-  const onLoginSubmit = async (e) => {
+  const onLoginSubmit = (e) => {
     e.preventDefault();
-
     if (emailError) return;
 
-    setLoading(true);
-    try {
-      const response = await apiConnector("POST", "/auth/login", formData);
-
-      if (response.data.success) {
-        handleLogin(response.data.user, response.data.token);
-        navigate("/dashboard");
-      }
-    } catch (error) {
-      alert(error.response?.data?.message || "Login failed");
-    } finally {
-      setLoading(false);
-    }
+    // Dispatch the Redux action
+    // It handles the API call, Toast, and Navigation internally
+    dispatch(login(email, password, navigate));
   };
 
   return (
@@ -93,6 +84,7 @@ const Login = () => {
               name="email"
               type="email"
               required
+              value={email}
               onChange={handleChange}
               className={`w-full px-4 py-3 border rounded-xl outline-none transition focus:ring-2
               ${
@@ -121,12 +113,12 @@ const Login = () => {
                 name="password"
                 type={showPassword ? "text" : "password"}
                 required
+                value={password}
                 onChange={handleChange}
                 className="w-full px-4 py-3 pr-12 border border-orange-100 rounded-xl focus:ring-2 focus:ring-orange-400 bg-orange-50/40 outline-none transition"
                 placeholder="••••••••"
               />
 
-              {/* Eye Icon */}
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
@@ -134,6 +126,14 @@ const Login = () => {
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
+            </div>
+            <div className="flex justify-end mt-2">
+              <Link 
+                to="/forgot-password" 
+                className="text-xs font-semibold text-gray-500 hover:text-orange-500 transition"
+              >
+                Forgot Password?
+              </Link>
             </div>
           </div>
 
