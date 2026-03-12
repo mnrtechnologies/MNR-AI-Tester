@@ -136,7 +136,7 @@ const GLOBAL_CSS = `
     transition: width .4s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  /* Terminal Logs (Kept dark for contrast/hacker feel) */
+  /* Terminal Logs */
   .terminal-container {
     background: #09090b; border: 1px solid ${C.border}; border-radius: 8px;
     padding: 12px 16px; font-family: 'JetBrains Mono', monospace;
@@ -148,7 +148,7 @@ const GLOBAL_CSS = `
   .log-green  { color: #10b981; }
   .log-yellow { color: #f59e0b; }
   .log-red    { color: #ef4444; }
-  .log-white  { color: #f4f4f5; } /* Forced to white for readability in dark terminal */
+  .log-white  { color: #f4f4f5; }
 
   /* Browser Mockup Screen */
   .screen-wrap {
@@ -302,7 +302,6 @@ function LogPanel({ logs }) {
     <div
       ref={ref}
       className="terminal-container"
-      // Set a fixed height here (e.g., 350px) to prevent it from growing
       style={{ height: 550, overflowY: "auto" }}
     >
       {logs.length === 0 ? (
@@ -423,7 +422,10 @@ function PhaseLogin({ onDone }) {
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
   const [targetUrl, setTargetUrl] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [anthropicApiKey, setAnthropicApiKey] = useState("");
   const [mode, setMode] = useState("checking");
+  const [goal, setGoal] = useState(""); // <--- NEW feature testing goal state
   const [status, setStatus] = useState("idle");
   const [logs, setLogs] = useState([]);
   const [screenshot, setScreenshot] = useState(null);
@@ -435,7 +437,8 @@ function PhaseLogin({ onDone }) {
     setLogs((p) => [...p, { message: msg, color }]);
 
   const connect = () => {
-    if (!email || !targetUrl) return;
+    // Both URL/Email AND at least one API key are required to connect
+    if (!email || !targetUrl || (!apiKey && !anthropicApiKey)) return;
     setStatus("connecting");
     setLogs([]);
     setScreenshot(null);
@@ -456,10 +459,13 @@ function PhaseLogin({ onDone }) {
             password: password || undefined,
             otp: otp || undefined,
             target_url: targetUrl,
+            api_key: apiKey || undefined,
+            anthropic_api_key: anthropicApiKey || undefined,
           }),
         );
         return;
       }
+
       if (data.type === "log") {
         pushLog(data.message, data.color || "white");
         return;
@@ -476,7 +482,7 @@ function PhaseLogin({ onDone }) {
         pushLog("✅ Login complete — auth.json saved", "green");
         setStatus("done");
         ws.close();
-        setTimeout(() => onDone(targetUrl, mode), 800);
+        setTimeout(() => onDone(targetUrl, mode, apiKey, anthropicApiKey, goal), 800); // Pass goal to parent
         return;
       }
       if (data.type === "error") {
@@ -631,6 +637,65 @@ function PhaseLogin({ onDone }) {
 
           <div className="divider" style={{ margin: "4px 0" }} />
 
+          {/* AI API Key Fields */}
+          <div>
+            <div
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: "#000000",
+                marginBottom: 4,
+              }}
+            >
+              AI Provider Credentials <span style={{ color: C.red }}>*</span>
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>
+              Please provide at least one API key to power the AI agent.
+            </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 16,
+              }}
+            >
+              <div>
+                <label
+                  className="label"
+                  style={{ fontWeight: 400, color: C.muted }}
+                >
+                  OpenAI API Key
+                </label>
+                <input
+                  className="input"
+                  type="password"
+                  placeholder="sk-..."
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  disabled={status === "running"}
+                />
+              </div>
+              <div>
+                <label
+                  className="label"
+                  style={{ fontWeight: 400, color: C.muted }}
+                >
+                  Anthropic API Key
+                </label>
+                <input
+                  className="input"
+                  type="password"
+                  placeholder="sk-ant-..."
+                  value={anthropicApiKey}
+                  onChange={(e) => setAnthropicApiKey(e.target.value)}
+                  disabled={status === "running"}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="divider" style={{ margin: "4px 0" }} />
+
           <div>
             <label className="label" style={{ marginBottom: 12 }}>
               Post-Authentication Pipeline
@@ -666,7 +731,36 @@ function PhaseLogin({ onDone }) {
                 </span>
                 Semantic AI Agent
               </button>
+              <button
+                className={cx(
+                  "toggle-opt",
+                  mode === "feature" ? "active" : "",
+                )}
+                onClick={() => setMode("feature")}
+                disabled={status === "running"}
+              >
+                <span
+                  style={{ display: "block", fontSize: 16, marginBottom: 4 }}
+                >
+                  🎯
+                </span>
+                Feature Testing
+              </button>
             </div>
+            {mode === "feature" && (
+              <div className="fade-up" style={{ marginTop: 16 }}>
+                <label className="label">
+                  Test Goal <span style={{ color: C.red }}>*</span>
+                </label>
+                <input
+                  className="input"
+                  placeholder="e.g. upload an image in gambar"
+                  value={goal}
+                  onChange={(e) => setGoal(e.target.value)}
+                  disabled={status === "running"}
+                />
+              </div>
+            )}
           </div>
 
           <button
@@ -674,7 +768,12 @@ function PhaseLogin({ onDone }) {
             style={{ padding: "12px", marginTop: 8 }}
             onClick={connect}
             disabled={
-              !email || !targetUrl || status === "running" || status === "done"
+              !email ||
+              !targetUrl ||
+              (!apiKey && !anthropicApiKey) ||
+              (mode === "feature" && !goal) ||
+              status === "running" ||
+              status === "done"
             }
           >
             {status === "connecting" ? (
@@ -753,7 +852,7 @@ function PhaseLogin({ onDone }) {
 // ════════════════════════════════════════════════════════════════════════════
 // PHASE 2 — Checking Pipeline
 // ════════════════════════════════════════════════════════════════════════════
-function PhaseChecking({ targetUrl, onPhase3 }) {
+function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onPhase3 }) {
   const [jobId, setJobId] = useState(null);
   const [status, setStatus] = useState("starting");
   const [screenshot, setScreenshot] = useState(null);
@@ -776,7 +875,11 @@ function PhaseChecking({ targetUrl, onPhase3 }) {
       const res = await fetch(`${API}/checking/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ base_url: targetUrl }),
+        body: JSON.stringify({
+          base_url: targetUrl,
+          api_key: apiKey || undefined,
+          anthropic_api_key: anthropicApiKey || undefined,
+        }),
       });
       const data = await res.json();
       if (cancelled) return;
@@ -964,7 +1067,7 @@ function PhaseChecking({ targetUrl, onPhase3 }) {
 // ════════════════════════════════════════════════════════════════════════════
 // PHASE 2 — Semantic Driver
 // ════════════════════════════════════════════════════════════════════════════
-function PhaseSemantic({ targetUrl, onPhase3, onExcelReady }) {
+function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onPhase3, onExcelReady }) {
   const [testId, setTestId] = useState(null);
   const [status, setStatus] = useState("starting");
   const [screenshot, setScreenshot] = useState(null);
@@ -984,7 +1087,12 @@ function PhaseSemantic({ targetUrl, onPhase3, onExcelReady }) {
       const res = await fetch(`${API}/semantic/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: targetUrl }),
+        // ONLY adding keys here, and using "url" instead of "base_url"
+        body: JSON.stringify({ 
+          url: targetUrl,
+          api_key: apiKey || undefined,
+          anthropic_api_key: anthropicApiKey || undefined
+        }),
       });
       const data = await res.json();
       if (cancelled) return;
@@ -1013,7 +1121,7 @@ function PhaseSemantic({ targetUrl, onPhase3, onExcelReady }) {
           );
         if (msg.type === "done") {
           setStatus("done");
-          // ── Lift Excel data up to parent so it survives phase transitions ──
+          // Lift Excel data up to parent so it survives phase transitions
           if (msg.excel_base64) {
             onExcelReady(msg.excel_base64, msg.excel_filename);
             pushLog(
@@ -1041,6 +1149,7 @@ function PhaseSemantic({ targetUrl, onPhase3, onExcelReady }) {
   const triggerConvert = async (tid) => {
     try {
       pushLog("Translating semantic findings to Orchestrator tasks...", "cyan");
+      // Kept exactly as you originally had it
       const r = await fetch(`${API}/semantic/${tid}/convert-to-orchestrator`, {
         method: "POST",
       });
@@ -1132,6 +1241,234 @@ function PhaseSemantic({ targetUrl, onPhase3, onExcelReady }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// PHASE 2 — Feature Testing (NEW)
+// ════════════════════════════════════════════════════════════════════════════
+function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal }) {
+  const [testId, setTestId] = useState(null);
+  const [status, setStatus] = useState("starting");
+  const [screenshot, setScreenshot] = useState(null);
+  const [logs, setLogs] = useState([]);
+  const [progress, setProgress] = useState({ current: 0, max: 0, lastAction: "", summary: null });
+  const wsRef = useRef(null);
+
+  const pushLog = (msg, color = "white") =>
+    setLogs((p) => [...p, { message: msg, color }]);
+
+  useEffect(() => {
+    localStorage.setItem("autopilotRunning", "true");
+    let cancelled = false;
+
+    const start = async () => {
+      pushLog(`Initializing Feature Test Engine → ${targetUrl}`, "cyan");
+      pushLog(`Goal: ${goal}`, "cyan");
+      
+      const res = await fetch(`${API}/tests/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "whitebox",
+          url: targetUrl,
+          goal: goal,
+          steps: [],
+          api_key: apiKey || undefined,
+          anthropic_api_key: anthropicApiKey || undefined,
+        }),
+      });
+      
+      const data = await res.json();
+      if (cancelled) return;
+
+      setTestId(data.test_id);
+      pushLog(`Test Session ID: ${data.test_id}`, "cyan");
+
+      const ws = new WebSocket(`${WS}/ws/tests/${data.test_id}`);
+      wsRef.current = ws;
+
+      ws.onmessage = (ev) => {
+        const msg = JSON.parse(ev.data);
+        if (msg.type === "frame") {
+          setScreenshot(`data:image/jpeg;base64,${msg.image}`);
+          return;
+        }
+        if (msg.message) {
+          pushLog(
+            msg.message,
+            msg.type === "error" ? "red" : msg.type === "done" ? "green" : "white",
+          );
+        }
+        if (msg.type === "done" || msg.status === "completed") {
+          setStatus("done");
+          ws.close();
+        }
+        if (msg.type === "error" || msg.status === "failed") {
+          setStatus("error");
+        }
+      };
+
+      ws.onerror = () => pushLog("WebSocket connection error", "red");
+      setStatus("running");
+    };
+
+    start().catch((e) => pushLog(String(e), "red"));
+    return () => {
+      cancelled = true;
+      wsRef.current?.close();
+    };
+  }, [targetUrl, goal, apiKey, anthropicApiKey]);
+
+  // Poll for the status API to get detailed current_step, last_action, and summary
+  useInterval(
+    async () => {
+      if (!testId || status !== "running") return;
+      try {
+        const r = await fetch(`${API}/tests/${testId}/status`);
+        const d = await r.json();
+        
+        setProgress((p) => ({
+          ...p,
+          current: d.current_step !== undefined ? d.current_step : p.current,
+          max: d.max_steps || p.max,
+          lastAction: d.last_action || p.lastAction,
+          summary: d.summary || p.summary,
+        }));
+        
+        if (d.status === "completed") setStatus("done");
+        if (d.status === "failed") setStatus("error");
+      } catch {}
+    },
+    status === "running" ? 3000 : null,
+  );
+
+  return (
+    <div
+      className="fade-up"
+      style={{ display: "flex", flexDirection: "column", gap: 24 }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+        }}
+      >
+        <div>
+          <div className="phase-header">Phase 1 — Feature Testing</div>
+          <div className="phase-title">Targeted Goal Execution</div>
+          <div style={{ fontSize: 14, color: C.muted, marginTop: 8 }}>
+            AI Agent is autonomously pursuing the specified test objective.
+          </div>
+        </div>
+        <span
+          className={cx(
+            "badge",
+            status === "running"
+              ? "badge-running"
+              : status === "done"
+                ? "badge-done"
+                : "badge-failed",
+          )}
+        >
+          {status === "running" && (
+            <span className="spinner" style={{ width: 10, height: 10 }} />
+          )}
+          {status === "running" ? "Executing" : status}
+        </span>
+      </div>
+
+      {/* TOP ROW: Large live feed */}
+      <div style={{ width: "100%" }}>
+        <ScreenPanel
+          src={screenshot}
+          scanning={status === "running"}
+          label="Agent Viewfinder"
+        />
+      </div>
+
+      {/* BOTTOM ROW: Stats (Left) and Logs (Right) */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+        <div className="card">
+          <div style={{ marginBottom: 24 }}>
+            <div className="label" style={{ marginBottom: 8 }}>Target Goal</div>
+            <div
+              style={{
+                fontSize: 14,
+                color: C.accent,
+                fontWeight: 600,
+                background: "rgba(59,130,246,.05)",
+                padding: "10px 14px",
+                borderRadius: 6,
+                border: `1px solid rgba(59,130,246,.2)`,
+              }}
+            >
+              "{goal}"
+            </div>
+          </div>
+          
+          <div style={{ display: "flex", gap: 32, marginBottom: 24 }}>
+            <div>
+              <div className="stat-val">{progress.current}</div>
+              <div className="stat-lbl">Current Step</div>
+            </div>
+            <div>
+              <div className="stat-val" style={{ color: C.muted }}>
+                {progress.max || "—"}
+              </div>
+              <div className="stat-lbl">Max Steps Allowed</div>
+            </div>
+          </div>
+          
+          <ProgressBar
+            value={progress.current}
+            max={progress.max || 1}
+            label="Execution Progress"
+          />
+          
+          {progress.lastAction && (
+            <div
+              style={{
+                marginTop: 16,
+                fontSize: 12,
+                color: C.text,
+                display: "flex",
+                gap: 8,
+                wordBreak: "break-all",
+                background: C.surface,
+                padding: "8px 12px",
+                borderRadius: 6,
+                border: `1px solid ${C.border}`,
+              }}
+            >
+              <span style={{ color: C.accent }}>●</span>{" "}
+              <span>{progress.lastAction}</span>
+            </div>
+          )}
+
+          {progress.summary && (
+            <div
+              className="fade-up"
+              style={{
+                marginTop: 16,
+                fontSize: 13,
+                color: C.green,
+                lineHeight: 1.6,
+                background: "rgba(16,185,129,.05)",
+                padding: "12px 16px",
+                borderRadius: 6,
+                border: `1px solid rgba(16,185,129,.2)`,
+              }}
+            >
+              <div style={{ fontWeight: 600, marginBottom: 4, color: "#000000" }}>Test Summary</div>
+              {progress.summary}
+            </div>
+          )}
+        </div>
+        <LogPanel logs={logs} />
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // PHASE 3 — Validation (Sequential test runner)
 // ════════════════════════════════════════════════════════════════════════════
 function PhaseValidation({ source }) {
@@ -1158,19 +1495,19 @@ function PhaseValidation({ source }) {
         setTests((p) => [...p, { id, status: d[id].status }]);
         pushLog(`Task initialized: ${id}`, "cyan");
       });
-      setTests(p =>
-        p.map(t => {
+      setTests((p) =>
+        p.map((t) => {
           const newStatus = d[t.id]?.status || t.status;
 
           // If just completed and summary not fetched yet
           if (newStatus === "completed" && !summaries[t.id]) {
             fetch(`${API}/tests/${t.id}/status`)
-              .then(r => r.json())
-              .then(data => {
+              .then((r) => r.json())
+              .then((data) => {
                 if (data.summary) {
-                  setSummaries(prev => ({
+                  setSummaries((prev) => ({
                     ...prev,
-                    [t.id]: data.summary ?? "No summary available"
+                    [t.id]: data.summary ?? "No summary available",
                   }));
                 }
               })
@@ -1178,7 +1515,7 @@ function PhaseValidation({ source }) {
           }
 
           return { ...t, status: newStatus };
-        })
+        }),
       );
     } catch {}
   }, 4000);
@@ -1308,149 +1645,148 @@ function PhaseValidation({ source }) {
             )}
           </div>
 
-  <div
-  style={{
-    maxHeight: 280,
-    overflowY: "auto",
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-    paddingRight: 4,
-  }}
->
-  {tests.map((t) => (
-    <div
-      key={t.id}
-      className={cx("test-item", t.id === activeId ? "active" : "")}
-      style={{
-        display: "flex",
-        flexDirection: "column", // Changed to column to stack header and summary
-        gap: 4,
-        padding: "8px 12px", // Added padding for better containment
-      }}
-    >
-      {/* Test Header: Icon, ID, and Badge */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: 16,
-          }}
-        >
-          {t.status === "completed" ? (
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke={C.green}
-              strokeWidth="3"
-            >
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          ) : t.status === "failed" ? (
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke={C.red}
-              strokeWidth="3"
-            >
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          ) : t.status === "running" ? (
-            <span
-              className="spinner"
-              style={{
-                width: 12,
-                height: 12,
-                borderWidth: "2px",
-                borderColor: `transparent transparent ${C.accent} ${C.accent}`,
-              }}
-            />
-          ) : (
-            <div
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: "50%",
-                background: C.muted,
-              }}
-            />
-          )}
-        </div>
-        
-        <span
-          style={{
-            color: t.id === activeId ? "#000000" : C.muted,
-            flex: 1,
-            fontSize: 13,
-          }}
-          className="font-mono"
-        >
-          {t.id}
-        </span>
+          <div
+            style={{
+              maxHeight: 280,
+              overflowY: "auto",
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              paddingRight: 4,
+            }}
+          >
+            {tests.map((t) => (
+              <div
+                key={t.id}
+                className={cx("test-item", t.id === activeId ? "active" : "")}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 4,
+                  padding: "8px 12px",
+                }}
+              >
+                {/* Test Header: Icon, ID, and Badge */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: 16,
+                    }}
+                  >
+                    {t.status === "completed" ? (
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke={C.green}
+                        strokeWidth="3"
+                      >
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    ) : t.status === "failed" ? (
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke={C.red}
+                        strokeWidth="3"
+                      >
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    ) : t.status === "running" ? (
+                      <span
+                        className="spinner"
+                        style={{
+                          width: 12,
+                          height: 12,
+                          borderWidth: "2px",
+                          borderColor: `transparent transparent ${C.accent} ${C.accent}`,
+                        }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: "50%",
+                          background: C.muted,
+                        }}
+                      />
+                    )}
+                  </div>
 
-        <span
-          className={cx(
-            "badge",
-            t.status === "completed"
-              ? "badge-done"
-              : t.status === "failed"
-              ? "badge-failed"
-              : t.status === "running"
-              ? "badge-running"
-              : "badge-idle"
-          )}
-          style={{ fontSize: 10, padding: "2px 8px" }}
-        >
-          {t.status}
-        </span>
-      </div>
+                  <span
+                    style={{
+                      color: t.id === activeId ? "#000000" : C.muted,
+                      flex: 1,
+                      fontSize: 13,
+                    }}
+                    className="font-mono"
+                  >
+                    {t.id}
+                  </span>
 
-      {/* Summary Section: Appears only when completed and summary exists */}
-      {t.status === "completed" && summaries[t.id] && (
-        <div
-          style={{
-            marginTop: 4,
-            marginLeft: 26, // Aligns summary text under the ID (past the icon)
-            fontSize: 11,
-            color: C.green,
-            lineHeight: 1.6,
-          }}
-        >
-          {summaries[t.id]}
-        </div>
-      )}
-    </div>
-  ))}
+                  <span
+                    className={cx(
+                      "badge",
+                      t.status === "completed"
+                        ? "badge-done"
+                        : t.status === "failed"
+                          ? "badge-failed"
+                          : t.status === "running"
+                            ? "badge-running"
+                            : "badge-idle",
+                    )}
+                    style={{ fontSize: 10, padding: "2px 8px" }}
+                  >
+                    {t.status}
+                  </span>
+                </div>
 
-  {tests.length === 0 && (
-    <div
-      style={{
-        color: C.muted,
-        fontSize: 13,
-        padding: "16px",
-        textAlign: "center",
-        border: `1px dashed ${C.border}`,
-        borderRadius: 8,
-      }}
-    >
-      Orchestrator is preparing tests...
-      <span
-        className="font-mono"
-        style={{ animation: "blink 1s step-end infinite" }}
-      >
-        _
-      </span>
-    </div>
-  )}
-</div>
+                {/* Summary Section: Appears only when completed and summary exists */}
+                {t.status === "completed" && summaries[t.id] && (
+                  <div
+                    style={{
+                      marginTop: 4,
+                      marginLeft: 26,
+                      fontSize: 11,
+                      color: C.green,
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    {summaries[t.id]}
+                  </div>
+                )}
+              </div>
+            ))}
 
+            {tests.length === 0 && (
+              <div
+                style={{
+                  color: C.muted,
+                  fontSize: 13,
+                  padding: "16px",
+                  textAlign: "center",
+                  border: `1px dashed ${C.border}`,
+                  borderRadius: 8,
+                }}
+              >
+                Orchestrator is preparing tests...
+                <span
+                  className="font-mono"
+                  style={{ animation: "blink 1s step-end infinite" }}
+                >
+                  _
+                </span>
+              </div>
+            )}
+          </div>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -1467,7 +1803,10 @@ function PhaseValidation({ source }) {
 export default function App() {
   const [phase, setPhase] = useState("login");
   const [targetUrl, setTargetUrl] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [anthropicApiKey, setAnthropicApiKey] = useState("");
   const [mode, setMode] = useState("checking");
+  const [goal, setGoal] = useState(""); // Lifted goal state for feature test
   const [p3Source, setP3Source] = useState("");
   const testRunning = phase === "phase2" || phase === "phase3";
 
@@ -1475,11 +1814,14 @@ export default function App() {
   const [excelB64, setExcelB64] = useState(null);
   const [excelName, setExcelName] = useState(null);
 
-  const handleLoginDone = (url, selectedMode) => {
+  const handleLoginDone = (url, selectedMode, openaiKey, antKey, selectedGoal) => {
     localStorage.setItem("targetUrl", url);
     localStorage.setItem("autopilotRunning", "true");
     setTargetUrl(url);
+    setApiKey(openaiKey);
+    setAnthropicApiKey(antKey);
     setMode(selectedMode);
+    setGoal(selectedGoal || "");
     // Reset excel state on new run
     setExcelB64(null);
     setExcelName(null);
@@ -1516,7 +1858,6 @@ export default function App() {
     <>
       <style dangerouslySetInnerHTML={{ __html: GLOBAL_CSS }} />
       <div style={{ display: "flex", minHeight: "100vh", background: C.bg }}>
-        {/* Removed Sidebar as requested. Main content now expands to full width with a max-width for readability */}
         <div
           style={{
             flex: 1,
@@ -1600,7 +1941,7 @@ export default function App() {
                 )}
               </div>
 
-              {/* Terminate button relocated here so you don't lose the functionality */}
+              {/* Terminate button */}
               <button
                 className="btn btn-danger"
                 style={{ padding: "6px 12px", fontSize: 12 }}
@@ -1654,13 +1995,28 @@ export default function App() {
           {phase === "login" && <PhaseLogin onDone={handleLoginDone} />}
 
           {phase === "phase2" && targetUrl && mode === "checking" && (
-            <PhaseChecking targetUrl={targetUrl} onPhase3={handlePhase3} />
+            <PhaseChecking
+              targetUrl={targetUrl}
+              apiKey={apiKey}
+              anthropicApiKey={anthropicApiKey}
+              onPhase3={handlePhase3}
+            />
           )}
           {phase === "phase2" && targetUrl && mode === "semantic" && (
             <PhaseSemantic
               targetUrl={targetUrl}
+              apiKey={apiKey}
+              anthropicApiKey={anthropicApiKey}
               onPhase3={handlePhase3}
               onExcelReady={handleExcelReady}
+            />
+          )}
+          {phase === "phase2" && targetUrl && mode === "feature" && (
+            <PhaseFeature
+              targetUrl={targetUrl}
+              apiKey={apiKey}
+              anthropicApiKey={anthropicApiKey}
+              goal={goal}
             />
           )}
 
