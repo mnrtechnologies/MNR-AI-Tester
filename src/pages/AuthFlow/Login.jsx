@@ -8,7 +8,7 @@ import { Eye, EyeOff } from "lucide-react";
 const Login = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch(); // Initialize dispatch
-  
+
   // Get loading state from Redux slice (optional, replaces local loading)
   const { loading } = useSelector((state) => state.auth);
 
@@ -35,8 +35,16 @@ const Login = () => {
     }));
 
     if (name === "email") {
-      if (value && !value.endsWith("@mnrtechnologies.com")) {
-        setEmailError("Only @mnrtechnologies.com emails are allowed");
+      if (
+        value &&
+        !(
+          value.endsWith("@mnrtechnologies.com") ||
+          value.endsWith("@adventglobal.com")
+        )
+      ) {
+        setEmailError(
+          "Only @mnrtechnologies.com or @adventglobal.com emails are allowed",
+        );
       } else {
         setEmailError("");
       }
@@ -128,8 +136,8 @@ const Login = () => {
               </button>
             </div>
             <div className="flex justify-end mt-2">
-              <Link 
-                to="/forgot-password" 
+              <Link
+                to="/forgot-password"
                 className="text-xs font-semibold text-gray-500 hover:text-orange-500 transition"
               >
                 Forgot Password?

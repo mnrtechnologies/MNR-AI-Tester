@@ -8,7 +8,7 @@ import { ArrowLeft, MailCheck } from "lucide-react";
 const ForgotPassword = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  
+
   // Get loading state from Redux store
   const { loading } = useSelector((state) => state.auth);
 
@@ -20,8 +20,16 @@ const ForgotPassword = () => {
     const value = e.target.value;
     setEmail(value);
 
-    if (value && !value.endsWith("@mnrtechnologies.com")) {
-      setEmailError("Only @mnrtechnologies.com emails are allowed");
+    if (
+      value &&
+      !(
+        value.endsWith("@mnrtechnologies.com") ||
+        value.endsWith("@adventglobal.com")
+      )
+    ) {
+      setEmailError(
+        "Only @mnrtechnologies.com or @adventglobal.com emails are allowed",
+      );
     } else {
       setEmailError("");
     }

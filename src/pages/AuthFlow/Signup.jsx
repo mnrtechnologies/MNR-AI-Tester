@@ -37,8 +37,16 @@ const Signup = () => {
 
     // Email validation
     if (name === "email") {
-      if (value && !value.endsWith("@mnrtechnologies.com")) {
-        setEmailError("Only @mnrtechnologies.com emails are allowed");
+      if (
+        value &&
+        !(
+          value.endsWith("@mnrtechnologies.com") ||
+          value.endsWith("@adventglobal.com")
+        )
+      ) {
+        setEmailError(
+          "Only @mnrtechnologies.com or @adventglobal.com emails are allowed",
+        );
       } else {
         setEmailError("");
       }
@@ -61,9 +69,9 @@ const Signup = () => {
     }
 
     // Dispatching the signUp action from authAPI.js
-    // Note: If your backend needs 'mobile', ensure your authAPI.js signUp function 
+    // Note: If your backend needs 'mobile', ensure your authAPI.js signUp function
     // is updated to accept it as well.
-    dispatch(signUp(name, email, password, confirmPassword,mobile, navigate));
+    dispatch(signUp(name, email, password, confirmPassword, mobile, navigate));
   };
 
   return (
