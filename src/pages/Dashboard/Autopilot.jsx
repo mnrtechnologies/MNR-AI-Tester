@@ -482,7 +482,10 @@ function PhaseLogin({ onDone }) {
         pushLog("✅ Login complete — auth.json saved", "green");
         setStatus("done");
         ws.close();
-        setTimeout(() => onDone(targetUrl, mode, apiKey, anthropicApiKey, goal), 800); // Pass goal to parent
+        setTimeout(
+          () => onDone(targetUrl, mode, apiKey, anthropicApiKey, goal),
+          800,
+        ); // Pass goal to parent
         return;
       }
       if (data.type === "error") {
@@ -732,10 +735,7 @@ function PhaseLogin({ onDone }) {
                 Semantic AI Agent
               </button>
               <button
-                className={cx(
-                  "toggle-opt",
-                  mode === "feature" ? "active" : "",
-                )}
+                className={cx("toggle-opt", mode === "feature" ? "active" : "")}
                 onClick={() => setMode("feature")}
                 disabled={status === "running"}
               >
@@ -862,6 +862,8 @@ function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onPhase3 }) {
     completed: 0,
     current: "",
   });
+  // NEW: State to hold continuously incoming reports
+  const [reports, setReports] = useState([]);
   const wsRef = useRef(null);
 
   const pushLog = (msg, color = "white") =>
@@ -902,12 +904,23 @@ function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onPhase3 }) {
           return;
         }
         if (msg.type === "url_report") {
-          pushLog(`✓ Indexed: ${msg.url}`, "green");
+          // Keep existing log and progress update
+          pushLog(`✓ Indexed: ${msg.url || "URL"}`, "green");
           setProgress((p) => ({
             ...p,
-            completed: msg.completed || p.completed,
-            total: msg.total || p.total,
+            completed:
+              msg.completed !== undefined ? msg.completed : p.completed,
+            total: msg.total !== undefined ? msg.total : p.total,
           }));
+
+          // NEW: Collect the excel file if provided in the continuous stream
+          if (msg.excel_base64 && msg.excel_filename) {
+            setReports((prev) => [
+              ...prev,
+              { filename: msg.excel_filename, base64: msg.excel_base64 },
+            ]);
+            pushLog(`📊 Report ready: ${msg.excel_filename}`, "green");
+          }
           return;
         }
         if (msg.message)
@@ -950,11 +963,13 @@ function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onPhase3 }) {
       try {
         const r = await fetch(`${API}/checking/${jobId}/status`);
         const d = await r.json();
-        setProgress({
-          total: d.total_urls,
-          completed: d.completed_urls,
-          current: d.current_url || "",
-        });
+        setProgress((p) => ({
+          ...p, // keep existing totals if not returned by status
+          total: d.total_urls !== undefined ? d.total_urls : p.total,
+          completed:
+            d.completed_urls !== undefined ? d.completed_urls : p.completed,
+          current: d.current_url || p.current,
+        }));
       } catch {}
     },
     status === "running" ? 3000 : null,
@@ -1020,7 +1035,10 @@ function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onPhase3 }) {
 
       {/* BOTTOM ROW: Stats (Left) and Logs (Right) */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
-        <div className="card">
+        <div
+          className="card"
+          style={{ display: "flex", flexDirection: "column" }}
+        >
           <div style={{ display: "flex", gap: 32, marginBottom: 24 }}>
             <div>
               <div className="stat-val">{progress.completed}</div>
@@ -1057,6 +1075,62 @@ function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onPhase3 }) {
               <span className="font-mono">{progress.current}</span>
             </div>
           )}
+
+          {/* NEW: Render multiple continuous reports */}
+          {reports.length > 0 && (
+            <div
+              style={{
+                marginTop: 24,
+                borderTop: `1px solid ${C.border}`,
+                paddingTop: 16,
+              }}
+            >
+              <div className="label" style={{ marginBottom: 12 }}>
+                Generated Reports ({reports.length})
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 8,
+                  maxHeight: 180,
+                  overflowY: "auto",
+                  paddingRight: 4,
+                }}
+              >
+                {reports.map((report, idx) => (
+                  <button
+                    key={idx}
+                    className="excel-pill"
+                    style={{ animation: "none" }} // Disabling slideIn to prevent a wall of jumping buttons
+                    onClick={() => {
+                      const link = document.createElement("a");
+                      link.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${report.base64}`;
+                      link.download = report.filename;
+                      link.click();
+                    }}
+                    title={`Download ${report.filename}`}
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    {report.filename}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         <LogPanel logs={logs} />
       </div>
@@ -1067,7 +1141,13 @@ function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onPhase3 }) {
 // ════════════════════════════════════════════════════════════════════════════
 // PHASE 2 — Semantic Driver
 // ════════════════════════════════════════════════════════════════════════════
-function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onPhase3, onExcelReady }) {
+function PhaseSemantic({
+  targetUrl,
+  apiKey,
+  anthropicApiKey,
+  onPhase3,
+  onExcelReady,
+}) {
   const [testId, setTestId] = useState(null);
   const [status, setStatus] = useState("starting");
   const [screenshot, setScreenshot] = useState(null);
@@ -1088,10 +1168,10 @@ function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onPhase3, onExcelRe
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // ONLY adding keys here, and using "url" instead of "base_url"
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           url: targetUrl,
           api_key: apiKey || undefined,
-          anthropic_api_key: anthropicApiKey || undefined
+          anthropic_api_key: anthropicApiKey || undefined,
         }),
       });
       const data = await res.json();
@@ -1248,7 +1328,12 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal }) {
   const [status, setStatus] = useState("starting");
   const [screenshot, setScreenshot] = useState(null);
   const [logs, setLogs] = useState([]);
-  const [progress, setProgress] = useState({ current: 0, max: 0, lastAction: "", summary: null });
+  const [progress, setProgress] = useState({
+    current: 0,
+    max: 0,
+    lastAction: "",
+    summary: null,
+  });
   const wsRef = useRef(null);
 
   const pushLog = (msg, color = "white") =>
@@ -1261,7 +1346,7 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal }) {
     const start = async () => {
       pushLog(`Initializing Feature Test Engine → ${targetUrl}`, "cyan");
       pushLog(`Goal: ${goal}`, "cyan");
-      
+
       const res = await fetch(`${API}/tests/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1274,7 +1359,7 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal }) {
           anthropic_api_key: anthropicApiKey || undefined,
         }),
       });
-      
+
       const data = await res.json();
       if (cancelled) return;
 
@@ -1293,7 +1378,11 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal }) {
         if (msg.message) {
           pushLog(
             msg.message,
-            msg.type === "error" ? "red" : msg.type === "done" ? "green" : "white",
+            msg.type === "error"
+              ? "red"
+              : msg.type === "done"
+                ? "green"
+                : "white",
           );
         }
         if (msg.type === "done" || msg.status === "completed") {
@@ -1323,7 +1412,7 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal }) {
       try {
         const r = await fetch(`${API}/tests/${testId}/status`);
         const d = await r.json();
-        
+
         setProgress((p) => ({
           ...p,
           current: d.current_step !== undefined ? d.current_step : p.current,
@@ -1331,7 +1420,7 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal }) {
           lastAction: d.last_action || p.lastAction,
           summary: d.summary || p.summary,
         }));
-        
+
         if (d.status === "completed") setStatus("done");
         if (d.status === "failed") setStatus("error");
       } catch {}
@@ -1388,7 +1477,9 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
         <div className="card">
           <div style={{ marginBottom: 24 }}>
-            <div className="label" style={{ marginBottom: 8 }}>Target Goal</div>
+            <div className="label" style={{ marginBottom: 8 }}>
+              Target Goal
+            </div>
             <div
               style={{
                 fontSize: 14,
@@ -1403,7 +1494,7 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal }) {
               "{goal}"
             </div>
           </div>
-          
+
           <div style={{ display: "flex", gap: 32, marginBottom: 24 }}>
             <div>
               <div className="stat-val">{progress.current}</div>
@@ -1416,13 +1507,13 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal }) {
               <div className="stat-lbl">Max Steps Allowed</div>
             </div>
           </div>
-          
+
           <ProgressBar
             value={progress.current}
             max={progress.max || 1}
             label="Execution Progress"
           />
-          
+
           {progress.lastAction && (
             <div
               style={{
@@ -1457,7 +1548,11 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal }) {
                 border: `1px solid rgba(16,185,129,.2)`,
               }}
             >
-              <div style={{ fontWeight: 600, marginBottom: 4, color: "#000000" }}>Test Summary</div>
+              <div
+                style={{ fontWeight: 600, marginBottom: 4, color: "#000000" }}
+              >
+                Test Summary
+              </div>
               {progress.summary}
             </div>
           )}
@@ -1814,7 +1909,13 @@ export default function App() {
   const [excelB64, setExcelB64] = useState(null);
   const [excelName, setExcelName] = useState(null);
 
-  const handleLoginDone = (url, selectedMode, openaiKey, antKey, selectedGoal) => {
+  const handleLoginDone = (
+    url,
+    selectedMode,
+    openaiKey,
+    antKey,
+    selectedGoal,
+  ) => {
     localStorage.setItem("targetUrl", url);
     localStorage.setItem("autopilotRunning", "true");
     setTargetUrl(url);
