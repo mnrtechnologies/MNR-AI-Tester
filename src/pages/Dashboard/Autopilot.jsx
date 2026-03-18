@@ -3,7 +3,6 @@ import { useState, useEffect, useRef } from "react";
 const API = process.env.REACT_APP_AI_TESTER_BACKEND_URL;
 const WS = API.replace(/^http/, "ws");
 
-// ── Light Professional Color Palette ─────────────────────────────────────────
 const C = {
   bg: "#ffffff", // Clean white background
   surface: "#fafafa", // Very light gray for cards
@@ -893,7 +892,11 @@ function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onPhase3, onExcelRe
                 ? "green"
                 : "white",
           );
-        if (msg.type === "done") {
+          if (msg.type === "test_started") {
+          onPhase3("checking", data.job_id);
+          return;
+        } 
+          if (msg.type === "done") {
           setStatus("done");
           pushLog(
             "Checking phase complete — Handing off to Phase 2 validation",
@@ -1451,321 +1454,273 @@ function PhaseValidation({ source }) {
   const [screenshot, setScreenshot] = useState(null);
   const [logs, setLogs] = useState([]);
   const [summaries, setSummaries] = useState({});
+  const [batchDone, setBatchDone] = useState(false);
   const wsRef = useRef(null);
-  const knownIds = useRef(new Set());
-  const activeWsRef = useRef(null);
+  const startTimeRef = useRef(Date.now());
 
   const pushLog = (msg, color = "white") =>
     setLogs((p) => [...p, { message: msg, color }]);
 
-  useInterval(async () => {
-    try {
-      const r = await fetch(`${API}/tests`);
-      const d = await r.json();
-      const ids = Object.keys(d);
-      const fresh = ids.filter((id) => !knownIds.current.has(id));
-      fresh.forEach((id) => {
-        knownIds.current.add(id);
-        setTests((p) => [...p, { id, status: d[id].status }]);
-        pushLog(`Task initialized: ${id}`, "cyan");
-      });
-      setTests((p) =>
-        p.map((t) => {
-          const newStatus = d[t.id]?.status || t.status;
-
-          // If just completed and summary not fetched yet
-          if (newStatus === "completed" && !summaries[t.id]) {
-            fetch(`${API}/tests/${t.id}/status`)
-              .then((r) => r.json())
-              .then((data) => {
-                if (data.summary) {
-                  setSummaries((prev) => ({
-                    ...prev,
-                    [t.id]: data.summary ?? "No summary available",
-                  }));
-                }
-              })
-              .catch(() => {});
-          }
-
-          return { ...t, status: newStatus };
-        }),
-      );
-    } catch {}
-  }, 4000);
-
   useEffect(() => {
-    const running = tests.find((t) => t.status === "running");
-    if (!running) return;
-    if (running.id === activeId) return;
+    // Extract the job_id from source string e.g. "checking / 48deac4a-..."
+    const jobId = source.split(" / ")[1]?.trim();
+    if (!jobId) {
+      pushLog("❌ Could not extract job ID from source", "red");
+      return;
+    }
 
-    setActiveId(running.id);
-    activeWsRef.current?.close();
+    pushLog(`🔌 Connecting to batch stream: ${jobId}`, "cyan");
 
-    const ws = new WebSocket(`${WS}/ws/tests/${running.id}`);
-    activeWsRef.current = ws;
+    const ws = new WebSocket(`${WS}/ws/checking/${jobId}`);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      pushLog("✅ Connected to batch WebSocket", "green");
+    };
 
     ws.onmessage = (ev) => {
       const msg = JSON.parse(ev.data);
+
+      // ── Screenshot frames ──────────────────────────────────────
       if (msg.type === "frame") {
         setScreenshot(`data:image/jpeg;base64,${msg.image}`);
         return;
       }
-      if (msg.message) pushLog(msg.message, "white");
+
+      // ── New test started ───────────────────────────────────────
+      if (msg.type === "test_started") {
+        const { test_id, story_index, total } = msg;
+        setActiveId(test_id);
+        setTests((p) => {
+          const exists = p.find((t) => t.id === test_id);
+          if (exists) return p.map((t) => t.id === test_id ? { ...t, status: "running" } : t);
+          return [...p, { id: test_id, status: "running", index: story_index, total }];
+        });
+        pushLog(msg.message, "cyan");
+        return;
+      }
+
+      // ── Test progress ping ─────────────────────────────────────
+      if (msg.type === "test_progress") {
+        pushLog(msg.message, "white");
+        return;
+      }
+
+      // ── Test finished ──────────────────────────────────────────
+      if (msg.type === "test_done") {
+        const { test_id, status, summary } = msg;
+        setTests((p) =>
+          p.map((t) => t.id === test_id ? { ...t, status } : t)
+        );
+        if (summary) {
+          setSummaries((prev) => ({ ...prev, [test_id]: summary }));
+        }
+        if (status === "completed") setActiveId(null);
+        pushLog(msg.message, status === "completed" ? "green" : "red");
+        return;
+      }
+
+      // ── Batch complete ─────────────────────────────────────────
+      if (msg.type === "batch_done") {
+        setBatchDone(true);
+        localStorage.removeItem("autopilotRunning");
+        pushLog(msg.message, "green");
+        return;
+      }
+
+      // ── Generic log / status messages ──────────────────────────
+      if (msg.message) {
+        pushLog(
+          msg.message,
+          msg.type === "error" ? "red"
+          : msg.type === "warning" ? "yellow"
+          : msg.type === "status" ? "cyan"
+          : "white"
+        );
+      }
     };
 
-    ws.onerror = () => pushLog(`Stream disconnected for ${running.id}`, "red");
+    ws.onerror = () => pushLog("❌ WebSocket error", "red");
+    ws.onclose = () => pushLog("🔌 WebSocket closed", "yellow");
 
     return () => ws.close();
-  }, [tests]);
+  }, [source]);
 
+  // Derived stats
   const done = tests.filter((t) => t.status === "completed").length;
   const failed = tests.filter((t) => t.status === "failed").length;
   const total = tests.length;
+  const pct = total > 0 ? Math.round(((done + failed) / total) * 100) : 0;
 
-  useEffect(() => {
-    if (total > 0 && done + failed === total) {
-      localStorage.removeItem("autopilotRunning");
-    }
-  }, [done, failed, total]);
+  // ETA
+  const elapsed = (Date.now() - startTimeRef.current) / 1000;
+  const rate = (done + failed) / Math.max(elapsed, 1);
+  const remaining = total - done - failed;
+  const etaSec = rate > 0 ? Math.round(remaining / rate) : null;
+  const etaStr = !etaSec ? "Estimating..."
+    : etaSec > 3600 ? `~${Math.round(etaSec / 3600)}h left`
+    : etaSec > 60 ? `~${Math.round(etaSec / 60)}m left`
+    : `~${etaSec}s left`;
 
   return (
-    <div
-      className="fade-up"
-      style={{ display: "flex", flexDirection: "column", gap: 24 }}
-    >
+    <div className="fade-up" style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       <div>
         <div className="phase-header">Phase 2 — Validation</div>
         <div className="phase-title">Sequential Execution Engine</div>
-        <div
-          style={{
-            fontSize: 13,
-            color: C.muted,
-            marginTop: 8,
-            display: "inline-flex",
-            background: C.surface,
-            padding: "4px 10px",
-            borderRadius: 4,
-            border: `1px solid ${C.border}`,
-          }}
-        >
-          Source Data:{" "}
-          <span
-            className="font-mono"
-            style={{ marginLeft: 6, color: "#000000" }}
-          >
-            {source}
-          </span>
+        <div style={{ fontSize: 13, color: C.muted, marginTop: 8,
+          display: "inline-flex", background: C.surface, padding: "4px 10px",
+          borderRadius: 4, border: `1px solid ${C.border}` }}>
+          Source: <span className="font-mono" style={{ marginLeft: 6, color: "#000" }}>{source}</span>
         </div>
       </div>
 
-      {/* TOP ROW: Large live feed */}
-      <div style={{ width: "100%" }}>
-        <ScreenPanel
-          src={screenshot}
-          scanning={!!activeId}
-          label={
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span
-                className="font-mono"
-                style={{ color: C.muted, fontSize: 12 }}
-              >
-                Executing:
-              </span>
-              <span
-                className="font-mono"
-                style={{ color: "#000000", fontSize: 13 }}
-              >
-                {activeId || "Idle"}
-              </span>
-            </div>
-          }
-        />
-      </div>
+      {/* Live screenshot */}
+      <ScreenPanel src={screenshot} scanning={!!activeId}
+        label={
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span className="font-mono" style={{ color: C.muted, fontSize: 12 }}>Executing:</span>
+            <span className="font-mono" style={{ color: "#000", fontSize: 13 }}>
+              {activeId || (batchDone ? "Complete" : "Idle")}
+            </span>
+          </div>
+        }
+      />
 
-      {/* BOTTOM ROW: Queue/Stats (Left) and Logs (Right) */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div className="card" style={{ display: "flex", gap: 32 }}>
-            <div>
-              <div className="stat-val">{total}</div>
-              <div className="stat-lbl">Queued</div>
-            </div>
-            <div>
-              <div className="stat-val" style={{ color: C.green }}>
-                {done}
+
+          {/* Progress bar card */}
+          <div className="card">
+            <div style={{ display: "flex", justifyContent: "space-between",
+              alignItems: "flex-end", marginBottom: 10 }}>
+              <div>
+                <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>
+                  Suite execution progress
+                </div>
+                <div className="stat-val">{pct}%</div>
               </div>
-              <div className="stat-lbl">Verified Passed</div>
-            </div>
-            <div>
-              <div className="stat-val" style={{ color: C.red }}>
-                {failed}
+              <div style={{ display: "flex", gap: 20, textAlign: "right" }}>
+                <div>
+                  <div className="stat-val" style={{ color: C.green }}>{done}</div>
+                  <div className="stat-lbl">passed</div>
+                </div>
+                <div>
+                  <div className="stat-val" style={{ color: C.red }}>{failed}</div>
+                  <div className="stat-lbl">failed</div>
+                </div>
+                <div>
+                  <div className="stat-val" style={{ color: C.muted }}>
+                    {Math.max(0, total - done - failed)}
+                  </div>
+                  <div className="stat-lbl">pending</div>
+                </div>
+                <div>
+                  <div className="stat-val">{total}</div>
+                  <div className="stat-lbl">total</div>
+                </div>
               </div>
-              <div className="stat-lbl">Anomalies</div>
+            </div>
+
+            {/* Segmented bar */}
+            <div style={{ height: 8, background: "#f3f4f6", borderRadius: 999,
+              overflow: "hidden", position: "relative" }}>
+              <div style={{ position: "absolute", left: 0, top: 0, height: "100%",
+                width: `${total > 0 ? (done / total) * 100 : 0}%`,
+                background: C.green, borderRadius: 999,
+                transition: "width .5s ease" }} />
+              <div style={{ position: "absolute", top: 0, height: "100%",
+                left: `${total > 0 ? (done / total) * 100 : 0}%`,
+                width: `${total > 0 ? (failed / total) * 100 : 0}%`,
+                background: C.red, borderRadius: 999,
+                transition: "width .5s ease, left .5s ease" }} />
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between",
+              marginTop: 8, fontSize: 11, color: C.muted }}>
+              <span>{batchDone ? "✅ All tests complete" : etaStr}</span>
+              <span style={{ color: "#000" }}>
+                {activeId ? `Running: ${activeId.slice(0, 8)}...` : "Idle"}
+              </span>
             </div>
           </div>
 
-          <div className="card" style={{ padding: "20px" }}>
-            {total > 0 ? (
-              <ProgressBar
-                value={done + failed}
-                max={total}
-                label="Suite Execution Progress"
-              />
-            ) : (
-              <div style={{ fontSize: 13, color: C.muted }}>
-                Awaiting task payload...
-              </div>
-            )}
-          </div>
-
-          <div
-            style={{
-              maxHeight: 280,
-              overflowY: "auto",
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-              paddingRight: 4,
-            }}
-          >
+          {/* Test list — increased height, summaries shown inline */}
+          <div style={{ maxHeight: 480, overflowY: "auto",
+            display: "flex", flexDirection: "column", gap: 8, paddingRight: 4 }}>
             {tests.map((t) => (
-              <div
-                key={t.id}
+              <div key={t.id}
                 className={cx("test-item", t.id === activeId ? "active" : "")}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 4,
-                  padding: "8px 12px",
-                }}
-              >
-                {/* Test Header: Icon, ID, and Badge */}
+                style={{ display: "flex", flexDirection: "column", gap: 4, padding: "8px 12px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      width: 16,
-                    }}
-                  >
+                  <div style={{ width: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>
                     {t.status === "completed" ? (
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke={C.green}
-                        strokeWidth="3"
-                      >
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke={C.green} strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>
                     ) : t.status === "failed" ? (
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke={C.red}
-                        strokeWidth="3"
-                      >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke={C.red} strokeWidth="3">
                         <line x1="18" y1="6" x2="6" y2="18" />
                         <line x1="6" y1="6" x2="18" y2="18" />
                       </svg>
                     ) : t.status === "running" ? (
-                      <span
-                        className="spinner"
-                        style={{
-                          width: 12,
-                          height: 12,
-                          borderWidth: "2px",
-                          borderColor: `transparent transparent ${C.accent} ${C.accent}`,
-                        }}
-                      />
+                      <span className="spinner" style={{ width: 12, height: 12,
+                        borderWidth: "2px",
+                        borderColor: `transparent transparent ${C.accent} ${C.accent}` }} />
                     ) : (
-                      <div
-                        style={{
-                          width: 6,
-                          height: 6,
-                          borderRadius: "50%",
-                          background: C.muted,
-                        }}
-                      />
+                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.muted }} />
                     )}
                   </div>
-
-                  <span
-                    style={{
-                      color: t.id === activeId ? "#000000" : C.muted,
-                      flex: 1,
-                      fontSize: 13,
-                    }}
-                    className="font-mono"
-                  >
-                    {t.id}
+                  <span style={{ color: t.id === activeId ? "#000" : C.muted, flex: 1, fontSize: 13 }}
+                    className="font-mono">
+                    {t.index ? `[${t.index}/${t.total}] ` : ""}{t.id.slice(0, 8)}...
                   </span>
-
-                  <span
-                    className={cx(
-                      "badge",
-                      t.status === "completed"
-                        ? "badge-done"
-                        : t.status === "failed"
-                          ? "badge-failed"
-                          : t.status === "running"
-                            ? "badge-running"
-                            : "badge-idle",
-                    )}
-                    style={{ fontSize: 10, padding: "2px 8px" }}
-                  >
+                  <span className={cx("badge",
+                    t.status === "completed" ? "badge-done"
+                    : t.status === "failed" ? "badge-failed"
+                    : t.status === "running" ? "badge-running"
+                    : "badge-idle")}
+                    style={{ fontSize: 10, padding: "2px 8px" }}>
                     {t.status}
                   </span>
                 </div>
 
-                {/* Summary Section: Appears only when completed and summary exists */}
-                {t.status === "completed" && summaries[t.id] && (
-                  <div
-                    style={{
-                      marginTop: 4,
-                      marginLeft: 26,
-                      fontSize: 11,
-                      color: C.green,
-                      lineHeight: 1.6,
-                    }}
-                  >
-                    {summaries[t.id]}
+                {/* Summary card */}
+                {(t.status === "completed" || t.status === "failed") && summaries[t.id] && (
+                  <div style={{
+                    marginTop: 8, marginLeft: 26, fontSize: 12, lineHeight: 1.6,
+                    background: t.status === "completed"
+                      ? "rgba(16,185,129,.05)" : "rgba(239,68,68,.05)",
+                    border: `1px solid ${t.status === "completed"
+                      ? "rgba(16,185,129,.2)" : "rgba(239,68,68,.2)"}`,
+                    borderRadius: 6, padding: "8px 12px",
+                  }}>
+                    <div style={{ fontSize: 10, fontWeight: 700,
+                      textTransform: "uppercase", letterSpacing: ".05em",
+                      color: t.status === "completed" ? C.green : C.red,
+                      marginBottom: 4 }}>
+                      {t.status === "completed" ? "✅ Summary" : "❌ Failure Reason"}
+                    </div>
+                    <div style={{ color: "#000", fontSize: 12 }}>
+                      {summaries[t.id]}
+                    </div>
                   </div>
                 )}
               </div>
             ))}
 
             {tests.length === 0 && (
-              <div
-                style={{
-                  color: C.muted,
-                  fontSize: 13,
-                  padding: "16px",
-                  textAlign: "center",
-                  border: `1px dashed ${C.border}`,
-                  borderRadius: 8,
-                }}
-              >
-                Orchestrator is preparing tests...
-                <span
-                  className="font-mono"
-                  style={{ animation: "blink 1s step-end infinite" }}
-                >
-                  _
-                </span>
+              <div style={{ color: C.muted, fontSize: 13, padding: "16px",
+                textAlign: "center", border: `1px dashed ${C.border}`, borderRadius: 8 }}>
+                Waiting for tests...
+                <span className="font-mono"
+                  style={{ animation: "blink 1s step-end infinite" }}>_</span>
               </div>
             )}
           </div>
+
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <LogPanel logs={logs} />
-        </div>
+        <LogPanel logs={logs} />
       </div>
     </div>
   );
@@ -1785,8 +1740,6 @@ export default function App() {
   const testRunning = phase === "phase2" || phase === "phase3";
 
   // ── Excel state lifted here so it survives phase transitions ────────────
-  // const [excelB64, setExcelB64] = useState(null);
-  // const [excelName, setExcelName] = useState(null);
   const [excelReports, setExcelReports] = useState([]);
 
   const handleLoginDone = (url, selectedMode, openaiKey, antKey, selectedGoal) => {
@@ -1797,9 +1750,6 @@ export default function App() {
     setAnthropicApiKey(antKey);
     setMode(selectedMode);
     setGoal(selectedGoal || "");
-    // Reset excel state on new run
-    // setExcelB64(null);
-    // setExcelName(null);
     setExcelReports([]);
     setPhase("phase2");
   };
@@ -1811,19 +1761,17 @@ export default function App() {
 
   // Called by PhaseSemantic when the report arrives
   const handleExcelReady = (b64, name) => {
-  setExcelReports(prev => [...prev, { b64, name }]);
-};
+    setExcelReports(prev => [...prev, { b64, name }]);
+  };
 
   useEffect(() => {
     const handler = (e) => {
       if (!testRunning) return;
-
       e.preventDefault();
       e.returnValue = "";
     };
 
     window.addEventListener("beforeunload", handler);
-
     return () => {
       window.removeEventListener("beforeunload", handler);
     };
@@ -1879,11 +1827,6 @@ export default function App() {
 
             {/* Right side of top bar — persistent download pill + URL + Terminate Button */}
             <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-              {/* <ExcelDownloadPill
-                excelB64={excelB64}
-                excelName={excelName}
-                mode={mode}
-              /> */}
               <ExcelDownloadPill reports={excelReports} />
 
               <div
