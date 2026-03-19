@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 const API = process.env.REACT_APP_AI_TESTER_BACKEND_URL;
 const WS = API.replace(/^http/, "ws");
 
+// ── Light Professional Color Palette ─────────────────────────────────────────
 const C = {
   bg: "#ffffff", // Clean white background
   surface: "#fafafa", // Very light gray for cards
@@ -861,6 +862,7 @@ function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onPhase3, onExcelRe
 
       ws.onmessage = (ev) => {
         const msg = JSON.parse(ev.data);
+        if (msg.type === "ping") return;
         if (msg.type === "frame") {
           setScreenshot(`data:image/jpeg;base64,${msg.image}`);
           if (msg.current_url)
@@ -1082,6 +1084,7 @@ function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onPhase3, onExcelRe
 
       ws.onmessage = (ev) => {
         const msg = JSON.parse(ev.data);
+        if (msg.type === "ping") return;
         if (msg.type === "frame") {
           setScreenshot(`data:image/jpeg;base64,${msg.image}`);
           if (msg.step !== undefined) setStep(msg.step);
@@ -1263,6 +1266,7 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal }) {
 
       ws.onmessage = (ev) => {
         const msg = JSON.parse(ev.data);
+        if (msg.type === "ping") return;
         if (msg.type === "frame") {
           setScreenshot(`data:image/jpeg;base64,${msg.image}`);
           return;
