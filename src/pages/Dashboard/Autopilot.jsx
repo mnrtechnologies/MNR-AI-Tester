@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
-// const API = process.env.REACT_APP_AI_TESTER_BACKEND_URL;
-const API = "http://localhost:8000";
+const API = process.env.REACT_APP_AI_TESTER_BACKEND_URL;
 const WS = API.replace(/^http/, "ws");
 
 // ── Light Professional Color Palette ─────────────────────────────────────────
