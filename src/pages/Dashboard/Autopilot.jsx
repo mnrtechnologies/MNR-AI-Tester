@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
-const API = process.env.REACT_APP_AI_TESTER_BACKEND_URL;
+// const API = process.env.REACT_APP_AI_TESTER_BACKEND_URL;
+const API = "http://localhost:8000";
 const WS = API.replace(/^http/, "ws");
 
 // ── Light Professional Color Palette ─────────────────────────────────────────
@@ -356,10 +357,19 @@ function ProgressBar({ value = 0, max = 100, label }) {
 function ExcelDownloadPill({ reports }) {
   if (!reports || reports.length === 0) return null;
 
-  const download = (b64, name) => {
+  const download = (urlOrB64, name) => {
     const link = document.createElement("a");
-    link.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${b64}`;
-    link.download = name;
+    // Check if it's an S3 URL or base64
+    if (urlOrB64.startsWith('http://') || urlOrB64.startsWith('https://')) {
+      // S3 URL - direct download
+      link.href = urlOrB64;
+      link.download = name;
+      link.target = '_blank';
+    } else {
+      // Legacy base64 format
+      link.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${urlOrB64}`;
+      link.download = name;
+    }
     link.click();
   };
 
@@ -369,7 +379,7 @@ function ExcelDownloadPill({ reports }) {
         <button
           key={i}
           className="excel-pill"
-          onClick={() => download(r.b64, r.name)}
+          onClick={() => download(r.urlOrB64, r.name)}
           title={`Download ${r.name}`}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -395,7 +405,7 @@ function PhaseLogin({ onDone }) {
   const [apiKey, setApiKey] = useState("");
   const [anthropicApiKey, setAnthropicApiKey] = useState("");
   const [mode, setMode] = useState("checking");
-  const [goal, setGoal] = useState(""); // <--- NEW feature testing goal state
+  const [goal, setGoal] = useState("");
   const [status, setStatus] = useState("idle");
   const [logs, setLogs] = useState([]);
   const [screenshot, setScreenshot] = useState(null);
@@ -407,7 +417,6 @@ function PhaseLogin({ onDone }) {
     setLogs((p) => [...p, { message: msg, color }]);
 
   const connect = () => {
-    // Both URL/Email AND at least one API key are required to connect
     if (!email || !targetUrl || (!apiKey && !anthropicApiKey)) return;
     setStatus("connecting");
     setLogs([]);
@@ -452,7 +461,7 @@ function PhaseLogin({ onDone }) {
         pushLog("✅ Login complete — auth.json saved", "green");
         setStatus("done");
         ws.close();
-        setTimeout(() => onDone(targetUrl, mode, apiKey, anthropicApiKey, goal), 800); // Pass goal to parent
+        setTimeout(() => onDone(targetUrl, mode, apiKey, anthropicApiKey, goal), 800);
         return;
       }
       if (data.type === "error") {
@@ -466,7 +475,7 @@ function PhaseLogin({ onDone }) {
       setStatus("error");
     };
     ws.onclose = () => {
-      if (status === "running") pushLog("Connection closed", "yellow");
+   if (status === "running") pushLog("Connection closed", "yellow");
     };
   };
 
@@ -505,7 +514,6 @@ function PhaseLogin({ onDone }) {
         </div>
       </div>
 
-      {/* TOP ROW: Large live feed */}
       <div style={{ width: "100%" }}>
         <ScreenPanel
           src={screenshot}
@@ -539,7 +547,6 @@ function PhaseLogin({ onDone }) {
         />
       </div>
 
-      {/* BOTTOM ROW: Form (Left) and Logs (Right) */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
         <div
           className="card"
@@ -607,7 +614,6 @@ function PhaseLogin({ onDone }) {
 
           <div className="divider" style={{ margin: "4px 0" }} />
 
-          {/* AI API Key Fields */}
           <div>
             <div
               style={{
@@ -822,8 +828,9 @@ function PhaseLogin({ onDone }) {
 // ════════════════════════════════════════════════════════════════════════════
 // PHASE 2 — Checking Pipeline
 // ════════════════════════════════════════════════════════════════════════════
-function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onPhase3, onExcelReady }) {
+function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onExcelReady }) {
   const [jobId, setJobId] = useState(null);
+  const [parentSessionId, setParentSessionId] = useState(null);
   const [status, setStatus] = useState("starting");
   const [screenshot, setScreenshot] = useState(null);
   const [logs, setLogs] = useState([]);
@@ -872,19 +879,33 @@ function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onPhase3, onExcelRe
             setProgress((p) => ({ ...p, completed: msg.completed }));
           return;
         }
-        if (msg.type === "url_report") {
-          pushLog(`✓ Indexed: ${msg.url}`, "green");
+        if (msg.type === "url_started") {
+          pushLog(`🔍 Exploring: ${msg.url}`, "cyan");
           setProgress((p) => ({
             ...p,
-            completed: msg.completed || p.completed,
-            total: msg.total || p.total,
+            current: msg.url,
+            total:   msg.total || p.total,
+            completed: msg.index - 1,
           }));
-          if (msg.excel_base64 && msg.excel_filename) {
-            onExcelReady(msg.excel_base64, msg.excel_filename);
-            pushLog(`📊 Report ready: ${msg.excel_filename}`, "green");
-          }
           return;
         }
+        if (msg.type === "url_report") {
+  pushLog(`✓ Indexed: ${msg.url}`, "green");
+  setProgress((p) => ({
+    ...p,
+    completed: msg.completed || p.completed,
+    total: msg.total || p.total,
+  }));
+  if (msg.s3_download_url && msg.excel_filename) {
+    onExcelReady(msg.s3_download_url, msg.excel_filename);
+    pushLog(`📊 Report saved to S3: ${msg.excel_filename}`, "green");
+  }
+  // ← ADD THIS: extract real parent session from session_id
+  if (msg.session_id && !parentSessionId) {
+    setParentSessionId(msg.parent_session);
+  }
+  return;
+}
         if (msg.message)
           pushLog(
             msg.message,
@@ -894,18 +915,11 @@ function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onPhase3, onExcelRe
                 ? "green"
                 : "white",
           );
-          if (msg.type === "test_started") {
-          onPhase3("checking", data.job_id);
-          return;
-        } 
-          if (msg.type === "done") {
+        if (msg.type === "done") {
           setStatus("done");
-          pushLog(
-            "Checking phase complete — Handing off to Phase 2 validation",
-            "cyan",
-          );
+          pushLog("✅ Phase 1 Complete — All URLs indexed and reports generated", "green");
           ws.close();
-          triggerPhase3(data.job_id);
+          // Phase 3 is now manually triggered - no auto-start
         }
         if (msg.type === "error") {
           setStatus("error");
@@ -929,28 +943,17 @@ function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onPhase3, onExcelRe
       try {
         const r = await fetch(`${API}/checking/${jobId}/status`);
         const d = await r.json();
-        setProgress({
-          total: d.total_urls,
-          completed: d.completed_urls,
-          current: d.current_url || "",
-        });
+        // Only update total — never overwrite completed
+        // which is managed by url_started/url_report WS messages
+        setProgress((p) => ({
+          ...p,
+          total: d.total_urls || p.total,
+          current: d.current_url || p.current,
+        }));
       } catch {}
     },
     status === "running" ? 3000 : null,
   );
-
-  const triggerPhase3 = async (jid) => {
-    try {
-      const r = await fetch(`${API}/checking/${jid}/trigger-all-tests`, {
-        method: "POST",
-      });
-      const d = await r.json();
-      pushLog(`Phase 2 batch queued — ${d.total_tasks} tasks`, "cyan");
-      onPhase3("checking", jid);
-    } catch (e) {
-      pushLog(`Phase 2 handoff failed: ${e}`, "red");
-    }
-  };
 
   return (
     <div
@@ -988,7 +991,6 @@ function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onPhase3, onExcelRe
         </span>
       </div>
 
-      {/* TOP ROW: Large live feed */}
       <div style={{ width: "100%" }}>
         <ScreenPanel
           src={screenshot}
@@ -997,7 +999,6 @@ function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onPhase3, onExcelRe
         />
       </div>
 
-      {/* BOTTOM ROW: Stats (Left) and Logs (Right) */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
         <div className="card">
           <div style={{ display: "flex", gap: 32, marginBottom: 24 }}>
@@ -1036,6 +1037,29 @@ function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onPhase3, onExcelRe
               <span className="font-mono">{progress.current}</span>
             </div>
           )}
+
+          {parentSessionId && (
+    <div style={{ marginTop: 16, padding: "14px 16px", borderRadius: 8, background: "rgba(59,130,246,0.05)", border: "1px solid rgba(59,130,246,0.2)" }}>
+      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: C.muted, marginBottom: 8 }}>
+        Parent Session ID — use in Phase 3
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span className="font-mono" style={{ fontSize: 13, color: "#000000", fontWeight: 600, flex: 1, wordBreak: "break-all" }}>
+          {parentSessionId}
+        </span>
+        <button
+          className="btn"
+          style={{ padding: "4px 10px", fontSize: 12, border: `1px solid ${C.border}` }}
+          onClick={() => navigator.clipboard.writeText(parentSessionId)}
+        >
+          Copy
+        </button>
+      </div>
+      <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>
+        Use this ID in the Phase 3 → Validation tab
+      </div>
+    </div>
+  )}
         </div>
         <LogPanel logs={logs} />
       </div>
@@ -1046,13 +1070,14 @@ function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onPhase3, onExcelRe
 // ════════════════════════════════════════════════════════════════════════════
 // PHASE 2 — Semantic Driver
 // ════════════════════════════════════════════════════════════════════════════
-function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onPhase3, onExcelReady }) {
+function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onExcelReady }) {
   const [testId, setTestId] = useState(null);
   const [status, setStatus] = useState("starting");
   const [screenshot, setScreenshot] = useState(null);
   const [logs, setLogs] = useState([]);
   const [step, setStep] = useState(0);
   const wsRef = useRef(null);
+  const [parentSessionId, setParentSessionId] = useState(null); // ← ADD THIS
 
   const pushLog = (msg, color = "white") =>
     setLogs((p) => [...p, { message: msg, color }]);
@@ -1066,7 +1091,6 @@ function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onPhase3, onExcelRe
       const res = await fetch(`${API}/semantic/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // ONLY adding keys here, and using "url" instead of "base_url"
         body: JSON.stringify({ 
           url: targetUrl,
           api_key: apiKey || undefined,
@@ -1078,6 +1102,7 @@ function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onPhase3, onExcelRe
 
       setTestId(data.test_id);
       pushLog(`Session ID: ${data.test_id}`, "cyan");
+      setParentSessionId(data.parent_session_id); 
 
       const ws = new WebSocket(`${WS}/ws/semantic/${data.test_id}`);
       wsRef.current = ws;
@@ -1101,16 +1126,13 @@ function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onPhase3, onExcelRe
           );
         if (msg.type === "done") {
           setStatus("done");
-          // Lift Excel data up to parent so it survives phase transitions
-          if (msg.excel_base64) {
-            onExcelReady(msg.excel_base64, msg.excel_filename);
-            pushLog(
-              "📊 Semantic report generated. Available for download.",
-              "green",
-            );
+          // Handle S3 download URL instead of base64
+          if (msg.s3_download_url) {
+            onExcelReady(msg.s3_download_url, msg.excel_filename);
+            pushLog("📊 Semantic report saved to S3 — Available for download", "green");
           }
           ws.close();
-          triggerConvert(data.test_id);
+          // Phase 3 is now manually triggered - no auto-start
         }
         if (msg.type === "error") setStatus("error");
       };
@@ -1125,21 +1147,6 @@ function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onPhase3, onExcelRe
       wsRef.current?.close();
     };
   }, []);
-
-  const triggerConvert = async (tid) => {
-    try {
-      pushLog("Translating semantic findings to Orchestrator tasks...", "cyan");
-      // Kept exactly as you originally had it
-      const r = await fetch(`${API}/semantic/${tid}/convert-to-orchestrator`, {
-        method: "POST",
-      });
-      const d = await r.json();
-      pushLog(`Phase 2 batch queued — ${d.total_tasks} tasks`, "cyan");
-      onPhase3("semantic", tid);
-    } catch (e) {
-      pushLog(`Conversion failed: ${e}`, "red");
-    }
-  };
 
   return (
     <div
@@ -1177,7 +1184,6 @@ function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onPhase3, onExcelRe
         </span>
       </div>
 
-      {/* TOP ROW: Large live feed */}
       <div style={{ width: "100%" }}>
         <ScreenPanel
           src={screenshot}
@@ -1186,7 +1192,6 @@ function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onPhase3, onExcelRe
         />
       </div>
 
-      {/* BOTTOM ROW: Stats (Left) and Logs (Right) */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
         <div className="card">
           <div style={{ display: "flex", gap: 32 }}>
@@ -1213,6 +1218,28 @@ function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onPhase3, onExcelRe
               <div className="stat-lbl">Engine Status</div>
             </div>
           </div>
+          {parentSessionId && (
+            <div style={{ marginTop: 24, padding: "14px 16px", borderRadius: 8, background: "rgba(59,130,246,0.05)", border: "1px solid rgba(59,130,246,0.2)" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: C.muted, marginBottom: 8 }}>
+                Parent Session ID
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span className="font-mono" style={{ fontSize: 13, color: "#000000", fontWeight: 600, flex: 1 }}>
+                  {parentSessionId}
+                </span>
+                <button
+                  className="btn"
+                  style={{ padding: "4px 10px", fontSize: 12, border: `1px solid ${C.border}` }}
+                  onClick={() => navigator.clipboard.writeText(parentSessionId)}
+                >
+                  Copy
+                </button>
+              </div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>
+                Use this ID in the Phase 3 → Validation tab
+              </div>
+            </div>
+          )}
         </div>
         <LogPanel logs={logs} />
       </div>
@@ -1221,10 +1248,11 @@ function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onPhase3, onExcelRe
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// PHASE 2 — Feature Testing (NEW)
+// PHASE 2 — Feature Testing
 // ════════════════════════════════════════════════════════════════════════════
 function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal }) {
   const [testId, setTestId] = useState(null);
+  const [parentSessionId, setParentSessionId] = useState(null);
   const [status, setStatus] = useState("starting");
   const [screenshot, setScreenshot] = useState(null);
   const [logs, setLogs] = useState([]);
@@ -1260,7 +1288,8 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal }) {
 
       setTestId(data.test_id);
       pushLog(`Test Session ID: ${data.test_id}`, "cyan");
-
+      setParentSessionId(data.parent_session_id); // ← ADD THIS
+      
       const ws = new WebSocket(`${WS}/ws/tests/${data.test_id}`);
       wsRef.current = ws;
 
@@ -1297,7 +1326,6 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal }) {
     };
   }, [targetUrl, goal, apiKey, anthropicApiKey]);
 
-  // Poll for the status API to get detailed current_step, last_action, and summary
   useInterval(
     async () => {
       if (!testId || status !== "running") return;
@@ -1356,7 +1384,6 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal }) {
         </span>
       </div>
 
-      {/* TOP ROW: Large live feed */}
       <div style={{ width: "100%" }}>
         <ScreenPanel
           src={screenshot}
@@ -1365,7 +1392,6 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal }) {
         />
       </div>
 
-      {/* BOTTOM ROW: Stats (Left) and Logs (Right) */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
         <div className="card">
           <div style={{ marginBottom: 24 }}>
@@ -1450,282 +1476,324 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// PHASE 3 — Validation (Sequential test runner)
+// PHASE 3 — MongoDB-Driven Validation (Manual Trigger)
 // ════════════════════════════════════════════════════════════════════════════
-function PhaseValidation({ source }) {
-  const [tests, setTests] = useState([]);
-  const [activeId, setActiveId] = useState(null);
-  const [screenshot, setScreenshot] = useState(null);
+function PhaseValidationMongoDB({ apiKey, anthropicApiKey }) {
+  const [parentSessionId, setParentSessionId] = useState("");
+  const [status, setStatus] = useState("idle");
+  const [sessions, setSessions] = useState([]);
+  const [anthropicKey, setAnthropicKey] = useState("");
+const [openaiKey, setOpenaiKey] = useState("");
+  const [progress, setProgress] = useState({ pending: 0, in_progress: 0, completed: 0, failed: 0 });
+  const [taskProgress, setTaskProgress] = useState({ done: 0, total: 0 });
   const [logs, setLogs] = useState([]);
-  const [summaries, setSummaries] = useState({});
-  const [batchDone, setBatchDone] = useState(false);
+  const [screenshot, setScreenshot] = useState(null);
+  const [activeSession, setActiveSession] = useState(null);
   const wsRef = useRef(null);
-  const startTimeRef = useRef(Date.now());
 
   const pushLog = (msg, color = "white") =>
     setLogs((p) => [...p, { message: msg, color }]);
 
-  useEffect(() => {
-    // Extract the job_id from source string e.g. "checking / 48deac4a-..."
-    const jobId = source.split(" / ")[1]?.trim();
-    if (!jobId) {
-      pushLog("❌ Could not extract job ID from source", "red");
+  useInterval(
+    async () => {
+      if (!parentSessionId || status !== "running") return;
+      try {
+        const r = await fetch(`${API}/phase3/status/${parentSessionId}`);
+        const d = await r.json();
+        
+        setSessions(d.sessions || []);
+        setProgress({
+          pending: d.sessions?.filter(s => s.phase3_status === 'pending').length || 0,
+          in_progress: d.sessions?.filter(s => s.phase3_status === 'in_progress').length || 0,
+          completed: d.sessions?.filter(s => s.phase3_status === 'completed').length || 0,
+          failed: d.sessions?.filter(s => s.phase3_status === 'failed').length || 0,
+        });
+
+        if (d.all_done && status === "running") {
+          setStatus("done");
+          pushLog("✅ All Phase 3 tests complete", "green");
+          wsRef.current?.close();
+        }
+      } catch (e) {
+        pushLog(`Status poll failed: ${e}`, "red");
+      }
+    },
+    status === "running" ? 3000 : null,
+  );
+
+  const startPhase3 = async () => {
+    if (!parentSessionId.trim()) {
+      pushLog("❌ Please enter a parent session ID", "red");
       return;
     }
 
-    pushLog(`🔌 Connecting to batch stream: ${jobId}`, "cyan");
+    setStatus("running");
+    setLogs([]);
+    setSessions([]);
+    pushLog(`🚀 Starting Phase 3 for session: ${parentSessionId}`, "cyan");
 
-    const ws = new WebSocket(`${WS}/ws/checking/${jobId}`);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      pushLog("✅ Connected to batch WebSocket", "green");
-    };
-
-    ws.onmessage = (ev) => {
-      const msg = JSON.parse(ev.data);
-
-      // ── Screenshot frames ──────────────────────────────────────
-      if (msg.type === "frame") {
-        setScreenshot(`data:image/jpeg;base64,${msg.image}`);
+    try {
+      const res = await fetch(`${API}/phase3/start/${parentSessionId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+        anthropic_api_key: anthropicKey || undefined, // ✅ Uses what the user typed
+            api_key: openaiKey || undefined,
+    }),
+});
+      const data = await res.json();
+      
+      if (data.error) {
+        pushLog(`❌ ${data.error}`, "red");
+        setStatus("error");
         return;
       }
 
-      // ── New test started ───────────────────────────────────────
-      if (msg.type === "test_started") {
-        const { test_id, story_index, total } = msg;
-        setActiveId(test_id);
-        setTests((p) => {
-          const exists = p.find((t) => t.id === test_id);
-          if (exists) return p.map((t) => t.id === test_id ? { ...t, status: "running" } : t);
-          return [...p, { id: test_id, status: "running", index: story_index, total }];
-        });
-        pushLog(msg.message, "cyan");
-        return;
-      }
+      pushLog(`✓ Found ${data.total_tests} tests to run`, "green");
 
-      // ── Test progress ping ─────────────────────────────────────
-      if (msg.type === "test_progress") {
-        pushLog(msg.message, "white");
-        return;
-      }
+      // Connect to WebSocket for live updates
+      const ws = new WebSocket(`${WS}/ws/phase3/${parentSessionId}`);
+      wsRef.current = ws;
 
-      // ── Test finished ──────────────────────────────────────────
-      if (msg.type === "test_done") {
-        const { test_id, status, summary } = msg;
-        setTests((p) =>
-          p.map((t) => t.id === test_id ? { ...t, status } : t)
-        );
-        if (summary) {
-          setSummaries((prev) => ({ ...prev, [test_id]: summary }));
+      ws.onopen = () => pushLog("✅ Connected to Phase 3 stream", "green");
+
+      ws.onmessage = (ev) => {
+        const msg = JSON.parse(ev.data);
+
+        if (msg.type === "frame") {
+          setScreenshot(`data:image/jpeg;base64,${msg.image}`);
+          return;
         }
-        if (status === "completed") setActiveId(null);
-        pushLog(msg.message, status === "completed" ? "green" : "red");
-        return;
-      }
 
-      // ── Batch complete ─────────────────────────────────────────
-      if (msg.type === "batch_done") {
-        setBatchDone(true);
-        localStorage.removeItem("autopilotRunning");
-        pushLog(msg.message, "green");
-        return;
-      }
+        if (msg.type === "session_started") {
+          setActiveSession(msg.session_id);
+          pushLog(`▶ Starting: ${msg.page_url}`, "cyan");
+          return;
+        }
 
-      // ── Generic log / status messages ──────────────────────────
-      if (msg.message) {
-        pushLog(
-          msg.message,
-          msg.type === "error" ? "red"
-          : msg.type === "warning" ? "yellow"
-          : msg.type === "status" ? "cyan"
-          : "white"
-        );
-      }
-    };
+        if (msg.type === "session_progress") {
+          pushLog(msg.message, "white");
+          return;
+        }
 
-    ws.onerror = () => pushLog("❌ WebSocket error", "red");
-    ws.onclose = () => pushLog("🔌 WebSocket closed", "yellow");
+        if (msg.type === "session_completed") {
+          setActiveSession(null);
+          pushLog(`✅ Completed: ${msg.page_url}`, "green");
+          return;
+        }
 
-    return () => ws.close();
-  }, [source]);
+        if (msg.type === "session_failed") {
+          setActiveSession(null);
+          pushLog(`❌ Failed: ${msg.page_url} - ${msg.reason}`, "red");
+          return;
+        }
 
-  // Derived stats
-  const done = tests.filter((t) => t.status === "completed").length;
-  const failed = tests.filter((t) => t.status === "failed").length;
-  const total = tests.length;
-  const pct = total > 0 ? Math.round(((done + failed) / total) * 100) : 0;
+        if (msg.type === "task_progress") {
+          setTaskProgress({ done: msg.tasks_done, total: msg.tasks_total });
+          return;
+        }
+        if (msg.type === "batch_done") {
+          setStatus("done");
+          setTaskProgress(p => ({ ...p, done: p.total }));
+          pushLog("🎉 All Phase 3 tests complete", "green");
+          ws.close();
+          return;
+        }
 
-  // ETA
-  const elapsed = (Date.now() - startTimeRef.current) / 1000;
-  const rate = (done + failed) / Math.max(elapsed, 1);
-  const remaining = total - done - failed;
-  const etaSec = rate > 0 ? Math.round(remaining / rate) : null;
-  const etaStr = !etaSec ? "Estimating..."
-    : etaSec > 3600 ? `~${Math.round(etaSec / 3600)}h left`
-    : etaSec > 60 ? `~${Math.round(etaSec / 60)}m left`
-    : `~${etaSec}s left`;
+        if (msg.message) {
+          pushLog(msg.message, msg.type === "error" ? "red" : "white");
+        }
+      };
+
+      ws.onerror = () => pushLog("❌ WebSocket error", "red");
+      ws.onclose = () => {
+        if (status === "running") pushLog("🔌 Connection closed", "yellow");
+      };
+
+    } catch (e) {
+      pushLog(`❌ Start failed: ${e}`, "red");
+      setStatus("error");
+    }
+  };
+
+  const total = sessions.length;
+  const done = progress.completed + progress.failed;
+  const sessionPct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const pct = taskProgress.total > 0 
+    ? Math.round((taskProgress.done / taskProgress.total) * 100)
+    : sessionPct;
 
   return (
     <div className="fade-up" style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       <div>
-        <div className="phase-header">Phase 2 — Validation</div>
-        <div className="phase-title">Sequential Execution Engine</div>
-        <div style={{ fontSize: 13, color: C.muted, marginTop: 8,
-          display: "inline-flex", background: C.surface, padding: "4px 10px",
-          borderRadius: 4, border: `1px solid ${C.border}` }}>
-          Source: <span className="font-mono" style={{ marginLeft: 6, color: "#000" }}>{source}</span>
+        <div className="phase-header">Phase 3 — Validation</div>
+        <div className="phase-title">MongoDB-Driven Test Execution</div>
+        <div style={{ fontSize: 14, color: C.muted, marginTop: 8 }}>
+          Run Phase 3 tests for any completed Phase 2 session
         </div>
       </div>
 
-      {/* Live screenshot */}
-      <ScreenPanel src={screenshot} scanning={!!activeId}
-        label={
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span className="font-mono" style={{ color: C.muted, fontSize: 12 }}>Executing:</span>
-            <span className="font-mono" style={{ color: "#000", fontSize: 13 }}>
-              {activeId || (batchDone ? "Complete" : "Idle")}
+      {status === "idle" && (
+  <div className="card fade-up" style={{ maxWidth: 600 }}>
+
+    <div style={{ marginBottom: 20 }}>
+      <label className="label">
+        Anthropic API Key{" "}
+        <span style={{ color: C.muted, fontWeight: 400 }}>(recommended)</span>
+      </label>
+      <input
+        className="input"
+        type="password"
+        placeholder="sk-ant-..."
+        value={anthropicKey}
+        onChange={(e) => setAnthropicKey(e.target.value)}
+      />
+    </div>
+
+    <div style={{ marginBottom: 20 }}>
+      <label className="label">
+        OpenAI API Key{" "}
+        <span style={{ color: C.muted, fontWeight: 400 }}>(optional)</span>
+      </label>
+      <input
+        className="input"
+        type="password"
+        placeholder="sk-..."
+        value={openaiKey}
+        onChange={(e) => setOpenaiKey(e.target.value)}
+      />
+    </div>
+
+    <div style={{ height: 1, background: C.border, margin: "20px 0" }} />
+
+    <label className="label">
+      Parent Session ID <span style={{ color: C.red }}>*</span>
+    </label>
+    <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>
+      Enter the session_id from a completed Phase 2 run. This will execute
+      validation tests for all URLs in that session.
+    </div>
+    <div style={{ display: "flex", gap: 12 }}>
+      <input
+        className="input"
+        placeholder="e.g. 20240326_143022"
+        value={parentSessionId}
+        onChange={(e) => setParentSessionId(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && startPhase3()}
+        style={{ flex: 1 }}
+      />
+      <button
+        className="btn btn-primary"
+        onClick={startPhase3}
+        disabled={
+          !parentSessionId.trim() ||
+          (!anthropicKey.trim() && !openaiKey.trim())
+        }
+      >
+        Start Phase 3
+      </button>
+    </div>
+
+    {!anthropicKey.trim() && !openaiKey.trim() && (
+      <div style={{ marginTop: 12, fontSize: 12, color: C.red }}>
+        At least one API key is required to run validation tests.
+      </div>
+    )}
+
+  </div>
+)}
+
+      {(status === "running" || status === "done") && (
+        <>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ fontSize: 13, color: C.muted }}>
+              Session: <span className="font-mono" style={{ color: "#000" }}>{parentSessionId}</span>
+            </div>
+            <span className={cx("badge", status === "running" ? "badge-running" : "badge-done")}>
+              {status === "running" && <span className="spinner" style={{ width: 10, height: 10 }} />}
+              {status}
             </span>
           </div>
-        }
-      />
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <ScreenPanel
+            src={screenshot}
+            scanning={status === "running"}
+            label={activeSession ? `Running: ${activeSession}` : "Idle"}
+          />
 
-          {/* Progress bar card */}
-          <div className="card">
-            <div style={{ display: "flex", justifyContent: "space-between",
-              alignItems: "flex-end", marginBottom: 10 }}>
-              <div>
-                <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>
-                  Suite execution progress
-                </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+            <div className="card">
+              <div style={{ marginBottom: 20 }}>
                 <div className="stat-val">{pct}%</div>
+                <div className="stat-lbl">Completion Progress</div>
               </div>
-              <div style={{ display: "flex", gap: 20, textAlign: "right" }}>
+
+              <div style={{ height: 8, background: "#f3f4f6", borderRadius: 999, overflow: "hidden", position: "relative" }}>
+                <div style={{ position: "absolute", left: 0, top: 0, height: "100%",
+                  width: `${pct}%`,
+                  background: status === "done" ? C.green : C.accent, 
+                  transition: "width .5s ease" }} />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginTop: 20 }}>
                 <div>
-                  <div className="stat-val" style={{ color: C.green }}>{done}</div>
-                  <div className="stat-lbl">passed</div>
+                  <div className="stat-val" style={{ fontSize: 20, color: C.muted }}>{progress.pending}</div>
+                  <div className="stat-lbl">Pending</div>
                 </div>
                 <div>
-                  <div className="stat-val" style={{ color: C.red }}>{failed}</div>
-                  <div className="stat-lbl">failed</div>
+                  <div className="stat-val" style={{ fontSize: 20, color: C.accent }}>{progress.in_progress}</div>
+                  <div className="stat-lbl">Running</div>
                 </div>
                 <div>
-                  <div className="stat-val" style={{ color: C.muted }}>
-                    {Math.max(0, total - done - failed)}
-                  </div>
-                  <div className="stat-lbl">pending</div>
+                  <div className="stat-val" style={{ fontSize: 20, color: C.green }}>{progress.completed}</div>
+                  <div className="stat-lbl">Passed</div>
                 </div>
                 <div>
-                  <div className="stat-val">{total}</div>
-                  <div className="stat-lbl">total</div>
+                  <div className="stat-val" style={{ fontSize: 20, color: C.red }}>{progress.failed}</div>
+                  <div className="stat-lbl">Failed</div>
                 </div>
               </div>
-            </div>
 
-            {/* Segmented bar */}
-            <div style={{ height: 8, background: "#f3f4f6", borderRadius: 999,
-              overflow: "hidden", position: "relative" }}>
-              <div style={{ position: "absolute", left: 0, top: 0, height: "100%",
-                width: `${total > 0 ? (done / total) * 100 : 0}%`,
-                background: C.green, borderRadius: 999,
-                transition: "width .5s ease" }} />
-              <div style={{ position: "absolute", top: 0, height: "100%",
-                left: `${total > 0 ? (done / total) * 100 : 0}%`,
-                width: `${total > 0 ? (failed / total) * 100 : 0}%`,
-                background: C.red, borderRadius: 999,
-                transition: "width .5s ease, left .5s ease" }} />
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "space-between",
-              marginTop: 8, fontSize: 11, color: C.muted }}>
-              <span>{batchDone ? "✅ All tests complete" : etaStr}</span>
-              <span style={{ color: "#000" }}>
-                {activeId ? `Running: ${activeId.slice(0, 8)}...` : "Idle"}
-              </span>
-            </div>
-          </div>
-
-          {/* Test list — increased height, summaries shown inline */}
-          <div style={{ maxHeight: 480, overflowY: "auto",
-            display: "flex", flexDirection: "column", gap: 8, paddingRight: 4 }}>
-            {tests.map((t) => (
-              <div key={t.id}
-                className={cx("test-item", t.id === activeId ? "active" : "")}
-                style={{ display: "flex", flexDirection: "column", gap: 4, padding: "8px 12px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ width: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    {t.status === "completed" ? (
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                        stroke={C.green} strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>
-                    ) : t.status === "failed" ? (
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                        stroke={C.red} strokeWidth="3">
-                        <line x1="18" y1="6" x2="6" y2="18" />
-                        <line x1="6" y1="6" x2="18" y2="18" />
-                      </svg>
-                    ) : t.status === "running" ? (
-                      <span className="spinner" style={{ width: 12, height: 12,
-                        borderWidth: "2px",
-                        borderColor: `transparent transparent ${C.accent} ${C.accent}` }} />
-                    ) : (
-                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.muted }} />
-                    )}
-                  </div>
-                  <span style={{ color: t.id === activeId ? "#000" : C.muted, flex: 1, fontSize: 13 }}
-                    className="font-mono">
-                    {t.index ? `[${t.index}/${t.total}] ` : ""}{t.id.slice(0, 8)}...
-                  </span>
-                  <span className={cx("badge",
-                    t.status === "completed" ? "badge-done"
-                    : t.status === "failed" ? "badge-failed"
-                    : t.status === "running" ? "badge-running"
-                    : "badge-idle")}
-                    style={{ fontSize: 10, padding: "2px 8px" }}>
-                    {t.status}
-                  </span>
-                </div>
-
-                {/* Summary card */}
-                {(t.status === "completed" || t.status === "failed") && summaries[t.id] && (
-                  <div style={{
-                    marginTop: 8, marginLeft: 26, fontSize: 12, lineHeight: 1.6,
-                    background: t.status === "completed"
-                      ? "rgba(16,185,129,.05)" : "rgba(239,68,68,.05)",
-                    border: `1px solid ${t.status === "completed"
-                      ? "rgba(16,185,129,.2)" : "rgba(239,68,68,.2)"}`,
-                    borderRadius: 6, padding: "8px 12px",
-                  }}>
-                    <div style={{ fontSize: 10, fontWeight: 700,
-                      textTransform: "uppercase", letterSpacing: ".05em",
-                      color: t.status === "completed" ? C.green : C.red,
-                      marginBottom: 4 }}>
-                      {t.status === "completed" ? "✅ Summary" : "❌ Failure Reason"}
-                    </div>
-                    <div style={{ color: "#000", fontSize: 12 }}>
-                      {summaries[t.id]}
+              <div style={{ marginTop: 20, maxHeight: 300, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+                {sessions.map((s, i) => (
+                  <div key={i} className={cx("test-item", s.session_id === activeSession ? "active" : "")}
+                    style={{ padding: "8px 12px", fontSize: 12 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      {s.phase3_status === "completed" ? (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="3">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      ) : s.phase3_status === "failed" ? (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.red} strokeWidth="3">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                      ) : s.phase3_status === "in_progress" ? (
+                        <span className="spinner" style={{ width: 10, height: 10, borderWidth: "2px" }} />
+                      ) : (
+                        <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.muted }} />
+                      )}
+                      <span className="font-mono" style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {s.page_url}
+                      </span>
+                      <span className={cx("badge",
+                        s.phase3_status === "completed" ? "badge-done"
+                        : s.phase3_status === "failed" ? "badge-failed"
+                        : s.phase3_status === "in_progress" ? "badge-running"
+                        : "badge-idle")}
+                        style={{ fontSize: 9, padding: "2px 6px" }}>
+                        {s.phase3_status}
+                      </span>
                     </div>
                   </div>
-                )}
+                ))}
               </div>
-            ))}
+            </div>
 
-            {tests.length === 0 && (
-              <div style={{ color: C.muted, fontSize: 13, padding: "16px",
-                textAlign: "center", border: `1px dashed ${C.border}`, borderRadius: 8 }}>
-                Waiting for tests...
-                <span className="font-mono"
-                  style={{ animation: "blink 1s step-end infinite" }}>_</span>
-              </div>
-            )}
+            <LogPanel logs={logs} />
           </div>
-
-        </div>
-
-        <LogPanel logs={logs} />
-      </div>
+        </>
+      )}
     </div>
   );
 }
@@ -1739,11 +1807,9 @@ export default function App() {
   const [apiKey, setApiKey] = useState("");
   const [anthropicApiKey, setAnthropicApiKey] = useState("");
   const [mode, setMode] = useState("checking");
-  const [goal, setGoal] = useState(""); // Lifted goal state for feature test
-  const [p3Source, setP3Source] = useState("");
-  const testRunning = phase === "phase2" || phase === "phase3";
+  const [goal, setGoal] = useState("");
+  const testRunning = phase === "phase2";
 
-  // ── Excel state lifted here so it survives phase transitions ────────────
   const [excelReports, setExcelReports] = useState([]);
 
   const handleLoginDone = (url, selectedMode, openaiKey, antKey, selectedGoal) => {
@@ -1758,14 +1824,8 @@ export default function App() {
     setPhase("phase2");
   };
 
-  const handlePhase3 = (source, id) => {
-    setP3Source(`${source} / ${id}`);
-    setPhase("phase3");
-  };
-
-  // Called by PhaseSemantic when the report arrives
-  const handleExcelReady = (b64, name) => {
-    setExcelReports(prev => [...prev, { b64, name }]);
+  const handleExcelReady = (urlOrB64, name) => {
+    setExcelReports(prev => [...prev, { urlOrB64, name }]);
   };
 
   useEffect(() => {
@@ -1795,7 +1855,6 @@ export default function App() {
             width: "100%",
           }}
         >
-          {/* Top bar */}
           <div
             style={{
               display: "flex",
@@ -1819,17 +1878,13 @@ export default function App() {
                   className={cx("nav-tab", phase === p ? "active" : "")}
                   style={{ flex: 1 }}
                   onClick={() => setPhase(p)}
-                  disabled={
-                    (p === "phase2" && !targetUrl) ||
-                    (p === "phase3" && !p3Source)
-                  }
+                  disabled={p === "phase2" && !targetUrl}
                 >
                   {["0. Auth", "1. Discovery", "2. Validation"][i]}
                 </button>
               ))}
             </div>
 
-            {/* Right side of top bar — persistent download pill + URL + Terminate Button */}
             <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
               <ExcelDownloadPill reports={excelReports} />
 
@@ -1864,7 +1919,6 @@ export default function App() {
                 )}
               </div>
 
-              {/* Terminate button */}
               <button
                 className="btn btn-danger"
                 style={{ padding: "6px 12px", fontSize: 12 }}
@@ -1914,7 +1968,6 @@ export default function App() {
             </div>
           )}
 
-          {/* Phase content */}
           {phase === "login" && <PhaseLogin onDone={handleLoginDone} />}
 
           {phase === "phase2" && targetUrl && mode === "checking" && (
@@ -1922,7 +1975,6 @@ export default function App() {
               targetUrl={targetUrl}
               apiKey={apiKey}
               anthropicApiKey={anthropicApiKey}
-              onPhase3={handlePhase3}
               onExcelReady={handleExcelReady}
             />
           )}
@@ -1931,7 +1983,6 @@ export default function App() {
               targetUrl={targetUrl}
               apiKey={apiKey}
               anthropicApiKey={anthropicApiKey}
-              onPhase3={handlePhase3}
               onExcelReady={handleExcelReady}
             />
           )}
@@ -1944,7 +1995,12 @@ export default function App() {
             />
           )}
 
-          {phase === "phase3" && <PhaseValidation source={p3Source} />}
+          {phase === "phase3" && (
+    <PhaseValidationMongoDB 
+        apiKey={apiKey} 
+        anthropicApiKey={anthropicApiKey} 
+    />
+)}
         </div>
       </div>
     </>
