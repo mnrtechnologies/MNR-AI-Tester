@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
 const API = process.env.REACT_APP_AI_TESTER_BACKEND_URL;
+const CONTROL_API = API.replace('/api', '/control'); 
 const WS = API.replace(/^http/, "ws");
 
 // ── Light Professional Color Palette ─────────────────────────────────────────
@@ -1923,7 +1924,7 @@ export default function App() {
                 style={{ padding: "6px 12px", fontSize: 12 }}
                 onClick={async () => {
                   try {
-                    await fetch(`${API}/terminate-and-restart`, { method: "POST" });
+                    await fetch(`${CONTROL_API}/terminate-and-restart`, { method: "POST" });
                   } catch (error) {
                     console.error("Termination error:", error);
                   } finally {
