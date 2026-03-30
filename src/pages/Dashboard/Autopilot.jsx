@@ -1923,7 +1923,7 @@ export default function App() {
                 style={{ padding: "6px 12px", fontSize: 12 }}
                 onClick={async () => {
                   try {
-                    await fetch(`${API}/terminate`, { method: "POST" });
+                    await fetch(`${API}/terminate-and-restart`, { method: "POST" });
                   } catch (error) {
                     console.error("Termination error:", error);
                   } finally {
