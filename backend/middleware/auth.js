@@ -18,10 +18,12 @@ exports.auth = async (req, res, next) => {
       return res.status(401).json({ success: false, message: `Token Missing` });
     }
 
+     let decode;
+
     try {
       // Verifying the JWT using the secret key stored in environment variables
-      const decode = await jwt.verify(token, process.env.JWT_SECRET);
-      console.log(decode);
+      decode = await jwt.verify(token, process.env.JWT_SECRET);
+      //console.log(decode);
       // Storing the decoded JWT payload in the request object for further use
       req.user = decode;
     } catch (error) {
@@ -30,6 +32,20 @@ exports.auth = async (req, res, next) => {
         .status(401)
         .json({ success: false, message: "token is invalid" });
     }
+
+    // 🔑new Verify token against DB-------------------------------
+    const user = await User.findById(decode.id);
+    if (!user || user.token !== token) {
+      return res.status(401).json({
+        success: false,
+        message: "Session expired. Please login again",
+      });
+    }
+
+    // ✅ Update lastActive
+    await User.findByIdAndUpdate(decode.id, {
+      lastActive: new Date(),
+    });
 
     // If JWT is valid, move on to the next middleware or request handler
     next();

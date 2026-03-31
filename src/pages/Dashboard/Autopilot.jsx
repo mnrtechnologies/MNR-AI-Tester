@@ -143,7 +143,7 @@ const GLOBAL_CSS = `
     padding: 12px 16px; font-family: 'JetBrains Mono', monospace;
   }
   .log-line {
-    font-size: 12px; line-height: 1.6; padding: 2px 0;
+    font-size: 13px; line-height: 1.6; padding: 3px 0;
   }
   .log-cyan   { color: #3b82f6; }
   .log-green  { color: #10b981; }
@@ -253,6 +253,14 @@ const GLOBAL_CSS = `
     transition: all 0.2s;
   }
   .test-item.active { border-color: ${C.accent}; background: rgba(59,130,246,0.05); }
+
+  /* Terminate Overlay */
+  .terminate-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.85); z-index: 9999;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    color: #fff;
+  }
 `;
 
 // ── Live Screenshot panel ─────────────────────────────────────────────────────
@@ -303,7 +311,7 @@ function LogPanel({ logs }) {
     <div
       ref={ref}
       className="terminal-container"
-      style={{ height: 550, overflowY: "auto" }}
+      style={{ height: "70vh", minHeight: "600px", overflowY: "auto", width: "100%" }}
     >
       {logs.length === 0 ? (
         <div style={{ color: "#a1a1aa", fontSize: 13 }}>
@@ -359,14 +367,11 @@ function ExcelDownloadPill({ reports }) {
 
   const download = (urlOrB64, name) => {
     const link = document.createElement("a");
-    // Check if it's an S3 URL or base64
     if (urlOrB64.startsWith('http://') || urlOrB64.startsWith('https://')) {
-      // S3 URL - direct download
       link.href = urlOrB64;
       link.download = name;
       link.target = '_blank';
     } else {
-      // Legacy base64 format
       link.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${urlOrB64}`;
       link.download = name;
     }
@@ -547,7 +552,7 @@ function PhaseLogin({ onDone }) {
         />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         <div
           className="card"
           style={{ display: "flex", flexDirection: "column", gap: 20 }}
@@ -817,9 +822,7 @@ function PhaseLogin({ onDone }) {
           )}
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <LogPanel logs={logs} />
-        </div>
+        <LogPanel logs={logs} />
       </div>
     </div>
   );
@@ -900,7 +903,6 @@ function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onExcelReady }) {
     onExcelReady(msg.s3_download_url, msg.excel_filename);
     pushLog(`📊 Report saved to S3: ${msg.excel_filename}`, "green");
   }
-  // ← ADD THIS: extract real parent session from session_id
   if (msg.session_id && !parentSessionId) {
     setParentSessionId(msg.parent_session);
   }
@@ -919,7 +921,6 @@ function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onExcelReady }) {
           setStatus("done");
           pushLog("✅ Phase 1 Complete — All URLs indexed and reports generated", "green");
           ws.close();
-          // Phase 3 is now manually triggered - no auto-start
         }
         if (msg.type === "error") {
           setStatus("error");
@@ -943,8 +944,6 @@ function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onExcelReady }) {
       try {
         const r = await fetch(`${API}/checking/${jobId}/status`);
         const d = await r.json();
-        // Only update total — never overwrite completed
-        // which is managed by url_started/url_report WS messages
         setProgress((p) => ({
           ...p,
           total: d.total_urls || p.total,
@@ -999,7 +998,7 @@ function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onExcelReady }) {
         />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         <div className="card">
           <div style={{ display: "flex", gap: 32, marginBottom: 24 }}>
             <div>
@@ -1039,28 +1038,29 @@ function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onExcelReady }) {
           )}
 
           {parentSessionId && (
-    <div style={{ marginTop: 16, padding: "14px 16px", borderRadius: 8, background: "rgba(59,130,246,0.05)", border: "1px solid rgba(59,130,246,0.2)" }}>
-      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: C.muted, marginBottom: 8 }}>
-        Parent Session ID — use in Phase 3
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <span className="font-mono" style={{ fontSize: 13, color: "#000000", fontWeight: 600, flex: 1, wordBreak: "break-all" }}>
-          {parentSessionId}
-        </span>
-        <button
-          className="btn"
-          style={{ padding: "4px 10px", fontSize: 12, border: `1px solid ${C.border}` }}
-          onClick={() => navigator.clipboard.writeText(parentSessionId)}
-        >
-          Copy
-        </button>
-      </div>
-      <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>
-        Use this ID in the Phase 3 → Validation tab
-      </div>
-    </div>
-  )}
+            <div style={{ marginTop: 16, padding: "14px 16px", borderRadius: 8, background: "rgba(59,130,246,0.05)", border: "1px solid rgba(59,130,246,0.2)" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: C.muted, marginBottom: 8 }}>
+                Parent Session ID — use in Phase 3
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span className="font-mono" style={{ fontSize: 13, color: "#000000", fontWeight: 600, flex: 1, wordBreak: "break-all" }}>
+                  {parentSessionId}
+                </span>
+                <button
+                  className="btn"
+                  style={{ padding: "4px 10px", fontSize: 12, border: `1px solid ${C.border}` }}
+                  onClick={() => navigator.clipboard.writeText(parentSessionId)}
+                >
+                  Copy
+                </button>
+              </div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>
+                Use this ID in the Phase 3 → Validation tab
+              </div>
+            </div>
+          )}
         </div>
+        
         <LogPanel logs={logs} />
       </div>
     </div>
@@ -1077,7 +1077,7 @@ function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onExcelReady }) {
   const [logs, setLogs] = useState([]);
   const [step, setStep] = useState(0);
   const wsRef = useRef(null);
-  const [parentSessionId, setParentSessionId] = useState(null); // ← ADD THIS
+  const [parentSessionId, setParentSessionId] = useState(null); 
 
   const pushLog = (msg, color = "white") =>
     setLogs((p) => [...p, { message: msg, color }]);
@@ -1126,13 +1126,11 @@ function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onExcelReady }) {
           );
         if (msg.type === "done") {
           setStatus("done");
-          // Handle S3 download URL instead of base64
           if (msg.s3_download_url) {
             onExcelReady(msg.s3_download_url, msg.excel_filename);
             pushLog("📊 Semantic report saved to S3 — Available for download", "green");
           }
           ws.close();
-          // Phase 3 is now manually triggered - no auto-start
         }
         if (msg.type === "error") setStatus("error");
       };
@@ -1192,7 +1190,7 @@ function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onExcelReady }) {
         />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         <div className="card">
           <div style={{ display: "flex", gap: 32 }}>
             <div>
@@ -1241,6 +1239,7 @@ function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onExcelReady }) {
             </div>
           )}
         </div>
+        
         <LogPanel logs={logs} />
       </div>
     </div>
@@ -1288,7 +1287,7 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal }) {
 
       setTestId(data.test_id);
       pushLog(`Test Session ID: ${data.test_id}`, "cyan");
-      setParentSessionId(data.parent_session_id); // ← ADD THIS
+      setParentSessionId(data.parent_session_id); 
       
       const ws = new WebSocket(`${WS}/ws/tests/${data.test_id}`);
       wsRef.current = ws;
@@ -1392,7 +1391,7 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal }) {
         />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         <div className="card">
           <div style={{ marginBottom: 24 }}>
             <div className="label" style={{ marginBottom: 8 }}>Target Goal</div>
@@ -1469,6 +1468,7 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal }) {
             </div>
           )}
         </div>
+        
         <LogPanel logs={logs} />
       </div>
     </div>
@@ -1537,7 +1537,7 @@ const [openaiKey, setOpenaiKey] = useState("");
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-        anthropic_api_key: anthropicKey || undefined, // ✅ Uses what the user typed
+        anthropic_api_key: anthropicKey || undefined, 
             api_key: openaiKey || undefined,
     }),
 });
@@ -1551,7 +1551,6 @@ const [openaiKey, setOpenaiKey] = useState("");
 
       pushLog(`✓ Found ${data.total_tests} tests to run`, "green");
 
-      // Connect to WebSocket for live updates
       const ws = new WebSocket(`${WS}/ws/phase3/${parentSessionId}`);
       wsRef.current = ws;
 
@@ -1634,74 +1633,74 @@ const [openaiKey, setOpenaiKey] = useState("");
       </div>
 
       {status === "idle" && (
-  <div className="card fade-up" style={{ maxWidth: 600 }}>
+        <div className="card fade-up" style={{ maxWidth: 600 }}>
 
-    <div style={{ marginBottom: 20 }}>
-      <label className="label">
-        Anthropic API Key{" "}
-        <span style={{ color: C.muted, fontWeight: 400 }}>(recommended)</span>
-      </label>
-      <input
-        className="input"
-        type="password"
-        placeholder="sk-ant-..."
-        value={anthropicKey}
-        onChange={(e) => setAnthropicKey(e.target.value)}
-      />
-    </div>
+          <div style={{ marginBottom: 20 }}>
+            <label className="label">
+              Anthropic API Key{" "}
+              <span style={{ color: C.muted, fontWeight: 400 }}>(recommended)</span>
+            </label>
+            <input
+              className="input"
+              type="password"
+              placeholder="sk-ant-..."
+              value={anthropicKey}
+              onChange={(e) => setAnthropicKey(e.target.value)}
+            />
+          </div>
 
-    <div style={{ marginBottom: 20 }}>
-      <label className="label">
-        OpenAI API Key{" "}
-        <span style={{ color: C.muted, fontWeight: 400 }}>(optional)</span>
-      </label>
-      <input
-        className="input"
-        type="password"
-        placeholder="sk-..."
-        value={openaiKey}
-        onChange={(e) => setOpenaiKey(e.target.value)}
-      />
-    </div>
+          <div style={{ marginBottom: 20 }}>
+            <label className="label">
+              OpenAI API Key{" "}
+              <span style={{ color: C.muted, fontWeight: 400 }}>(optional)</span>
+            </label>
+            <input
+              className="input"
+              type="password"
+              placeholder="sk-..."
+              value={openaiKey}
+              onChange={(e) => setOpenaiKey(e.target.value)}
+            />
+          </div>
 
-    <div style={{ height: 1, background: C.border, margin: "20px 0" }} />
+          <div style={{ height: 1, background: C.border, margin: "20px 0" }} />
 
-    <label className="label">
-      Parent Session ID <span style={{ color: C.red }}>*</span>
-    </label>
-    <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>
-      Enter the session_id from a completed Phase 2 run. This will execute
-      validation tests for all URLs in that session.
-    </div>
-    <div style={{ display: "flex", gap: 12 }}>
-      <input
-        className="input"
-        placeholder="e.g. 20240326_143022"
-        value={parentSessionId}
-        onChange={(e) => setParentSessionId(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && startPhase3()}
-        style={{ flex: 1 }}
-      />
-      <button
-        className="btn btn-primary"
-        onClick={startPhase3}
-        disabled={
-          !parentSessionId.trim() ||
-          (!anthropicKey.trim() && !openaiKey.trim())
-        }
-      >
-        Start Phase 3
-      </button>
-    </div>
+          <label className="label">
+            Parent Session ID <span style={{ color: C.red }}>*</span>
+          </label>
+          <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>
+            Enter the session_id from a completed Phase 2 run. This will execute
+            validation tests for all URLs in that session.
+          </div>
+          <div style={{ display: "flex", gap: 12 }}>
+            <input
+              className="input"
+              placeholder="e.g. 20240326_143022"
+              value={parentSessionId}
+              onChange={(e) => setParentSessionId(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && startPhase3()}
+              style={{ flex: 1 }}
+            />
+            <button
+              className="btn btn-primary"
+              onClick={startPhase3}
+              disabled={
+                !parentSessionId.trim() ||
+                (!anthropicKey.trim() && !openaiKey.trim())
+              }
+            >
+              Start Phase 3
+            </button>
+          </div>
 
-    {!anthropicKey.trim() && !openaiKey.trim() && (
-      <div style={{ marginTop: 12, fontSize: 12, color: C.red }}>
-        At least one API key is required to run validation tests.
-      </div>
-    )}
+          {!anthropicKey.trim() && !openaiKey.trim() && (
+            <div style={{ marginTop: 12, fontSize: 12, color: C.red }}>
+              At least one API key is required to run validation tests.
+            </div>
+          )}
 
-  </div>
-)}
+        </div>
+      )}
 
       {(status === "running" || status === "done") && (
         <>
@@ -1721,7 +1720,7 @@ const [openaiKey, setOpenaiKey] = useState("");
             label={activeSession ? `Running: ${activeSession}` : "Idle"}
           />
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
             <div className="card">
               <div style={{ marginBottom: 20 }}>
                 <div className="stat-val">{pct}%</div>
@@ -1809,7 +1808,8 @@ export default function App() {
   const [mode, setMode] = useState("checking");
   const [goal, setGoal] = useState("");
   const testRunning = phase === "phase2";
-
+  
+  const [terminateCountdown, setTerminateCountdown] = useState(null);
   const [excelReports, setExcelReports] = useState([]);
 
   const handleLoginDone = (url, selectedMode, openaiKey, antKey, selectedGoal) => {
@@ -1829,17 +1829,36 @@ export default function App() {
   };
 
   useEffect(() => {
-    const handler = (e) => {
-      if (!testRunning) return;
-      e.preventDefault();
-      e.returnValue = "";
+    const onUnload = () => {
+      navigator.sendBeacon(`${CONTROL_API}/terminate-and-restart`);
     };
+    window.addEventListener("unload", onUnload);
+    return () => window.removeEventListener("unload", onUnload);
+  }, []);
 
-    window.addEventListener("beforeunload", handler);
-    return () => {
-      window.removeEventListener("beforeunload", handler);
-    };
-  }, [testRunning]);
+  useEffect(() => {
+    if (terminateCountdown === null) return;
+    if (terminateCountdown <= 0) {
+      fetch(`${CONTROL_API}/terminate-and-restart`, { method: "POST" })
+        .finally(() => { window.location.reload(); });
+      return;
+    }
+    const timer = setTimeout(() => setTerminateCountdown(prev => prev - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [terminateCountdown]);
+
+  const handleTabClick = async (p) => {
+    if (p === phase) return;
+    
+    const confirmSwitch = window.confirm("If you forcefully go to another phase, current data will be lost and the session will be terminated. Continue?");
+    if (!confirmSwitch) return;
+
+    try {
+      await fetch(`${CONTROL_API}/terminate-and-restart`, { method: "POST" });
+    } catch(e) {}
+    
+    setPhase(p);
+  };
 
   return (
     <>
@@ -1877,7 +1896,7 @@ export default function App() {
                   key={p}
                   className={cx("nav-tab", phase === p ? "active" : "")}
                   style={{ flex: 1 }}
-                  onClick={() => setPhase(p)}
+                  onClick={() => handleTabClick(p)}
                   disabled={p === "phase2" && !targetUrl}
                 >
                   {["0. Auth", "1. Discovery", "2. Validation"][i]}
@@ -1922,15 +1941,7 @@ export default function App() {
               <button
                 className="btn btn-danger"
                 style={{ padding: "6px 12px", fontSize: 12 }}
-                onClick={async () => {
-                  try {
-                    await fetch(`${CONTROL_API}/terminate-and-restart`, { method: "POST" });
-                  } catch (error) {
-                    console.error("Termination error:", error);
-                  } finally {
-                    window.location.reload();
-                  }
-                }}
+                onClick={() => setTerminateCountdown(15)}
               >
                 <svg
                   width="14"
@@ -1996,13 +2007,21 @@ export default function App() {
           )}
 
           {phase === "phase3" && (
-    <PhaseValidationMongoDB 
-        apiKey={apiKey} 
-        anthropicApiKey={anthropicApiKey} 
-    />
-)}
+            <PhaseValidationMongoDB 
+                apiKey={apiKey} 
+                anthropicApiKey={anthropicApiKey} 
+            />
+          )}
         </div>
       </div>
+      
+      {terminateCountdown !== null && (
+        <div className="terminate-overlay">
+          <h2 style={{ fontSize: 24, marginBottom: 16 }}>Terminating Session...</h2>
+          <div style={{ fontSize: 64, fontWeight: 'bold', color: C.accent }}>{terminateCountdown}s</div>
+          <p style={{ marginTop: 16, color: '#a1a1aa' }}>Allowing graceful teardown. Please wait...</p>
+        </div>
+      )}
     </>
   );
 }
