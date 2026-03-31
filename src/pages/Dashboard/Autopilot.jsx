@@ -218,6 +218,7 @@ const GLOBAL_CSS = `
   }
   .nav-tab.active { color: #000000; border-bottom-color: #000000; }
   .nav-tab:hover:not(.active) { color: #000000; }
+  .nav-tab:disabled { opacity: 0.4; cursor: not-allowed; }
 
   /* Persistent download pill */
   .excel-pill {
@@ -232,20 +233,6 @@ const GLOBAL_CSS = `
   }
   .excel-pill:hover { background: #f9fafb; border-color: #d1d5db; }
 
-  .excel-pill-pending {
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 6px 12px; border-radius: 6px;
-    background: transparent; color: ${C.muted};
-    border: 1px dashed ${C.border};
-    font-size: 12px; font-weight: 600; white-space: nowrap; cursor: not-allowed;
-  }
-
-  .spinner {
-    width: 16px; height: 16px; border-radius: 50%;
-    border: 2px solid ${C.border}; border-top-color: currentColor;
-    animation: spin .6s linear infinite; display: inline-block;
-  }
-
   /* List items for Phase 3 */
   .test-item {
     display: flex; align-items: center; gap: 12px; padding: 12px; 
@@ -254,12 +241,38 @@ const GLOBAL_CSS = `
   }
   .test-item.active { border-color: ${C.accent}; background: rgba(59,130,246,0.05); }
 
-  /* Terminate Overlay */
+  /* Terminate Overlay & Animations */
   .terminate-overlay {
     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(0,0,0,0.85); z-index: 9999;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     color: #fff;
+  }
+  @keyframes pulse-ring {
+    0% { transform: scale(0.85); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+    70% { transform: scale(1); box-shadow: 0 0 0 25px rgba(239, 68, 68, 0); }
+    100% { transform: scale(0.85); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+  }
+  @keyframes terminate-spin {
+    100% { transform: rotate(360deg); }
+  }
+  .terminate-spinner {
+    width: 80px; height: 80px; border-radius: 50%;
+    background: ${C.red};
+    animation: pulse-ring 2s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 16px;
+  }
+  .terminate-icon {
+    animation: terminate-spin 3s linear infinite;
+  }
+  .terminate-progress-bar {
+    width: 300px; height: 6px; background: rgba(255,255,255,0.2); 
+    border-radius: 4px; overflow: hidden; margin-top: 24px;
+  }
+  .terminate-progress-fill {
+    height: 100%; background: ${C.red};
+    transition: width 1s linear;
   }
 `;
 
@@ -402,7 +415,7 @@ function ExcelDownloadPill({ reports }) {
 // ════════════════════════════════════════════════════════════════════════════
 // PHASE 0 — Login
 // ════════════════════════════════════════════════════════════════════════════
-function PhaseLogin({ onDone }) {
+function PhaseLogin({ onDone, onStatusChange }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
@@ -417,6 +430,11 @@ function PhaseLogin({ onDone }) {
   const [needOtp, setNeedOtp] = useState(false);
   const [liveOtp, setLiveOtp] = useState("");
   const wsRef = useRef(null);
+
+  // Sync internal status with parent App state
+  useEffect(() => {
+    if (onStatusChange) onStatusChange(status);
+  }, [status, onStatusChange]);
 
   const pushLog = (msg, color = "white") =>
     setLogs((p) => [...p, { message: msg, color }]);
@@ -831,7 +849,7 @@ function PhaseLogin({ onDone }) {
 // ════════════════════════════════════════════════════════════════════════════
 // PHASE 2 — Checking Pipeline
 // ════════════════════════════════════════════════════════════════════════════
-function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onExcelReady }) {
+function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onExcelReady, onStatusChange }) {
   const [jobId, setJobId] = useState(null);
   const [parentSessionId, setParentSessionId] = useState(null);
   const [status, setStatus] = useState("starting");
@@ -843,6 +861,10 @@ function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onExcelReady }) {
     current: "",
   });
   const wsRef = useRef(null);
+
+  useEffect(() => {
+    if (onStatusChange) onStatusChange(status);
+  }, [status, onStatusChange]);
 
   const pushLog = (msg, color = "white") =>
     setLogs((p) => [...p, { message: msg, color }]);
@@ -1070,7 +1092,7 @@ function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onExcelReady }) {
 // ════════════════════════════════════════════════════════════════════════════
 // PHASE 2 — Semantic Driver
 // ════════════════════════════════════════════════════════════════════════════
-function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onExcelReady }) {
+function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onExcelReady, onStatusChange }) {
   const [testId, setTestId] = useState(null);
   const [status, setStatus] = useState("starting");
   const [screenshot, setScreenshot] = useState(null);
@@ -1078,6 +1100,10 @@ function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onExcelReady }) {
   const [step, setStep] = useState(0);
   const wsRef = useRef(null);
   const [parentSessionId, setParentSessionId] = useState(null); 
+
+  useEffect(() => {
+    if (onStatusChange) onStatusChange(status);
+  }, [status, onStatusChange]);
 
   const pushLog = (msg, color = "white") =>
     setLogs((p) => [...p, { message: msg, color }]);
@@ -1249,7 +1275,7 @@ function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onExcelReady }) {
 // ════════════════════════════════════════════════════════════════════════════
 // PHASE 2 — Feature Testing
 // ════════════════════════════════════════════════════════════════════════════
-function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal }) {
+function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal, onStatusChange }) {
   const [testId, setTestId] = useState(null);
   const [parentSessionId, setParentSessionId] = useState(null);
   const [status, setStatus] = useState("starting");
@@ -1257,6 +1283,10 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal }) {
   const [logs, setLogs] = useState([]);
   const [progress, setProgress] = useState({ current: 0, max: 0, lastAction: "", summary: null });
   const wsRef = useRef(null);
+
+  useEffect(() => {
+    if (onStatusChange) onStatusChange(status);
+  }, [status, onStatusChange]);
 
   const pushLog = (msg, color = "white") =>
     setLogs((p) => [...p, { message: msg, color }]);
@@ -1478,7 +1508,7 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal }) {
 // ════════════════════════════════════════════════════════════════════════════
 // PHASE 3 — MongoDB-Driven Validation (Manual Trigger)
 // ════════════════════════════════════════════════════════════════════════════
-function PhaseValidationMongoDB({ apiKey, anthropicApiKey }) {
+function PhaseValidationMongoDB({ apiKey, anthropicApiKey, onStatusChange }) {
   const [parentSessionId, setParentSessionId] = useState("");
   const [status, setStatus] = useState("idle");
   const [sessions, setSessions] = useState([]);
@@ -1490,6 +1520,10 @@ const [openaiKey, setOpenaiKey] = useState("");
   const [screenshot, setScreenshot] = useState(null);
   const [activeSession, setActiveSession] = useState(null);
   const wsRef = useRef(null);
+
+  useEffect(() => {
+    if (onStatusChange) onStatusChange(status);
+  }, [status, onStatusChange]);
 
   const pushLog = (msg, color = "white") =>
     setLogs((p) => [...p, { message: msg, color }]);
@@ -1802,15 +1836,20 @@ const [openaiKey, setOpenaiKey] = useState("");
 // ════════════════════════════════════════════════════════════════════════════
 export default function App() {
   const [phase, setPhase] = useState("login");
+  const [authStatus, setAuthStatus] = useState("idle");
+  const [activePhaseStatus, setActivePhaseStatus] = useState("idle");
+  
   const [targetUrl, setTargetUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [anthropicApiKey, setAnthropicApiKey] = useState("");
   const [mode, setMode] = useState("checking");
   const [goal, setGoal] = useState("");
-  const testRunning = phase === "phase2";
   
   const [terminateCountdown, setTerminateCountdown] = useState(null);
   const [excelReports, setExcelReports] = useState([]);
+
+  // Check if ANY phase is actively processing
+  const isProcessing = ["connecting", "starting", "running"].includes(activePhaseStatus);
 
   const handleLoginDone = (url, selectedMode, openaiKey, antKey, selectedGoal) => {
     localStorage.setItem("targetUrl", url);
@@ -1828,34 +1867,53 @@ export default function App() {
     setExcelReports(prev => [...prev, { urlOrB64, name }]);
   };
 
+  // Browser level refresh/close blocking
   useEffect(() => {
-    const onUnload = () => {
-      navigator.sendBeacon(`${CONTROL_API}/terminate-and-restart`);
+    const handleBeforeUnload = (e) => {
+      if (isProcessing) {
+        e.preventDefault();
+        e.returnValue = "Processing is ongoing. Are you sure you want to leave?";
+      }
     };
-    window.addEventListener("unload", onUnload);
-    return () => window.removeEventListener("unload", onUnload);
-  }, []);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isProcessing]);
 
+  // Reliable API hit if the user accepts the browser unload popup
+  useEffect(() => {
+    const handleUnload = () => {
+      if (isProcessing) {
+        navigator.sendBeacon(`${CONTROL_API}/terminate-and-restart`);
+      }
+    };
+    window.addEventListener("unload", handleUnload);
+    return () => window.removeEventListener("unload", handleUnload);
+  }, [isProcessing]);
+
+  // Custom UI terminate timer
   useEffect(() => {
     if (terminateCountdown === null) return;
     if (terminateCountdown <= 0) {
-      fetch(`${CONTROL_API}/terminate-and-restart`, { method: "POST" })
-        .finally(() => { window.location.reload(); });
+      window.location.reload(); 
       return;
     }
     const timer = setTimeout(() => setTerminateCountdown(prev => prev - 1), 1000);
     return () => clearTimeout(timer);
   }, [terminateCountdown]);
 
+  const handleTerminateClick = () => {
+   
+    fetch(`${CONTROL_API}/terminate-and-restart`, { method: "POST" })
+      .catch(err => console.error("Termination request failed:", err));
+       setTerminateCountdown(60);
+  };
+
   const handleTabClick = async (p) => {
     if (p === phase) return;
     
-    const confirmSwitch = window.confirm("If you forcefully go to another phase, current data will be lost and the session will be terminated. Continue?");
-    if (!confirmSwitch) return;
-
-    try {
-      await fetch(`${CONTROL_API}/terminate-and-restart`, { method: "POST" });
-    } catch(e) {}
+    // If we are actively processing, explicitly block tab clicks so we don't accidentally terminate
+    // the user must use the manual "Terminate" button to break out.
+    if (isProcessing) return; 
     
     setPhase(p);
   };
@@ -1891,17 +1949,29 @@ export default function App() {
                 maxWidth: "500px",
               }}
             >
-              {["login", "phase2", "phase3"].map((p, i) => (
-                <button
-                  key={p}
-                  className={cx("nav-tab", phase === p ? "active" : "")}
-                  style={{ flex: 1 }}
-                  onClick={() => handleTabClick(p)}
-                  disabled={p === "phase2" && !targetUrl}
-                >
-                  {["0. Auth", "1. Discovery", "2. Validation"][i]}
-                </button>
-              ))}
+              {["login", "phase2", "phase3"].map((p, i) => {
+                let isDisabled = false;
+
+                if (isProcessing) {
+                  isDisabled = (p !== phase); // Block switching visually if processing is ongoing
+                } else if (authStatus === "idle" || authStatus === "error") {
+                  if (p === "phase2") isDisabled = true; // Block discovery if auth not completed
+                } else {
+                  if (p === "phase2" && !targetUrl) isDisabled = true;
+                }
+
+                return (
+                  <button
+                    key={p}
+                    className={cx("nav-tab", phase === p ? "active" : "")}
+                    style={{ flex: 1 }}
+                    onClick={() => handleTabClick(p)}
+                    disabled={isDisabled}
+                  >
+                    {["0. Auth", "1. Discovery", "2. Validation"][i]}
+                  </button>
+                );
+              })}
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
@@ -1941,7 +2011,7 @@ export default function App() {
               <button
                 className="btn btn-danger"
                 style={{ padding: "6px 12px", fontSize: 12 }}
-                onClick={() => setTerminateCountdown(15)}
+                onClick={handleTerminateClick}
               >
                 <svg
                   width="14"
@@ -1962,7 +2032,7 @@ export default function App() {
             </div>
           </div>
 
-          {testRunning && (
+          {isProcessing && (
             <div
               style={{
                 background: "#fef3c7",
@@ -1979,7 +2049,15 @@ export default function App() {
             </div>
           )}
 
-          {phase === "login" && <PhaseLogin onDone={handleLoginDone} />}
+          {phase === "login" && (
+            <PhaseLogin 
+              onDone={handleLoginDone} 
+              onStatusChange={(s) => {
+                setAuthStatus(s);
+                setActivePhaseStatus(s);
+              }} 
+            />
+          )}
 
           {phase === "phase2" && targetUrl && mode === "checking" && (
             <PhaseChecking
@@ -1987,6 +2065,7 @@ export default function App() {
               apiKey={apiKey}
               anthropicApiKey={anthropicApiKey}
               onExcelReady={handleExcelReady}
+              onStatusChange={setActivePhaseStatus}
             />
           )}
           {phase === "phase2" && targetUrl && mode === "semantic" && (
@@ -1995,6 +2074,7 @@ export default function App() {
               apiKey={apiKey}
               anthropicApiKey={anthropicApiKey}
               onExcelReady={handleExcelReady}
+              onStatusChange={setActivePhaseStatus}
             />
           )}
           {phase === "phase2" && targetUrl && mode === "feature" && (
@@ -2003,6 +2083,7 @@ export default function App() {
               apiKey={apiKey}
               anthropicApiKey={anthropicApiKey}
               goal={goal}
+              onStatusChange={setActivePhaseStatus}
             />
           )}
 
@@ -2010,6 +2091,7 @@ export default function App() {
             <PhaseValidationMongoDB 
                 apiKey={apiKey} 
                 anthropicApiKey={anthropicApiKey} 
+                onStatusChange={setActivePhaseStatus}
             />
           )}
         </div>
@@ -2018,8 +2100,24 @@ export default function App() {
       {terminateCountdown !== null && (
         <div className="terminate-overlay">
           <h2 style={{ fontSize: 24, marginBottom: 16 }}>Terminating Session...</h2>
-          <div style={{ fontSize: 64, fontWeight: 'bold', color: C.accent }}>{terminateCountdown}s</div>
-          <p style={{ marginTop: 16, color: '#a1a1aa' }}>Allowing graceful teardown. Please wait...</p>
+          
+          <div className="terminate-spinner">
+            <svg className="terminate-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+            </svg>
+          </div>
+
+          <div className="terminate-progress-bar">
+            <div 
+              className="terminate-progress-fill" 
+              style={{ width: `${((60 - terminateCountdown) / 60) * 100}%` }} 
+            />
+          </div>
+          
+          <p style={{ marginTop: 24, fontSize: 18, fontWeight: 700, color: '#fff', letterSpacing: '0.5px' }}>
+            Don't refresh the page.
+          </p>
+          <p style={{ marginTop: 8, color: '#a1a1aa' }}>Allowing graceful teardown. Please wait...</p>
         </div>
       )}
     </>
