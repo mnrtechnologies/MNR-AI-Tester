@@ -3,6 +3,13 @@ import { setLoading, setToken } from "../../slices/authSlice";
 import { setUser } from "../../slices/profileSlice";
 import { apiConnector } from "../apiConnector";
 import { endpoints } from "../api";
+import socket from "../../utils/socket";
+
+const ensureSocketConnected = () => {
+  if (!socket.connected) {
+    socket.connect();
+  }
+};
 
 const {
   LOGIN_API,
@@ -39,6 +46,12 @@ export function login(email, password, navigate) {
 
       dispatch(setUser({ ...response.data.user }));
       localStorage.setItem("token", JSON.stringify(response.data.token));
+      ensureSocketConnected();
+      socket.auth = {
+        token: response.data.token,
+      };
+
+      socket.connect();
       navigate("/dashboard");
     } catch (error) {
       //console.log("SIGNin API ERROR............", error);
@@ -176,16 +189,21 @@ export function resetPassword(password, confirmPassword, token, navigate) {
 }
 
 // change password
-export function changePassword(oldPassword, newPassword, confirmPassword, onSuccess) {
+export function changePassword(
+  oldPassword,
+  newPassword,
+  confirmPassword,
+  onSuccess,
+) {
   return async (dispatch) => {
     const toastId = toast.loading("Changing password...");
     try {
       // Send all 3 fields matching the backend req.body
-      const response = await apiConnector(
-        "POST",
-        CHANGED_PASSWORD_API,
-        { oldPassword, newPassword, confirmPassword }
-      );
+      const response = await apiConnector("POST", CHANGED_PASSWORD_API, {
+        oldPassword,
+        newPassword,
+        confirmPassword,
+      });
 
       if (!response.data.success) {
         throw new Error(response.data.message);
@@ -197,7 +215,7 @@ export function changePassword(oldPassword, newPassword, confirmPassword, onSucc
       if (onSuccess) onSuccess();
     } catch (error) {
       toast.error(
-        error?.response?.data?.message || "Failed to change password"
+        error?.response?.data?.message || "Failed to change password",
       );
     } finally {
       toast.dismiss(toastId);
@@ -209,7 +227,7 @@ export function changePassword(oldPassword, newPassword, confirmPassword, onSucc
 export function getAllUsers() {
   return async (dispatch) => {
     try {
-      // Don't pass headers manually! 
+      // Don't pass headers manually!
       // The apiConnector (axiosInstance) adds them automatically via interceptors.
       const response = await apiConnector("GET", GET_ALL_USERS_API);
 
@@ -227,19 +245,22 @@ export function getAllUsers() {
 
 export function updateBasicInfo(
   { name, email, mobile, country, state, city },
-  onSuccess
+  onSuccess,
 ) {
   return async (dispatch) => {
     const toastId = toast.loading("Updating profile...");
-    
+
     try {
       // The interceptor automatically handles the Authorization header,
       // so we just need to pass the method, URL, and the body data.
-      const response = await apiConnector(
-        "PUT", 
-        UPDATE_INFO_API, 
-        { name, email, mobile, country, state, city }
-      );
+      const response = await apiConnector("PUT", UPDATE_INFO_API, {
+        name,
+        email,
+        mobile,
+        country,
+        state,
+        city,
+      });
 
       if (!response.data.success) {
         throw new Error(response.data.message);
@@ -250,15 +271,13 @@ export function updateBasicInfo(
 
       // Show the success message sent from the backend ("User profile updated successfully")
       toast.success(response.data.message || "Profile updated");
-      
+
       if (onSuccess) {
         onSuccess(response.data.data);
       }
     } catch (error) {
       console.error("UPDATE_BASIC_INFO ERROR:", error);
-      toast.error(
-        error?.response?.data?.message || "Failed to update profile"
-      );
+      toast.error(error?.response?.data?.message || "Failed to update profile");
     } finally {
       toast.dismiss(toastId);
     }
@@ -267,6 +286,7 @@ export function updateBasicInfo(
 
 export function logout(navigate) {
   return (dispatch) => {
+    socket.disconnect();
     dispatch(setToken(null));
     dispatch(setUser(null));
     localStorage.removeItem("token");

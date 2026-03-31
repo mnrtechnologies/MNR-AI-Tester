@@ -3,7 +3,9 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { signupEmail } = require("../mail/templates/signupEmail");
 const mailSender = require("../utils/mailSender");
-
+const { v4: uuidv4 } = require("uuid");
+const axios = require("axios")
+require("dotenv").config();
 
 //register
 exports.register = async (req, res) => {
@@ -20,13 +22,7 @@ exports.register = async (req, res) => {
     } = req.body;
 
     // validation
-    if (
-      !name ||
-      !email ||
-      !password ||
-      !confirmPassword ||
-      !mobile
-    ) {
+    if (!name || !email || !password || !confirmPassword || !mobile) {
       return res.status(400).json({
         success: false,
         message: "All required fields must be filled",
@@ -64,7 +60,7 @@ exports.register = async (req, res) => {
 
     user.password = undefined;
 
-        try {
+    try {
       await mailSender(
         email,
         "Welcome to MNR AI Tester - Account Created",
@@ -94,14 +90,12 @@ exports.login = async (req, res) => {
     // Destructure fields from the request body
     const { email, password } = req.body;
     // Check if All Details are there or not
-    if (!email || !password ) {
+    if (!email || !password) {
       return res.status(403).send({
         success: false,
         message: "All Fields are required",
       });
     }
-
-
 
     // Find user with provided email
     const user = await User.findOne({ email });
@@ -115,13 +109,35 @@ exports.login = async (req, res) => {
       });
     }
 
-
     // Generate JWT token and Compare Password
     if (await bcrypt.compare(password, user.password)) {
+      /**
+       * STEP 1 — FORCE LOGOUT OLD DEVICE---------------------
+       */
+
+      const oldSocketId = global.userSockets[user._id.toString()];
+
+      if (oldSocketId) {
+        // CALL EXTERNAL API HERE
+
+        await axios.post(process.env.AI_BACKEND_API_TERMINATE);
+
+        global.io.to(oldSocketId).emit("forceLogout");
+      }
+
+      /**
+       * STEP 2 — CREATE NEW SESSION ID
+       */
+
+      const sessionId = uuidv4();
+
+      //---------------------------------------------------------
+
       const payload = {
         email: user.email,
         id: user._id,
         role: user.role,
+        sessionId,
       };
       const token = jwt.sign(payload, process.env.JWT_SECRET, {
         expiresIn: "24h",
@@ -129,6 +145,7 @@ exports.login = async (req, res) => {
 
       // Save token to user document in database
       user.token = token;
+      user.sessionId = sessionId;
       user.lastActive = new Date();
       await user.save();
       user.password = undefined;
@@ -181,7 +198,7 @@ exports.changePassword = async (req, res) => {
 
     const isPasswordMatch = await bcrypt.compare(
       oldPassword,
-      userDetails.password
+      userDetails.password,
     );
 
     if (!isPasswordMatch) {
@@ -282,11 +299,9 @@ exports.updateBasicInfo = async (req, res) => {
     }
 
     // 5. Update Database
-    const updatedUser = await User.findByIdAndUpdate(
-      userId,
-      updatedData,
-      { new: true }
-    ).select("-password -token");
+    const updatedUser = await User.findByIdAndUpdate(userId, updatedData, {
+      new: true,
+    }).select("-password -token");
 
     return res.status(200).json({
       success: true,
@@ -304,7 +319,6 @@ exports.updateBasicInfo = async (req, res) => {
 // Get all users with total count
 exports.getAllUser = async (req, res) => {
   try {
-   
     const allUsers = await User.find({}).select("-password -token");
     const count = await User.countDocuments();
 
@@ -323,5 +337,3 @@ exports.getAllUser = async (req, res) => {
     });
   }
 };
-
-

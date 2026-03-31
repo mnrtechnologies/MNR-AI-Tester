@@ -53,14 +53,15 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
-    
-
+    sessionId: {
+      type: String,
+    },
 
     resetPasswordExpires: {
       type: Date,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 module.exports = mongoose.model("user", userSchema);

@@ -9,7 +9,7 @@ exports.auth = async (req, res, next) => {
   try {
     // Extracting JWT from request cookies, body or header
     const token =
-      req.header("Authorization").replace("Bearer ", "") ||
+      req.header("Authorization")?.replace("Bearer ", "") ||
       req.cookies.token ||
       req.body.token;
 
@@ -18,7 +18,7 @@ exports.auth = async (req, res, next) => {
       return res.status(401).json({ success: false, message: `Token Missing` });
     }
 
-     let decode;
+    let decode;
 
     try {
       // Verifying the JWT using the secret key stored in environment variables
@@ -35,10 +35,11 @@ exports.auth = async (req, res, next) => {
 
     // 🔑new Verify token against DB-------------------------------
     const user = await User.findById(decode.id);
-    if (!user || user.token !== token) {
+
+    if (!user || user.sessionId !== decode.sessionId) {
       return res.status(401).json({
         success: false,
-        message: "Session expired. Please login again",
+        message: "Session expired (logged in elsewhere)",
       });
     }
 
@@ -58,7 +59,6 @@ exports.auth = async (req, res, next) => {
   }
 };
 
-
 exports.isAdmin = async (req, res, next) => {
   try {
     const userDetails = await User.findOne({ email: req.user.email });
@@ -73,7 +73,11 @@ exports.isAdmin = async (req, res, next) => {
   } catch (error) {
     return res
       .status(500)
-      .json({ success: false, message: `User Role Can't be Verified`,error:error.message });
+      .json({
+        success: false,
+        message: `User Role Can't be Verified`,
+        error: error.message,
+      });
   }
 };
 
@@ -81,7 +85,6 @@ exports.isUser = async (req, res, next) => {
   try {
     const userDetails = await User.findOne({ email: req.user.email });
     console.log(userDetails);
-
 
     if (userDetails.role !== "User") {
       return res.status(401).json({

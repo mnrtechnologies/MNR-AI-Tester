@@ -1,5 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useSelector } from "react-redux"; // Added Redux hook
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import AppHeader from "./components/Layout/AppHeader.jsx";
 import Sidebar from "./components/Layout/Sidebar.jsx";
 import Home from "./pages/Home.jsx";
@@ -12,6 +14,12 @@ import ChangePassword from "./pages/Dashboard/ChangePassword.jsx";
 import AutoPilot from "./pages/Dashboard/Autopilot.jsx";
 import ForgotPassword from "./pages/AuthFlow/ForgotPassword.jsx";
 import UpdatePassword from "./pages/AuthFlow/UpdatePassword.jsx";
+
+import socket from "./utils/socket.js";
+import { logout } from "./services/operations/authAPIs.js";
+import { useDispatch } from "react-redux";
+
+
 
 // Layout for Dashboard pages ONLY
 const DashboardLayout = ({ children }) => (
@@ -35,7 +43,7 @@ const ProtectedRoute = ({ children }) => {
   if (token !== null || localToken !== null) {
     return children;
   }
-  
+
   // If no user is logged in, redirect to the home page (or login page)
   return <Navigate to="/" replace />;
 };
@@ -48,78 +56,131 @@ const OpenRoute = ({ children }) => {
   if (token === null && localToken === null) {
     return children;
   }
-  
+
   // If user is ALREADY logged in, redirect them to the dashboard
   return <Navigate to="/dashboard" replace />;
 };
 
 function App() {
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+
+
+useEffect(() => {
+
+  const handleForceLogout = () => {
+
+    dispatch(logout(navigate));
+
+    alert("Logged in from another device");
+
+  };
+
+  socket.on("forceLogout", handleForceLogout);
+
+  return () => {
+
+    socket.off("forceLogout", handleForceLogout);
+
+  };
+
+}, [dispatch, navigate]);
+
+
+
   return (
     <Routes>
       {/* --- PUBLIC ROUTES --- */}
-      <Route path="/" element={
-        <OpenRoute>
-          <Home />
-        </OpenRoute>
-      } />
-      
+      <Route
+        path="/"
+        element={
+          <OpenRoute>
+            <Home />
+          </OpenRoute>
+        }
+      />
+
       {/* Public auth pages */}
-      <Route path="/login" element={
-        <OpenRoute>
-          <Login />
-        </OpenRoute>
-      } />
-      <Route path="/signup" element={
-        <OpenRoute>
-          <Signup />
-        </OpenRoute>
-      } />
-      <Route path="/forgot-password" element={
-        <OpenRoute>
-          <ForgotPassword />
-        </OpenRoute>
-      } />
-      <Route path="/update-password/:token" element={
-        <OpenRoute>
-          <UpdatePassword />
-        </OpenRoute>
-      } />
+      <Route
+        path="/login"
+        element={
+          <OpenRoute>
+            <Login />
+          </OpenRoute>
+        }
+      />
+      <Route
+        path="/signup"
+        element={
+          <OpenRoute>
+            <Signup />
+          </OpenRoute>
+        }
+      />
+      <Route
+        path="/forgot-password"
+        element={
+          <OpenRoute>
+            <ForgotPassword />
+          </OpenRoute>
+        }
+      />
+      <Route
+        path="/update-password/:token"
+        element={
+          <OpenRoute>
+            <UpdatePassword />
+          </OpenRoute>
+        }
+      />
 
       {/* --- PRIVATE ROUTES: Dashboard and Testing --- */}
-      <Route path="/dashboard" element={
-        <ProtectedRoute>
-          <DashboardLayout>
-            <MainDashboard />
-          </DashboardLayout>
-        </ProtectedRoute>
-      } />
-      
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <MainDashboard />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
       {/* Autopilot page */}
-      <Route path="/autopilot" element={
-        <ProtectedRoute>
-          <DashboardLayout>
-            <AutoPilot />
-          </DashboardLayout>
-        </ProtectedRoute>
-      } />
+      <Route
+        path="/autopilot"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <AutoPilot />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
 
       {/* --- Profile Route --- */}
-      <Route path="/profile" element={
-        <ProtectedRoute>
-          <DashboardLayout>
-            <Profile />
-          </DashboardLayout>
-        </ProtectedRoute>
-      } />
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <Profile />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
 
       {/* --- Change Password Route --- */}
-      <Route path="/change-password" element={
-        <ProtectedRoute>
-          <DashboardLayout>
-            <ChangePassword />
-          </DashboardLayout>
-        </ProtectedRoute>
-      } />
+      <Route
+        path="/change-password"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <ChangePassword />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
 
       {/* Catch-all route for undefined URLs */}
       <Route path="*" element={<Navigate to="/" replace />} />
