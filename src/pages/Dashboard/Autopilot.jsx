@@ -21,6 +21,26 @@ const C = {
 // ── Tiny helpers ─────────────────────────────────────────────────────────────
 const cx = (...cls) => cls.filter(Boolean).join(" ");
 
+const copyToClipboard = (text) => {
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text);
+  } else {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "absolute";
+    textArea.style.left = "-999999px";
+    document.body.prepend(textArea);
+    textArea.select();
+    try {
+      document.execCommand('copy');
+    } catch (error) {
+      console.error(error);
+    } finally {
+      textArea.remove();
+    }
+  }
+};
+
 function useInterval(cb, delay) {
   const saved = useRef(cb);
   useEffect(() => {
@@ -1071,7 +1091,7 @@ function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onExcelReady, onSta
                 <button
                   className="btn"
                   style={{ padding: "4px 10px", fontSize: 12, border: `1px solid ${C.border}` }}
-                  onClick={() => navigator.clipboard.writeText(parentSessionId)}
+                  onClick={() => copyToClipboard(parentSessionId)}
                 >
                   Copy
                 </button>
@@ -1254,7 +1274,7 @@ function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onExcelReady, onSta
                 <button
                   className="btn"
                   style={{ padding: "4px 10px", fontSize: 12, border: `1px solid ${C.border}` }}
-                  onClick={() => navigator.clipboard.writeText(parentSessionId)}
+                  onClick={() => copyToClipboard(parentSessionId)}
                 >
                   Copy
                 </button>
@@ -1513,7 +1533,7 @@ function PhaseValidationMongoDB({ apiKey, anthropicApiKey, onStatusChange }) {
   const [status, setStatus] = useState("idle");
   const [sessions, setSessions] = useState([]);
   const [anthropicKey, setAnthropicKey] = useState("");
-const [openaiKey, setOpenaiKey] = useState("");
+  const [openaiKey, setOpenaiKey] = useState("");
   const [progress, setProgress] = useState({ pending: 0, in_progress: 0, completed: 0, failed: 0 });
   const [taskProgress, setTaskProgress] = useState({ done: 0, total: 0 });
   const [logs, setLogs] = useState([]);
@@ -1593,6 +1613,17 @@ const [openaiKey, setOpenaiKey] = useState("");
       ws.onmessage = (ev) => {
         const msg = JSON.parse(ev.data);
 
+        if (msg.type === "status") {
+          if (msg.sessions) setSessions(msg.sessions);
+          setProgress({
+            pending: msg.pending || 0,
+            in_progress: msg.in_progress || 0,
+            completed: msg.completed || 0,
+            failed: msg.failed || 0
+          });
+          return;
+        }
+
         if (msg.type === "frame") {
           setScreenshot(`data:image/jpeg;base64,${msg.image}`);
           return;
@@ -1625,6 +1656,7 @@ const [openaiKey, setOpenaiKey] = useState("");
           setTaskProgress({ done: msg.tasks_done, total: msg.tasks_total });
           return;
         }
+        
         if (msg.type === "batch_done") {
           setStatus("done");
           setTaskProgress(p => ({ ...p, done: p.total }));
@@ -1817,6 +1849,31 @@ const [openaiKey, setOpenaiKey] = useState("");
                         style={{ fontSize: 9, padding: "2px 6px" }}>
                         {s.phase3_status}
                       </span>
+                      {s.final_report_url && (
+                        <a
+                          href={s.final_report_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn"
+                          style={{
+                            padding: "4px 8px",
+                            fontSize: 10,
+                            border: `1px solid ${C.border}`,
+                            background: "#ffffff",
+                            color: "#000000",
+                            textDecoration: "none",
+                            marginLeft: "auto"
+                          }}
+                          title="Download Final Report"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4, display: "inline-block", verticalAlign: "middle" }}>
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                          </svg>
+                          Report
+                        </a>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1902,7 +1959,7 @@ export default function App() {
   }, [terminateCountdown]);
 
   const handleTerminateClick = () => {
-   
+    
     fetch(`${CONTROL_API}/terminate-and-restart`, { method: "POST" })
       .catch(err => console.error("Termination request failed:", err));
        setTerminateCountdown(60);
