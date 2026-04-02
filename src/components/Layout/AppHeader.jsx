@@ -40,7 +40,7 @@ const AppHeader = () => {
     switch (pathname) {
       case "/":
       case "/dashboard": return "Dashboard";
-      case "/autopilot": return "MNR AT Auto Pilot";
+      case "/web-testing": return "Web Testing";
       case "/db-testing": return "DB Testing";
       case "/mobile-testing": return "Mobile App Testing";
       case "/api-testing": return "API Testing";

@@ -11,7 +11,7 @@ import Signup from "./pages/AuthFlow/Signup.jsx";
 import MainDashboard from "./pages/Dashboard/MainDashboard.jsx";
 import Profile from "./pages/Settings/Profile.jsx";
 import ChangePassword from "./pages/Settings/ChangePassword.jsx";
-import AutoPilot from "./pages/Dashboard/Autopilot.jsx";
+import AutoPilot from "./pages/Dashboard/WebTesting.jsx";
 import ForgotPassword from "./pages/AuthFlow/ForgotPassword.jsx";
 import UpdatePassword from "./pages/AuthFlow/UpdatePassword.jsx";
 
@@ -151,7 +151,7 @@ useEffect(() => {
 
       {/* Autopilot page */}
       <Route
-        path="/autopilot"
+        path="/web-testing"
         element={
           <ProtectedRoute>
             <DashboardLayout>
