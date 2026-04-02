@@ -1,15 +1,14 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Bot } from "lucide-react";
+import { LayoutDashboard, Bot, Database, Smartphone, Globe } from "lucide-react";
 
 const Sidebar = () => {
   const menuItems = [
-    {
-      name: "Dashboard",
-      icon: <LayoutDashboard size={20} />,
-      path: "/dashboard",
-    },
+    { name: "Dashboard", icon: <LayoutDashboard size={20} />, path: "/dashboard" },
     { name: "MNR AT Auto Pilot", icon: <Bot size={20} />, path: "/autopilot" },
+    { name: "DB Testing", icon: <Database size={20} />, path: "/db-testing" },
+    { name: "Mobile App Testing", icon: <Smartphone size={20} />, path: "/mobile-testing" },
+    { name: "API Testing", icon: <Globe size={20} />, path: "/api-testing" },
   ];
 
   return (
@@ -20,17 +19,21 @@ const Sidebar = () => {
             <NavLink
               to={item.path}
               onClick={(e) => {
-                const running =
-                  localStorage.getItem("autopilotRunning") === "true";
+                // Check if autopilot is actively running
+                const isRunning = localStorage.getItem("autopilotRunning") === "true";
                 const goingToAutopilot = item.path === "/autopilot";
 
-                if (running && !goingToAutopilot) {
+                // Only block navigation if running AND leaving the autopilot page
+                if (isRunning && !goingToAutopilot) {
                   const confirmLeave = window.confirm(
-                    "An Autopilot test is currently running. Leaving this page may interrupt the process. Continue?",
+                    "An Autopilot test is currently running. Leaving this page may interrupt the process. Continue?"
                   );
 
                   if (!confirmLeave) {
-                    e.preventDefault();
+                    e.preventDefault(); // Stop navigation if they click "Cancel"
+                  } else {
+                    // Optional: Clean up if they forcefully leave
+                    localStorage.setItem("autopilotRunning", "false"); 
                   }
                 }
               }}

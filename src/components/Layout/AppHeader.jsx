@@ -1,20 +1,19 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
-import { useDispatch, useSelector } from "react-redux"; // Added Redux hooks
-import { logout, getUserDetails } from "../../services/operations/authAPIs"; // Imported actions
-import { Sun, Settings, User, ChevronDown, Key, LogOut } from "lucide-react";
+import { useNavigate, useLocation } from "react-router-dom"; // Added useLocation
+import { useDispatch, useSelector } from "react-redux"; 
+import { logout, getUserDetails } from "../../services/operations/authAPIs";
+import { Settings, User, ChevronDown, Key, LogOut } from "lucide-react";
 import logo from "../../assets/MNR_AT.png";
 
 const AppHeader = () => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
+  const location = useLocation(); // Get current URL path
   const dispatch = useDispatch();
 
-  // Access user data from your Redux store (assuming it's in the profile slice)
   const { user } = useSelector((state) => state.profile);
 
-  // Fetch user details on mount if they aren't already in the Redux store
   useEffect(() => {
     if (!user) {
       dispatch(getUserDetails());
@@ -32,9 +31,29 @@ const AppHeader = () => {
   }, []);
 
   const logoutUser = () => {
-    // Dispatch the Redux logout action and pass navigate
     dispatch(logout(navigate));
     setIsOpen(false);
+  };
+
+  // Helper function to map paths to readable names
+  const getPageName = (pathname) => {
+    switch (pathname) {
+      case "/":
+      case "/dashboard": return "Dashboard";
+      case "/autopilot": return "MNR AT Auto Pilot";
+      case "/db-testing": return "DB Testing";
+      case "/mobile-testing": return "Mobile App Testing";
+      case "/api-testing": return "API Testing";
+      case "/profile": return "Profile";
+      case "/change-password": return "Change Password";
+      default:
+        // Generic fallback: turns "/some-page-name" into "Some Page Name"
+        return pathname
+          .substring(1)
+          .split("-")
+          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(" ");
+    }
   };
 
   return (
@@ -51,9 +70,10 @@ const AppHeader = () => {
           />
         </div>
         <nav className="text-sm text-gray-400">
-          HOME /{" "}
-          <span className="text-gray-900 font-medium uppercase text-[10px] tracking-widest">
-            Dashboard
+       
+          <span className="text-gray-900 font-medium uppercase text-[10px] ml-16 tracking-widest">
+            {/* Dynamically display the page name */}
+            {getPageName(location.pathname)}
           </span>
         </nav>
       </div>

@@ -9,8 +9,8 @@ import Login from "./pages/AuthFlow/Login.jsx";
 import Signup from "./pages/AuthFlow/Signup.jsx";
 
 import MainDashboard from "./pages/Dashboard/MainDashboard.jsx";
-import Profile from "./pages/Dashboard/Profile.jsx";
-import ChangePassword from "./pages/Dashboard/ChangePassword.jsx";
+import Profile from "./pages/Settings/Profile.jsx";
+import ChangePassword from "./pages/Settings/ChangePassword.jsx";
 import AutoPilot from "./pages/Dashboard/Autopilot.jsx";
 import ForgotPassword from "./pages/AuthFlow/ForgotPassword.jsx";
 import UpdatePassword from "./pages/AuthFlow/UpdatePassword.jsx";
@@ -18,6 +18,9 @@ import UpdatePassword from "./pages/AuthFlow/UpdatePassword.jsx";
 import socket from "./utils/socket.js";
 import { logout } from "./services/operations/authAPIs.js";
 import { useDispatch } from "react-redux";
+import APITesting from "./pages/Dashboard/APITesting.jsx";
+import MobileAppTesting from "./pages/Dashboard/MobileAppTesting.jsx";
+import DBTesting from "./pages/Dashboard/DBTesting.jsx";
 
 
 
@@ -153,6 +156,42 @@ useEffect(() => {
           <ProtectedRoute>
             <DashboardLayout>
               <AutoPilot />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+            {/* --- /db-testing Route --- */}
+      <Route
+        path="/db-testing"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <DBTesting/>
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+            {/* --- /mobile-testing Route --- */}
+      <Route
+        path="/mobile-testing"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <MobileAppTesting/>
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+            {/* --- /api-testing Route --- */}
+      <Route
+        path="/api-testing"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <APITesting/>
             </DashboardLayout>
           </ProtectedRoute>
         }

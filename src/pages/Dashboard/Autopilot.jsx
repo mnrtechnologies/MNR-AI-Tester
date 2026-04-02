@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
 const API = process.env.REACT_APP_AI_TESTER_BACKEND_URL;
-const CONTROL_API = API.replace('/api', '/control'); 
+const CONTROL_API = API.replace("/api", "/control");
 const WS = API.replace(/^http/, "ws");
 
 // ── Light Professional Color Palette ─────────────────────────────────────────
@@ -32,7 +32,7 @@ const copyToClipboard = (text) => {
     document.body.prepend(textArea);
     textArea.select();
     try {
-      document.execCommand('copy');
+      document.execCommand("copy");
     } catch (error) {
       console.error(error);
     } finally {
@@ -344,7 +344,12 @@ function LogPanel({ logs }) {
     <div
       ref={ref}
       className="terminal-container"
-      style={{ height: "70vh", minHeight: "600px", overflowY: "auto", width: "100%" }}
+      style={{
+        height: "70vh",
+        minHeight: "600px",
+        overflowY: "auto",
+        width: "100%",
+      }}
     >
       {logs.length === 0 ? (
         <div style={{ color: "#a1a1aa", fontSize: 13 }}>
@@ -400,10 +405,10 @@ function ExcelDownloadPill({ reports }) {
 
   const download = (urlOrB64, name) => {
     const link = document.createElement("a");
-    if (urlOrB64.startsWith('http://') || urlOrB64.startsWith('https://')) {
+    if (urlOrB64.startsWith("http://") || urlOrB64.startsWith("https://")) {
       link.href = urlOrB64;
       link.download = name;
-      link.target = '_blank';
+      link.target = "_blank";
     } else {
       link.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${urlOrB64}`;
       link.download = name;
@@ -412,7 +417,14 @@ function ExcelDownloadPill({ reports }) {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+        alignItems: "flex-end",
+      }}
+    >
       {reports.map((r, i) => (
         <button
           key={i}
@@ -420,7 +432,16 @@ function ExcelDownloadPill({ reports }) {
           onClick={() => download(r.urlOrB64, r.name)}
           title={`Download ${r.name}`}
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
             <polyline points="7 10 12 15 17 10" />
             <line x1="12" y1="15" x2="12" y2="3" />
@@ -504,7 +525,10 @@ function PhaseLogin({ onDone, onStatusChange }) {
         pushLog("✅ Login complete — auth.json saved", "green");
         setStatus("done");
         ws.close();
-        setTimeout(() => onDone(targetUrl, mode, apiKey, anthropicApiKey, goal), 800);
+        setTimeout(
+          () => onDone(targetUrl, mode, apiKey, anthropicApiKey, goal),
+          800,
+        );
         return;
       }
       if (data.type === "error") {
@@ -518,7 +542,7 @@ function PhaseLogin({ onDone, onStatusChange }) {
       setStatus("error");
     };
     ws.onclose = () => {
-   if (status === "running") pushLog("Connection closed", "yellow");
+      if (status === "running") pushLog("Connection closed", "yellow");
     };
   };
 
@@ -751,10 +775,7 @@ function PhaseLogin({ onDone, onStatusChange }) {
                 Semantic AI Agent
               </button>
               <button
-                className={cx(
-                  "toggle-opt",
-                  mode === "feature" ? "active" : "",
-                )}
+                className={cx("toggle-opt", mode === "feature" ? "active" : "")}
                 onClick={() => setMode("feature")}
                 disabled={status === "running"}
               >
@@ -869,7 +890,13 @@ function PhaseLogin({ onDone, onStatusChange }) {
 // ════════════════════════════════════════════════════════════════════════════
 // PHASE 2 — Checking Pipeline
 // ════════════════════════════════════════════════════════════════════════════
-function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onExcelReady, onStatusChange }) {
+function PhaseChecking({
+  targetUrl,
+  apiKey,
+  anthropicApiKey,
+  onExcelReady,
+  onStatusChange,
+}) {
   const [jobId, setJobId] = useState(null);
   const [parentSessionId, setParentSessionId] = useState(null);
   const [status, setStatus] = useState("starting");
@@ -929,27 +956,27 @@ function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onExcelReady, onSta
           setProgress((p) => ({
             ...p,
             current: msg.url,
-            total:   msg.total || p.total,
+            total: msg.total || p.total,
             completed: msg.index - 1,
           }));
           return;
         }
         if (msg.type === "url_report") {
-  pushLog(`✓ Indexed: ${msg.url}`, "green");
-  setProgress((p) => ({
-    ...p,
-    completed: msg.completed || p.completed,
-    total: msg.total || p.total,
-  }));
-  if (msg.s3_download_url && msg.excel_filename) {
-    onExcelReady(msg.s3_download_url, msg.excel_filename);
-    pushLog(`📊 Report saved to S3: ${msg.excel_filename}`, "green");
-  }
-  if (msg.session_id && !parentSessionId) {
-    setParentSessionId(msg.parent_session);
-  }
-  return;
-}
+          pushLog(`✓ Indexed: ${msg.url}`, "green");
+          setProgress((p) => ({
+            ...p,
+            completed: msg.completed || p.completed,
+            total: msg.total || p.total,
+          }));
+          if (msg.s3_download_url && msg.excel_filename) {
+            onExcelReady(msg.s3_download_url, msg.excel_filename);
+            pushLog(`📊 Report saved to S3: ${msg.excel_filename}`, "green");
+          }
+          if (msg.session_id && !parentSessionId) {
+            setParentSessionId(msg.parent_session);
+          }
+          return;
+        }
         if (msg.message)
           pushLog(
             msg.message,
@@ -961,7 +988,10 @@ function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onExcelReady, onSta
           );
         if (msg.type === "done") {
           setStatus("done");
-          pushLog("✅ Phase 1 Complete — All URLs indexed and reports generated", "green");
+          pushLog(
+            "✅ Phase 1 Complete — All URLs indexed and reports generated",
+            "green",
+          );
           ws.close();
         }
         if (msg.type === "error") {
@@ -1080,17 +1110,47 @@ function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onExcelReady, onSta
           )}
 
           {parentSessionId && (
-            <div style={{ marginTop: 16, padding: "14px 16px", borderRadius: 8, background: "rgba(59,130,246,0.05)", border: "1px solid rgba(59,130,246,0.2)" }}>
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: C.muted, marginBottom: 8 }}>
+            <div
+              style={{
+                marginTop: 16,
+                padding: "14px 16px",
+                borderRadius: 8,
+                background: "rgba(59,130,246,0.05)",
+                border: "1px solid rgba(59,130,246,0.2)",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                  color: C.muted,
+                  marginBottom: 8,
+                }}
+              >
                 Parent Session ID — use in Phase 3
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span className="font-mono" style={{ fontSize: 13, color: "#000000", fontWeight: 600, flex: 1, wordBreak: "break-all" }}>
+                <span
+                  className="font-mono"
+                  style={{
+                    fontSize: 13,
+                    color: "#000000",
+                    fontWeight: 600,
+                    flex: 1,
+                    wordBreak: "break-all",
+                  }}
+                >
                   {parentSessionId}
                 </span>
                 <button
                   className="btn"
-                  style={{ padding: "4px 10px", fontSize: 12, border: `1px solid ${C.border}` }}
+                  style={{
+                    padding: "4px 10px",
+                    fontSize: 12,
+                    border: `1px solid ${C.border}`,
+                  }}
                   onClick={() => copyToClipboard(parentSessionId)}
                 >
                   Copy
@@ -1102,7 +1162,7 @@ function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onExcelReady, onSta
             </div>
           )}
         </div>
-        
+
         <LogPanel logs={logs} />
       </div>
     </div>
@@ -1112,14 +1172,20 @@ function PhaseChecking({ targetUrl, apiKey, anthropicApiKey, onExcelReady, onSta
 // ════════════════════════════════════════════════════════════════════════════
 // PHASE 2 — Semantic Driver
 // ════════════════════════════════════════════════════════════════════════════
-function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onExcelReady, onStatusChange }) {
+function PhaseSemantic({
+  targetUrl,
+  apiKey,
+  anthropicApiKey,
+  onExcelReady,
+  onStatusChange,
+}) {
   const [testId, setTestId] = useState(null);
   const [status, setStatus] = useState("starting");
   const [screenshot, setScreenshot] = useState(null);
   const [logs, setLogs] = useState([]);
   const [step, setStep] = useState(0);
   const wsRef = useRef(null);
-  const [parentSessionId, setParentSessionId] = useState(null); 
+  const [parentSessionId, setParentSessionId] = useState(null);
 
   useEffect(() => {
     if (onStatusChange) onStatusChange(status);
@@ -1137,10 +1203,10 @@ function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onExcelReady, onSta
       const res = await fetch(`${API}/semantic/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           url: targetUrl,
           api_key: apiKey || undefined,
-          anthropic_api_key: anthropicApiKey || undefined
+          anthropic_api_key: anthropicApiKey || undefined,
         }),
       });
       const data = await res.json();
@@ -1148,7 +1214,7 @@ function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onExcelReady, onSta
 
       setTestId(data.test_id);
       pushLog(`Session ID: ${data.test_id}`, "cyan");
-      setParentSessionId(data.parent_session_id); 
+      setParentSessionId(data.parent_session_id);
 
       const ws = new WebSocket(`${WS}/ws/semantic/${data.test_id}`);
       wsRef.current = ws;
@@ -1174,7 +1240,10 @@ function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onExcelReady, onSta
           setStatus("done");
           if (msg.s3_download_url) {
             onExcelReady(msg.s3_download_url, msg.excel_filename);
-            pushLog("📊 Semantic report saved to S3 — Available for download", "green");
+            pushLog(
+              "📊 Semantic report saved to S3 — Available for download",
+              "green",
+            );
           }
           ws.close();
         }
@@ -1263,17 +1332,46 @@ function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onExcelReady, onSta
             </div>
           </div>
           {parentSessionId && (
-            <div style={{ marginTop: 24, padding: "14px 16px", borderRadius: 8, background: "rgba(59,130,246,0.05)", border: "1px solid rgba(59,130,246,0.2)" }}>
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: C.muted, marginBottom: 8 }}>
+            <div
+              style={{
+                marginTop: 24,
+                padding: "14px 16px",
+                borderRadius: 8,
+                background: "rgba(59,130,246,0.05)",
+                border: "1px solid rgba(59,130,246,0.2)",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                  color: C.muted,
+                  marginBottom: 8,
+                }}
+              >
                 Parent Session ID
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span className="font-mono" style={{ fontSize: 13, color: "#000000", fontWeight: 600, flex: 1 }}>
+                <span
+                  className="font-mono"
+                  style={{
+                    fontSize: 13,
+                    color: "#000000",
+                    fontWeight: 600,
+                    flex: 1,
+                  }}
+                >
                   {parentSessionId}
                 </span>
                 <button
                   className="btn"
-                  style={{ padding: "4px 10px", fontSize: 12, border: `1px solid ${C.border}` }}
+                  style={{
+                    padding: "4px 10px",
+                    fontSize: 12,
+                    border: `1px solid ${C.border}`,
+                  }}
                   onClick={() => copyToClipboard(parentSessionId)}
                 >
                   Copy
@@ -1285,7 +1383,7 @@ function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onExcelReady, onSta
             </div>
           )}
         </div>
-        
+
         <LogPanel logs={logs} />
       </div>
     </div>
@@ -1295,13 +1393,24 @@ function PhaseSemantic({ targetUrl, apiKey, anthropicApiKey, onExcelReady, onSta
 // ════════════════════════════════════════════════════════════════════════════
 // PHASE 2 — Feature Testing
 // ════════════════════════════════════════════════════════════════════════════
-function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal, onStatusChange }) {
+function PhaseFeature({
+  targetUrl,
+  apiKey,
+  anthropicApiKey,
+  goal,
+  onStatusChange,
+}) {
   const [testId, setTestId] = useState(null);
   const [parentSessionId, setParentSessionId] = useState(null);
   const [status, setStatus] = useState("starting");
   const [screenshot, setScreenshot] = useState(null);
   const [logs, setLogs] = useState([]);
-  const [progress, setProgress] = useState({ current: 0, max: 0, lastAction: "", summary: null });
+  const [progress, setProgress] = useState({
+    current: 0,
+    max: 0,
+    lastAction: "",
+    summary: null,
+  });
   const wsRef = useRef(null);
 
   useEffect(() => {
@@ -1318,7 +1427,7 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal, onStatusChange
     const start = async () => {
       pushLog(`Initializing Feature Test Engine → ${targetUrl}`, "cyan");
       pushLog(`Goal: ${goal}`, "cyan");
-      
+
       const res = await fetch(`${API}/tests/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1331,14 +1440,14 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal, onStatusChange
           anthropic_api_key: anthropicApiKey || undefined,
         }),
       });
-      
+
       const data = await res.json();
       if (cancelled) return;
 
       setTestId(data.test_id);
       pushLog(`Test Session ID: ${data.test_id}`, "cyan");
-      setParentSessionId(data.parent_session_id); 
-      
+      setParentSessionId(data.parent_session_id);
+
       const ws = new WebSocket(`${WS}/ws/tests/${data.test_id}`);
       wsRef.current = ws;
 
@@ -1352,7 +1461,11 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal, onStatusChange
         if (msg.message) {
           pushLog(
             msg.message,
-            msg.type === "error" ? "red" : msg.type === "done" ? "green" : "white",
+            msg.type === "error"
+              ? "red"
+              : msg.type === "done"
+                ? "green"
+                : "white",
           );
         }
         if (msg.type === "done" || msg.status === "completed") {
@@ -1381,7 +1494,7 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal, onStatusChange
       try {
         const r = await fetch(`${API}/tests/${testId}/status`);
         const d = await r.json();
-        
+
         setProgress((p) => ({
           ...p,
           current: d.current_step !== undefined ? d.current_step : p.current,
@@ -1389,7 +1502,7 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal, onStatusChange
           lastAction: d.last_action || p.lastAction,
           summary: d.summary || p.summary,
         }));
-        
+
         if (d.status === "completed") setStatus("done");
         if (d.status === "failed") setStatus("error");
       } catch {}
@@ -1444,7 +1557,9 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal, onStatusChange
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         <div className="card">
           <div style={{ marginBottom: 24 }}>
-            <div className="label" style={{ marginBottom: 8 }}>Target Goal</div>
+            <div className="label" style={{ marginBottom: 8 }}>
+              Target Goal
+            </div>
             <div
               style={{
                 fontSize: 14,
@@ -1459,7 +1574,7 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal, onStatusChange
               "{goal}"
             </div>
           </div>
-          
+
           <div style={{ display: "flex", gap: 32, marginBottom: 24 }}>
             <div>
               <div className="stat-val">{progress.current}</div>
@@ -1472,13 +1587,13 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal, onStatusChange
               <div className="stat-lbl">Max Steps Allowed</div>
             </div>
           </div>
-          
+
           <ProgressBar
             value={progress.current}
             max={progress.max || 1}
             label="Execution Progress"
           />
-          
+
           {progress.lastAction && (
             <div
               style={{
@@ -1513,12 +1628,16 @@ function PhaseFeature({ targetUrl, apiKey, anthropicApiKey, goal, onStatusChange
                 border: `1px solid rgba(16,185,129,.2)`,
               }}
             >
-              <div style={{ fontWeight: 600, marginBottom: 4, color: "#000000" }}>Test Summary</div>
+              <div
+                style={{ fontWeight: 600, marginBottom: 4, color: "#000000" }}
+              >
+                Test Summary
+              </div>
               {progress.summary}
             </div>
           )}
         </div>
-        
+
         <LogPanel logs={logs} />
       </div>
     </div>
@@ -1534,7 +1653,12 @@ function PhaseValidationMongoDB({ apiKey, anthropicApiKey, onStatusChange }) {
   const [sessions, setSessions] = useState([]);
   const [anthropicKey, setAnthropicKey] = useState("");
   const [openaiKey, setOpenaiKey] = useState("");
-  const [progress, setProgress] = useState({ pending: 0, in_progress: 0, completed: 0, failed: 0 });
+  const [progress, setProgress] = useState({
+    pending: 0,
+    in_progress: 0,
+    completed: 0,
+    failed: 0,
+  });
   const [taskProgress, setTaskProgress] = useState({ done: 0, total: 0 });
   const [logs, setLogs] = useState([]);
   const [screenshot, setScreenshot] = useState(null);
@@ -1554,13 +1678,20 @@ function PhaseValidationMongoDB({ apiKey, anthropicApiKey, onStatusChange }) {
       try {
         const r = await fetch(`${API}/phase3/status/${parentSessionId}`);
         const d = await r.json();
-        
+
         setSessions(d.sessions || []);
         setProgress({
-          pending: d.sessions?.filter(s => s.phase3_status === 'pending').length || 0,
-          in_progress: d.sessions?.filter(s => s.phase3_status === 'in_progress').length || 0,
-          completed: d.sessions?.filter(s => s.phase3_status === 'completed').length || 0,
-          failed: d.sessions?.filter(s => s.phase3_status === 'failed').length || 0,
+          pending:
+            d.sessions?.filter((s) => s.phase3_status === "pending").length ||
+            0,
+          in_progress:
+            d.sessions?.filter((s) => s.phase3_status === "in_progress")
+              .length || 0,
+          completed:
+            d.sessions?.filter((s) => s.phase3_status === "completed").length ||
+            0,
+          failed:
+            d.sessions?.filter((s) => s.phase3_status === "failed").length || 0,
         });
 
         if (d.all_done && status === "running") {
@@ -1588,15 +1719,15 @@ function PhaseValidationMongoDB({ apiKey, anthropicApiKey, onStatusChange }) {
 
     try {
       const res = await fetch(`${API}/phase3/start/${parentSessionId}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-        anthropic_api_key: anthropicKey || undefined, 
-            api_key: openaiKey || undefined,
-    }),
-});
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          anthropic_api_key: anthropicKey || undefined,
+          api_key: openaiKey || undefined,
+        }),
+      });
       const data = await res.json();
-      
+
       if (data.error) {
         pushLog(`❌ ${data.error}`, "red");
         setStatus("error");
@@ -1619,7 +1750,7 @@ function PhaseValidationMongoDB({ apiKey, anthropicApiKey, onStatusChange }) {
             pending: msg.pending || 0,
             in_progress: msg.in_progress || 0,
             completed: msg.completed || 0,
-            failed: msg.failed || 0
+            failed: msg.failed || 0,
           });
           return;
         }
@@ -1656,10 +1787,10 @@ function PhaseValidationMongoDB({ apiKey, anthropicApiKey, onStatusChange }) {
           setTaskProgress({ done: msg.tasks_done, total: msg.tasks_total });
           return;
         }
-        
+
         if (msg.type === "batch_done") {
           setStatus("done");
-          setTaskProgress(p => ({ ...p, done: p.total }));
+          setTaskProgress((p) => ({ ...p, done: p.total }));
           pushLog("🎉 All Phase 3 tests complete", "green");
           ws.close();
           return;
@@ -1674,7 +1805,6 @@ function PhaseValidationMongoDB({ apiKey, anthropicApiKey, onStatusChange }) {
       ws.onclose = () => {
         if (status === "running") pushLog("🔌 Connection closed", "yellow");
       };
-
     } catch (e) {
       pushLog(`❌ Start failed: ${e}`, "red");
       setStatus("error");
@@ -1684,12 +1814,16 @@ function PhaseValidationMongoDB({ apiKey, anthropicApiKey, onStatusChange }) {
   const total = sessions.length;
   const done = progress.completed + progress.failed;
   const sessionPct = total > 0 ? Math.round((done / total) * 100) : 0;
-  const pct = taskProgress.total > 0 
-    ? Math.round((taskProgress.done / taskProgress.total) * 100)
-    : sessionPct;
+  const pct =
+    taskProgress.total > 0
+      ? Math.round((taskProgress.done / taskProgress.total) * 100)
+      : sessionPct;
 
   return (
-    <div className="fade-up" style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+    <div
+      className="fade-up"
+      style={{ display: "flex", flexDirection: "column", gap: 24 }}
+    >
       <div>
         <div className="phase-header">Phase 3 — Validation</div>
         <div className="phase-title">MongoDB-Driven Test Execution</div>
@@ -1700,11 +1834,12 @@ function PhaseValidationMongoDB({ apiKey, anthropicApiKey, onStatusChange }) {
 
       {status === "idle" && (
         <div className="card fade-up" style={{ maxWidth: 600 }}>
-
           <div style={{ marginBottom: 20 }}>
             <label className="label">
               Anthropic API Key{" "}
-              <span style={{ color: C.muted, fontWeight: 400 }}>(recommended)</span>
+              <span style={{ color: C.muted, fontWeight: 400 }}>
+                (recommended)
+              </span>
             </label>
             <input
               className="input"
@@ -1718,7 +1853,9 @@ function PhaseValidationMongoDB({ apiKey, anthropicApiKey, onStatusChange }) {
           <div style={{ marginBottom: 20 }}>
             <label className="label">
               OpenAI API Key{" "}
-              <span style={{ color: C.muted, fontWeight: 400 }}>(optional)</span>
+              <span style={{ color: C.muted, fontWeight: 400 }}>
+                (optional)
+              </span>
             </label>
             <input
               className="input"
@@ -1764,18 +1901,33 @@ function PhaseValidationMongoDB({ apiKey, anthropicApiKey, onStatusChange }) {
               At least one API key is required to run validation tests.
             </div>
           )}
-
         </div>
       )}
 
       {(status === "running" || status === "done") && (
         <>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
             <div style={{ fontSize: 13, color: C.muted }}>
-              Session: <span className="font-mono" style={{ color: "#000" }}>{parentSessionId}</span>
+              Session:{" "}
+              <span className="font-mono" style={{ color: "#000" }}>
+                {parentSessionId}
+              </span>
             </div>
-            <span className={cx("badge", status === "running" ? "badge-running" : "badge-done")}>
-              {status === "running" && <span className="spinner" style={{ width: 10, height: 10 }} />}
+            <span
+              className={cx(
+                "badge",
+                status === "running" ? "badge-running" : "badge-done",
+              )}
+            >
+              {status === "running" && (
+                <span className="spinner" style={{ width: 10, height: 10 }} />
+              )}
               {status}
             </span>
           </div>
@@ -1793,60 +1945,158 @@ function PhaseValidationMongoDB({ apiKey, anthropicApiKey, onStatusChange }) {
                 <div className="stat-lbl">Completion Progress</div>
               </div>
 
-              <div style={{ height: 8, background: "#f3f4f6", borderRadius: 999, overflow: "hidden", position: "relative" }}>
-                <div style={{ position: "absolute", left: 0, top: 0, height: "100%",
-                  width: `${pct}%`,
-                  background: status === "done" ? C.green : C.accent, 
-                  transition: "width .5s ease" }} />
+              <div
+                style={{
+                  height: 8,
+                  background: "#f3f4f6",
+                  borderRadius: 999,
+                  overflow: "hidden",
+                  position: "relative",
+                }}
+              >
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    top: 0,
+                    height: "100%",
+                    width: `${pct}%`,
+                    background: status === "done" ? C.green : C.accent,
+                    transition: "width .5s ease",
+                  }}
+                />
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginTop: 20 }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(4, 1fr)",
+                  gap: 16,
+                  marginTop: 20,
+                }}
+              >
                 <div>
-                  <div className="stat-val" style={{ fontSize: 20, color: C.muted }}>{progress.pending}</div>
+                  <div
+                    className="stat-val"
+                    style={{ fontSize: 20, color: C.muted }}
+                  >
+                    {progress.pending}
+                  </div>
                   <div className="stat-lbl">Pending</div>
                 </div>
                 <div>
-                  <div className="stat-val" style={{ fontSize: 20, color: C.accent }}>{progress.in_progress}</div>
+                  <div
+                    className="stat-val"
+                    style={{ fontSize: 20, color: C.accent }}
+                  >
+                    {progress.in_progress}
+                  </div>
                   <div className="stat-lbl">Running</div>
                 </div>
                 <div>
-                  <div className="stat-val" style={{ fontSize: 20, color: C.green }}>{progress.completed}</div>
+                  <div
+                    className="stat-val"
+                    style={{ fontSize: 20, color: C.green }}
+                  >
+                    {progress.completed}
+                  </div>
                   <div className="stat-lbl">Passed</div>
                 </div>
                 <div>
-                  <div className="stat-val" style={{ fontSize: 20, color: C.red }}>{progress.failed}</div>
+                  <div
+                    className="stat-val"
+                    style={{ fontSize: 20, color: C.red }}
+                  >
+                    {progress.failed}
+                  </div>
                   <div className="stat-lbl">Failed</div>
                 </div>
               </div>
 
-              <div style={{ marginTop: 20, maxHeight: 300, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+              <div
+                style={{
+                  marginTop: 20,
+                  maxHeight: 300,
+                  overflowY: "auto",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                }}
+              >
                 {sessions.map((s, i) => (
-                  <div key={i} className={cx("test-item", s.session_id === activeSession ? "active" : "")}
-                    style={{ padding: "8px 12px", fontSize: 12 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div
+                    key={i}
+                    className={cx(
+                      "test-item",
+                      s.session_id === activeSession ? "active" : "",
+                    )}
+                    style={{ padding: "8px 12px", fontSize: 12 }}
+                  >
+                    <div
+                      style={{ display: "flex", alignItems: "center", gap: 8 }}
+                    >
                       {s.phase3_status === "completed" ? (
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="3">
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke={C.green}
+                          strokeWidth="3"
+                        >
                           <polyline points="20 6 9 17 4 12" />
                         </svg>
                       ) : s.phase3_status === "failed" ? (
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.red} strokeWidth="3">
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke={C.red}
+                          strokeWidth="3"
+                        >
                           <line x1="18" y1="6" x2="6" y2="18" />
                           <line x1="6" y1="6" x2="18" y2="18" />
                         </svg>
                       ) : s.phase3_status === "in_progress" ? (
-                        <span className="spinner" style={{ width: 10, height: 10, borderWidth: "2px" }} />
+                        <span
+                          className="spinner"
+                          style={{ width: 10, height: 10, borderWidth: "2px" }}
+                        />
                       ) : (
-                        <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.muted }} />
+                        <div
+                          style={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: "50%",
+                            background: C.muted,
+                          }}
+                        />
                       )}
-                      <span className="font-mono" style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <span
+                        className="font-mono"
+                        style={{
+                          flex: 1,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
                         {s.page_url}
                       </span>
-                      <span className={cx("badge",
-                        s.phase3_status === "completed" ? "badge-done"
-                        : s.phase3_status === "failed" ? "badge-failed"
-                        : s.phase3_status === "in_progress" ? "badge-running"
-                        : "badge-idle")}
-                        style={{ fontSize: 9, padding: "2px 6px" }}>
+                      <span
+                        className={cx(
+                          "badge",
+                          s.phase3_status === "completed"
+                            ? "badge-done"
+                            : s.phase3_status === "failed"
+                              ? "badge-failed"
+                              : s.phase3_status === "in_progress"
+                                ? "badge-running"
+                                : "badge-idle",
+                        )}
+                        style={{ fontSize: 9, padding: "2px 6px" }}
+                      >
                         {s.phase3_status}
                       </span>
                       {s.final_report_url && (
@@ -1862,11 +2112,25 @@ function PhaseValidationMongoDB({ apiKey, anthropicApiKey, onStatusChange }) {
                             background: "#ffffff",
                             color: "#000000",
                             textDecoration: "none",
-                            marginLeft: "auto"
+                            marginLeft: "auto",
                           }}
                           title="Download Final Report"
                         >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4, display: "inline-block", verticalAlign: "middle" }}>
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            style={{
+                              marginRight: 4,
+                              display: "inline-block",
+                              verticalAlign: "middle",
+                            }}
+                          >
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                             <polyline points="7 10 12 15 17 10" />
                             <line x1="12" y1="15" x2="12" y2="3" />
@@ -1895,20 +2159,37 @@ export default function App() {
   const [phase, setPhase] = useState("login");
   const [authStatus, setAuthStatus] = useState("idle");
   const [activePhaseStatus, setActivePhaseStatus] = useState("idle");
-  
+
   const [targetUrl, setTargetUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [anthropicApiKey, setAnthropicApiKey] = useState("");
   const [mode, setMode] = useState("checking");
   const [goal, setGoal] = useState("");
-  
+
   const [terminateCountdown, setTerminateCountdown] = useState(null);
   const [excelReports, setExcelReports] = useState([]);
 
   // Check if ANY phase is actively processing
-  const isProcessing = ["connecting", "starting", "running"].includes(activePhaseStatus);
+  const isProcessing = ["connecting", "starting", "running"].includes(
+    activePhaseStatus,
+  );
 
-  const handleLoginDone = (url, selectedMode, openaiKey, antKey, selectedGoal) => {
+  useEffect(() => {
+    if (isProcessing) {
+      localStorage.setItem("autopilotRunning", "true");
+    } else {
+      // Crucial fix: turn it off when idle, done, or errored
+      localStorage.setItem("autopilotRunning", "false");
+    }
+  }, [isProcessing]);
+
+  const handleLoginDone = (
+    url,
+    selectedMode,
+    openaiKey,
+    antKey,
+    selectedGoal,
+  ) => {
     localStorage.setItem("targetUrl", url);
     localStorage.setItem("autopilotRunning", "true");
     setTargetUrl(url);
@@ -1921,7 +2202,7 @@ export default function App() {
   };
 
   const handleExcelReady = (urlOrB64, name) => {
-    setExcelReports(prev => [...prev, { urlOrB64, name }]);
+    setExcelReports((prev) => [...prev, { urlOrB64, name }]);
   };
 
   // Browser level refresh/close blocking
@@ -1929,7 +2210,8 @@ export default function App() {
     const handleBeforeUnload = (e) => {
       if (isProcessing) {
         e.preventDefault();
-        e.returnValue = "Processing is ongoing. Are you sure you want to leave?";
+        e.returnValue =
+          "Processing is ongoing. Are you sure you want to leave?";
       }
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
@@ -1951,27 +2233,30 @@ export default function App() {
   useEffect(() => {
     if (terminateCountdown === null) return;
     if (terminateCountdown <= 0) {
-      window.location.reload(); 
+      window.location.reload();
       return;
     }
-    const timer = setTimeout(() => setTerminateCountdown(prev => prev - 1), 1000);
+    const timer = setTimeout(
+      () => setTerminateCountdown((prev) => prev - 1),
+      1000,
+    );
     return () => clearTimeout(timer);
   }, [terminateCountdown]);
 
   const handleTerminateClick = () => {
-    
-    fetch(`${CONTROL_API}/terminate-and-restart`, { method: "POST" })
-      .catch(err => console.error("Termination request failed:", err));
-       setTerminateCountdown(60);
+    fetch(`${CONTROL_API}/terminate-and-restart`, { method: "POST" }).catch(
+      (err) => console.error("Termination request failed:", err),
+    );
+    setTerminateCountdown(60);
   };
 
   const handleTabClick = async (p) => {
     if (p === phase) return;
-    
+
     // If we are actively processing, explicitly block tab clicks so we don't accidentally terminate
     // the user must use the manual "Terminate" button to break out.
-    if (isProcessing) return; 
-    
+    if (isProcessing) return;
+
     setPhase(p);
   };
 
@@ -2010,7 +2295,7 @@ export default function App() {
                 let isDisabled = false;
 
                 if (isProcessing) {
-                  isDisabled = (p !== phase); // Block switching visually if processing is ongoing
+                  isDisabled = p !== phase; // Block switching visually if processing is ongoing
                 } else if (authStatus === "idle" || authStatus === "error") {
                   if (p === "phase2") isDisabled = true; // Block discovery if auth not completed
                 } else {
@@ -2107,12 +2392,12 @@ export default function App() {
           )}
 
           {phase === "login" && (
-            <PhaseLogin 
-              onDone={handleLoginDone} 
+            <PhaseLogin
+              onDone={handleLoginDone}
               onStatusChange={(s) => {
                 setAuthStatus(s);
                 setActivePhaseStatus(s);
-              }} 
+              }}
             />
           )}
 
@@ -2145,36 +2430,58 @@ export default function App() {
           )}
 
           {phase === "phase3" && (
-            <PhaseValidationMongoDB 
-                apiKey={apiKey} 
-                anthropicApiKey={anthropicApiKey} 
-                onStatusChange={setActivePhaseStatus}
+            <PhaseValidationMongoDB
+              apiKey={apiKey}
+              anthropicApiKey={anthropicApiKey}
+              onStatusChange={setActivePhaseStatus}
             />
           )}
         </div>
       </div>
-      
+
       {terminateCountdown !== null && (
         <div className="terminate-overlay">
-          <h2 style={{ fontSize: 24, marginBottom: 16 }}>Terminating Session...</h2>
-          
+          <h2 style={{ fontSize: 24, marginBottom: 16 }}>
+            Terminating Session...
+          </h2>
+
           <div className="terminate-spinner">
-            <svg className="terminate-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+            <svg
+              className="terminate-icon"
+              width="32"
+              height="32"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#fff"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
             </svg>
           </div>
 
           <div className="terminate-progress-bar">
-            <div 
-              className="terminate-progress-fill" 
-              style={{ width: `${((60 - terminateCountdown) / 60) * 100}%` }} 
+            <div
+              className="terminate-progress-fill"
+              style={{ width: `${((60 - terminateCountdown) / 60) * 100}%` }}
             />
           </div>
-          
-          <p style={{ marginTop: 24, fontSize: 18, fontWeight: 700, color: '#fff', letterSpacing: '0.5px' }}>
+
+          <p
+            style={{
+              marginTop: 24,
+              fontSize: 18,
+              fontWeight: 700,
+              color: "#fff",
+              letterSpacing: "0.5px",
+            }}
+          >
             Don't refresh the page.
           </p>
-          <p style={{ marginTop: 8, color: '#a1a1aa' }}>Allowing graceful teardown. Please wait...</p>
+          <p style={{ marginTop: 8, color: "#a1a1aa" }}>
+            Allowing graceful teardown. Please wait...
+          </p>
         </div>
       )}
     </>
