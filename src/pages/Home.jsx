@@ -18,7 +18,7 @@ import heroImg from "../assets/homeImage.jpg";
 import aiImg from "../assets/Intell_automation_image.jpg";
 import ContactPage from "../components/UI/ContactPage";
 import { useNavigate } from "react-router-dom";
-import Footer from "../components/UI/Footer";
+//import Footer from "../components/UI/Footer";
 // import PricingCTA from "../components/UI/Pricing";
 
 const fadeUp = {
@@ -438,7 +438,7 @@ const Home = () => {
       </section>
 
       {/* ================= >>FOOTER <<================= */}
-      <Footer />
+      {/* <Footer /> */}
     </div>
   );
 };
