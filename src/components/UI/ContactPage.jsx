@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { Send, MapPin, Phone, Mail } from "lucide-react";
+import { Send, MapPin, Phone, Mail, CheckCircle2 } from "lucide-react";
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
@@ -18,7 +18,7 @@ export default function ContactPage() {
 
   const sectionRef = useRef(null);
 
-  /*  Animate on scroll */
+  /* Animate on scroll */
   useEffect(() => {
     const observer = new IntersectionObserver(
       ([entry]) => {
@@ -58,10 +58,6 @@ export default function ContactPage() {
     }
 
     if (!formData.message.trim()) errors.message = "Message is required";
-
-    if (formData.service === "Select a service") {
-      errors.service = "Please select a service";
-    }
 
     return errors;
   };
@@ -104,55 +100,64 @@ export default function ContactPage() {
   };
 
   return (
-    <main className="pt-20">
-      {/*  HERO */}
-      <section className="bg-gradient-to-br from-[#0c1e5b] to-[#1a2a5e] py-24 text-center text-white px-6">
-        <h1 className="text-4xl md:text-5xl font-bold mb-6">Contact Us</h1>
-        <p className="max-w-2xl mx-auto text-lg text-gray-200">
+    <main className="pt-20 bg-white">
+      {/* HERO */}
+      <section className="py-24 text-center px-6 bg-gradient-to-b from-orange-50/50 to-white">
+        <h1 className="text-4xl md:text-5xl font-black mb-6 tracking-tight text-slate-900">
+          Contact <span className="text-orange-500">Us</span>
+        </h1>
+        <p className="max-w-2xl mx-auto text-lg text-slate-500 leading-relaxed">
           We'd love to hear from you. Reach out to discuss how we can help with
           your technology needs.
         </p>
       </section>
 
-      {/*  CONTACT */}
+      {/* CONTACT */}
       <section
         ref={sectionRef}
-        className="py-20 px-6 opacity-0 translate-y-10 transition-all duration-700"
+        className="pb-24 px-6 opacity-0 translate-y-10 transition-all duration-700"
       >
-        <div className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-10">
+        <div className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-10 items-stretch">
+          
           {/* LEFT INFO */}
-          <div className="bg-[#0c1e5b] rounded-xl p-8 text-white">
-            <h3 className="text-2xl font-semibold mb-4">Contact Information</h3>
-            <p className="text-gray-200 mb-8">
+          <div className="bg-slate-50 rounded-3xl p-8 lg:p-12 border border-slate-100 flex flex-col justify-center">
+            <h3 className="text-2xl font-bold mb-4 tracking-tight text-slate-900">Contact Information</h3>
+            <p className="text-slate-500 mb-10 leading-relaxed">
               Reach out to us for a consultation or to learn more about our
-              services.
+              services. Our team is ready to assist you.
             </p>
 
-            <div className="space-y-6">
-              <div className="flex gap-4">
-                <MapPin className="text-teal-400" />
+            <div className="space-y-8">
+              <div className="flex gap-5 items-start">
+                <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shrink-0 border border-slate-200 shadow-sm">
+                  <MapPin className="text-orange-500" size={20} />
+                </div>
                 <div>
-                  <h4 className="font-semibold">Our Location</h4>
-                  <p className="text-gray-200 text-sm">
+                  <h4 className="font-bold text-slate-900 mb-1">Our Location</h4>
+                  <p className="text-slate-500 text-sm leading-relaxed">
                     WeWork - Krishe Emerald, Ground Floor, Laxmi Cyber City,
                     HITECH City, Hyderabad, Telangana - 500082
                   </p>
                 </div>
               </div>
 
-              <div className="flex gap-4">
-                <Phone className="text-teal-400" />
+              <div className="flex gap-5 items-start">
+                <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shrink-0 border border-slate-200 shadow-sm">
+                  <Phone className="text-orange-500" size={20} />
+                </div>
                 <div>
-                  <h4 className="font-semibold">Phone</h4>
-                  <p className="text-gray-200 text-sm">+91 73299 99968</p>
+                  <h4 className="font-bold text-slate-900 mb-1">Phone</h4>
+                  <p className="text-slate-500 text-sm">+91 73299 99968</p>
                 </div>
               </div>
 
-              <div className="flex gap-4">
-                <Mail className="text-teal-400" />
+              <div className="flex gap-5 items-start">
+                <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shrink-0 border border-slate-200 shadow-sm">
+                  <Mail className="text-orange-500" size={20} />
+                </div>
                 <div>
-                  <h4 className="font-semibold">Email</h4>
-                  <p className="text-gray-200 text-sm">
+                  <h4 className="font-bold text-slate-900 mb-1">Email</h4>
+                  <p className="text-slate-500 text-sm">
                     info@mnrtechnologies.com
                   </p>
                 </div>
@@ -163,43 +168,51 @@ export default function ContactPage() {
           {/* RIGHT FORM */}
           <form
             onSubmit={handleSubmit}
-            className="bg-white rounded-xl shadow-lg p-8"
+            className="bg-white rounded-3xl shadow-xl shadow-slate-200/40 border border-slate-100 p-8 lg:p-12"
           >
-            <h3 className="text-2xl font-semibold mb-6">Send Us a Message</h3>
+            <h3 className="text-2xl font-bold mb-8 text-slate-900 tracking-tight">Send Us a Message</h3>
 
             {submitSuccess && (
-              <div className="bg-teal-50 border border-teal-300 text-teal-600 p-3 rounded mb-6">
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 p-4 rounded-xl mb-8 font-medium flex items-center gap-2">
+                <CheckCircle2 size={20} className="text-emerald-500 shrink-0" />
                 Thank you! We'll get back to you shortly.
               </div>
             )}
 
             <div className="space-y-5">
-              <input
-                name="name"
-                placeholder="Full Name*"
-                value={formData.name}
-                onChange={handleChange}
-                className="w-full border p-3 rounded focus:ring-2 focus:ring-teal-400"
-              />
-              {formErrors.name && (
-                <p className="text-red-500 text-sm">{formErrors.name}</p>
-              )}
-
-              <div className="grid md:grid-cols-2 gap-4">
+              <div>
                 <input
-                  name="email"
-                  placeholder="Email*"
-                  value={formData.email}
+                  name="name"
+                  placeholder="Full Name*"
+                  value={formData.name}
                   onChange={handleChange}
-                  className="border p-3 rounded focus:ring-2 focus:ring-teal-400"
+                  className="w-full border border-slate-200 bg-slate-50 p-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400 focus:bg-white transition-all text-slate-900"
                 />
+                {formErrors.name && (
+                  <p className="text-red-500 text-sm mt-2 font-medium">{formErrors.name}</p>
+                )}
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-5">
+                <div>
+                  <input
+                    name="email"
+                    placeholder="Email*"
+                    value={formData.email}
+                    onChange={handleChange}
+                    className="w-full border border-slate-200 bg-slate-50 p-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400 focus:bg-white transition-all text-slate-900"
+                  />
+                  {formErrors.email && (
+                    <p className="text-red-500 text-sm mt-2 font-medium">{formErrors.email}</p>
+                  )}
+                </div>
 
                 <input
                   name="phone"
                   placeholder="Phone"
                   value={formData.phone}
                   onChange={handleChange}
-                  className="border p-3 rounded focus:ring-2 focus:ring-teal-400"
+                  className="w-full border border-slate-200 bg-slate-50 p-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400 focus:bg-white transition-all text-slate-900"
                 />
               </div>
 
@@ -208,103 +221,35 @@ export default function ContactPage() {
                 placeholder="Company"
                 value={formData.company}
                 onChange={handleChange}
-                className="w-full border p-3 rounded focus:ring-2 focus:ring-teal-400"
+                className="w-full border border-slate-200 bg-slate-50 p-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400 focus:bg-white transition-all text-slate-900"
               />
 
-              {/* <select
-                name="service"
-                value={formData.service}
-                onChange={handleChange}
-                className="w-full border p-3 rounded focus:ring-2 focus:ring-teal-400"
-              >
-                <option disabled>Select a service</option>
-                <option>Healthcare</option>
-                <option>Banking</option>
-                <option>AI</option>
-                <option>Cloud</option>
-                <option>Cybersecurity</option>
-                <option>Other</option>
-              </select> */}
-
-              <textarea
-                name="message"
-                rows="4"
-                placeholder="Message*"
-                value={formData.message}
-                onChange={handleChange}
-                className="w-full border p-3 rounded focus:ring-2 focus:ring-teal-400"
-              />
+              <div>
+                <textarea
+                  name="message"
+                  rows="4"
+                  placeholder="Message*"
+                  value={formData.message}
+                  onChange={handleChange}
+                  className="w-full border border-slate-200 bg-slate-50 p-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400 focus:bg-white transition-all resize-none text-slate-900"
+                />
+                {formErrors.message && (
+                  <p className="text-red-500 text-sm mt-2 font-medium">{formErrors.message}</p>
+                )}
+              </div>
 
               <button
                 disabled={isSubmitting}
-                className="bg-gradient-to-r from-teal-400 to-blue-500 text-white px-6 py-3 rounded flex items-center gap-2 hover:scale-105 transition"
+                className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20 hover:-translate-y-0.5 transition-all w-full font-bold tracking-wide mt-4"
               >
                 {isSubmitting ? "Sending..." : "Send Message"}
-                <Send size={16} />
+                <Send size={18} />
               </button>
             </div>
           </form>
         </div>
       </section>
 
-      {/*  OFFICES */}
-      <section className="bg-gray-100 py-24 px-6 text-center">
-        <h2 className="text-4xl font-bold text-gray-800 mb-16">
-          Our Global Offices
-        </h2>
-
-        <div className="max-w-7xl mx-auto grid md:grid-cols-3 gap-10">
-          {/* Headquarters */}
-          <div className="bg-white rounded-2xl shadow-sm px-10 py-12 hover:-translate-y-2 transition duration-300">
-            <h3 className="font-semibold text-2xl text-gray-800 mb-6">
-              Headquarters
-            </h3>
-
-            <div className="text-gray-600 leading-8 space-y-4">
-              <p>
-                WeWork - Krishe Emerald Ground Floor <br />
-                Laxmi Cyber City Whitefields, HITECH City <br />
-                Hyderabad, Telangana 500082
-              </p>
-
-              <p>Phone: +91 73299 99968</p>
-              <p>Email: info@mnrtechnologies.com</p>
-            </div>
-          </div>
-
-          {/* USA */}
-          <div className="bg-white rounded-2xl shadow-sm px-10 py-12 hover:-translate-y-2 transition duration-300">
-            <h3 className="font-semibold text-2xl text-gray-800 mb-6">USA</h3>
-
-            <div className="text-gray-600 leading-8 space-y-4">
-              <p>
-                Phoenix, AZ, <br />
-                USA
-              </p>
-
-              <p>Phone: +1 (860) 595-6756</p>
-              <p>Email: us@mnrtechnologies.com</p>
-            </div>
-          </div>
-
-          {/* Asia Pacific */}
-          <div className="bg-white rounded-2xl shadow-sm px-10 py-12 hover:-translate-y-2 transition duration-300">
-            <h3 className="font-semibold text-2xl text-gray-800 mb-6">
-              Asia Pacific
-            </h3>
-
-            <div className="text-gray-600 leading-8 space-y-4">
-              <p>
-                88 Innovation Tower, Level 21 <br />
-                Singapore 018956
-              </p>
-
-              <p>Phone: +65 6123 4567</p>
-              <p>Email: apac@mnrtechnologies.com</p>
-            </div>
-          </div>
-        </div>
-      </section>
     </main>
   );
 }

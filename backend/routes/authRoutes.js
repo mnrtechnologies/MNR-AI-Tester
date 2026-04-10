@@ -7,27 +7,37 @@ const {
   changePassword,
   getUserDetails,
   updateBasicInfo,
-  getAllUser
+  getAllUser,
+  editUser,
+  deleteUser
 } = require("../controllers/authController");
 const { 
     resetPasswordToken, 
     resetPassword 
 } = require("../controllers/resetPasswordController");
 
-const { auth } = require("../middleware/auth");
+const { auth,isAdmin } = require("../middleware/auth");
 
 // public routes
-router.post("/signup", register);
+// router.post("/signup", register);
 router.post("/login", login);
 
 // protected routes
 router.get("/getUserDetails", auth, getUserDetails);
 router.post("/change-password", auth, changePassword);
 router.put("/update-profile", auth, updateBasicInfo);
-router.get("/get-all-users",auth, getAllUser);
 
 //forgot password - Password Reset Routes
 router.post("/reset-password-token", resetPasswordToken);
 router.post("/reset-password", resetPassword);
+
+// Route for user signup
+router.post("/register",auth,isAdmin, register)
+//get all user
+router.get("/get-all-users",auth, getAllUser);
+// Edit User Details
+router.put("/edit-user/:userId", auth, isAdmin, editUser);
+// Delete User
+router.delete("/delete-user/:userId", auth, isAdmin, deleteUser);
 
 module.exports = router;

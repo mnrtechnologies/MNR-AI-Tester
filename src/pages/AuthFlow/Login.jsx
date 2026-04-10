@@ -40,7 +40,7 @@ const Login = () => {
         value &&
         !(
           value.endsWith("@mnrtechnologies.com") ||
-          value.endsWith("@adventglobal.com")
+          value.endsWith("@adventglobal.com") || value.endsWith("pratikmehakare8@gmail.com") 
         )
       ) {
         setEmailError(
@@ -155,7 +155,7 @@ const Login = () => {
           </button>
         </form>
 
-        <p className="mt-8 text-center text-sm text-gray-500">
+        {/* <p className="mt-8 text-center text-sm text-gray-500">
           New here?
           <Link
             to="/signup"
@@ -163,6 +163,13 @@ const Login = () => {
           >
             Create an account
           </Link>
+        </p> */}
+
+        <p className="mt-8 text-center text-sm text-gray-500">
+          Need access?{" "}
+          <span className="text-[#00254D] font-semibold">
+            Please contact your system administrator.
+          </span>
         </p>
       </div>
     </div>

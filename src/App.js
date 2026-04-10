@@ -21,8 +21,10 @@ import { useDispatch } from "react-redux";
 import APITesting from "./pages/Dashboard/APITesting.jsx";
 import MobileAppTesting from "./pages/Dashboard/MobileAppTesting.jsx";
 import DBTesting from "./pages/Dashboard/DBTesting.jsx";
-
-
+import UserManagement from "./pages/Dashboard/Admin/UserManagement.jsx";
+import AddUserForm from "./pages/Dashboard/Admin/AddUserForm.jsx";
+import { getUserDetails } from "./services/operations/authAPIs.js";
+import UpgradePlan from "./pages/Dashboard/UpgradePlan.jsx";
 
 // Layout for Dashboard pages ONLY
 const DashboardLayout = ({ children }) => (
@@ -64,32 +66,59 @@ const OpenRoute = ({ children }) => {
   return <Navigate to="/dashboard" replace />;
 };
 
+// Admin Route helper ---
+// --- UPDATED: Admin Route helper ---
+const AdminRoute = ({ children }) => {
+  const { user } = useSelector((state) => state.profile);
+  const hasToken = localStorage.getItem("token");
+
+  const currentRole = user?.role;
+
+  // 1. If we don't have user data yet, but a token exists, we are likely still fetching the profile.
+  // Show a loading state instead of immediately kicking them out.
+  if (!user && hasToken) {
+    return (
+      <div className="flex h-screen items-center justify-center text-blue-900 font-semibold">
+        Loading...
+      </div>
+    );
+  }
+
+  // 2. Once the user data is loaded, check if they are an Admin.
+  if (currentRole === "Admin") {
+    return children;
+  }
+
+  // 3. If they are completely loaded and NOT an Admin, redirect them.
+  return <Navigate to="/dashboard" replace />;
+};
+
 function App() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
+  const { user } = useSelector((state) => state.profile);
+  const localToken = localStorage.getItem("token");
 
-useEffect(() => {
+  useEffect(() => {
+    if (localToken && !user) {
+      dispatch(getUserDetails(localToken, navigate));
+    }
+  }, [dispatch, localToken, user, navigate]);
 
-  const handleForceLogout = () => {
+  useEffect(() => {
+    const handleForceLogout = () => {
+      dispatch(logout(navigate));
 
-    dispatch(logout(navigate));
+      alert("Logged in from another device");
+    };
 
-    alert("Logged in from another device");
+    socket.on("forceLogout", handleForceLogout);
 
-  };
-
-  socket.on("forceLogout", handleForceLogout);
-
-  return () => {
-
-    socket.off("forceLogout", handleForceLogout);
-
-  };
-
-}, [dispatch, navigate]);
-
-
+    return () => {
+      socket.off("forceLogout", handleForceLogout);
+    };
+  }, [dispatch, navigate]);
 
   return (
     <Routes>
@@ -112,14 +141,14 @@ useEffect(() => {
           </OpenRoute>
         }
       />
-      <Route
+      {/* <Route
         path="/signup"
         element={
           <OpenRoute>
             <Signup />
           </OpenRoute>
         }
-      />
+      /> */}
       <Route
         path="/forgot-password"
         element={
@@ -134,6 +163,17 @@ useEffect(() => {
           <OpenRoute>
             <UpdatePassword />
           </OpenRoute>
+        }
+      />
+
+      <Route
+        path="/upgrade-plan"
+        element={
+          <ProtectedRoute>
+           <AppHeader/>
+              <UpgradePlan />
+           
+          </ProtectedRoute>
         }
       />
 
@@ -161,37 +201,37 @@ useEffect(() => {
         }
       />
 
-            {/* --- /db-testing Route --- */}
+      {/* --- /db-testing Route --- */}
       <Route
         path="/db-testing"
         element={
           <ProtectedRoute>
             <DashboardLayout>
-              <DBTesting/>
+              <DBTesting />
             </DashboardLayout>
           </ProtectedRoute>
         }
       />
 
-            {/* --- /mobile-testing Route --- */}
+      {/* --- /mobile-testing Route --- */}
       <Route
         path="/mobile-testing"
         element={
           <ProtectedRoute>
             <DashboardLayout>
-              <MobileAppTesting/>
+              <MobileAppTesting />
             </DashboardLayout>
           </ProtectedRoute>
         }
       />
 
-            {/* --- /api-testing Route --- */}
+      {/* --- /api-testing Route --- */}
       <Route
         path="/api-testing"
         element={
           <ProtectedRoute>
             <DashboardLayout>
-              <APITesting/>
+              <APITesting />
             </DashboardLayout>
           </ProtectedRoute>
         }
@@ -217,6 +257,34 @@ useEffect(() => {
             <DashboardLayout>
               <ChangePassword />
             </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* --- Admin Route --- */}
+      <Route
+        path="/admin/user-management"
+        element={
+          <ProtectedRoute>
+            <AdminRoute>
+              <DashboardLayout>
+                <UserManagement />
+              </DashboardLayout>
+            </AdminRoute>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* --- Admin Route --- */}
+      <Route
+        path="/admin/user-management/add-user"
+        element={
+          <ProtectedRoute>
+            <AdminRoute>
+              <DashboardLayout>
+                <AddUserForm />
+              </DashboardLayout>
+            </AdminRoute>
           </ProtectedRoute>
         }
       />

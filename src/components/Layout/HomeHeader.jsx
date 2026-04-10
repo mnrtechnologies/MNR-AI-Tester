@@ -29,7 +29,7 @@ const HomeHeader = () => {
 
       {/* Navigation - Orange hover states */}
       <div className="hidden md:flex items-center gap-10">
-        {["Home", "Features", "About", "Contact"].map((item) => (
+        {["Home", "Features", "About", "Contact","Pricing"].map((item) => (
           <button 
             key={item}
             onClick={() => handleScroll(item.toLowerCase())}
@@ -41,7 +41,7 @@ const HomeHeader = () => {
       </div>
 
       <div className="flex items-center gap-8">
-        <Link to="/signup" className="text-sm font-medium text-slate-400 hover:text-orange-600">Sign up</Link>
+        {/* <Link to="/signup" className="text-sm font-medium text-slate-400 hover:text-orange-600">Sign up</Link> */}
         <Link
           to="/login"
           className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 rounded-full text-sm font-bold transition-all shadow-lg shadow-orange-100"

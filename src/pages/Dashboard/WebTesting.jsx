@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-
+import SubscriptionGuard from "../../components/UI/SubscriptionGuard"
 const API = process.env.REACT_APP_AI_TESTER_BACKEND_URL;
 const CONTROL_API = API.replace("/api", "/control");
 const WS = API.replace(/^http/, "ws");
@@ -2261,6 +2261,7 @@ export default function App() {
   };
 
   return (
+    <SubscriptionGuard>
     <>
       <style dangerouslySetInnerHTML={{ __html: GLOBAL_CSS }} />
       <div style={{ display: "flex", minHeight: "100vh", background: C.bg }}>
@@ -2485,5 +2486,6 @@ export default function App() {
         </div>
       )}
     </>
+    </SubscriptionGuard>
   );
 }

@@ -20,8 +20,12 @@ const {
 
   GET_USER_DETAILS_API,
   UPDATE_INFO_API,
-  GET_ALL_USERS_API,
   CHANGED_PASSWORD_API,
+
+  REGISTER_API,
+  GET_ALL_USERS_API,
+  EDIT_USER_API,
+  DELETE_USER_API,
 } = endpoints;
 
 //login
@@ -223,26 +227,6 @@ export function changePassword(
   };
 }
 
-//get all users
-export function getAllUsers() {
-  return async (dispatch) => {
-    try {
-      // Don't pass headers manually!
-      // The apiConnector (axiosInstance) adds them automatically via interceptors.
-      const response = await apiConnector("GET", GET_ALL_USERS_API);
-
-      if (!response.data.success) {
-        throw new Error(response.data.message);
-      }
-
-      return response.data.users;
-    } catch (error) {
-      console.error("GET_ALL_USERS ERROR:", error);
-      return [];
-    }
-  };
-}
-
 export function updateBasicInfo(
   { name, email, mobile, country, state, city },
   onSuccess,
@@ -293,5 +277,151 @@ export function logout(navigate) {
     localStorage.removeItem("user");
     toast.success("Logged Out");
     navigate("/");
+  };
+}
+
+//Admin functions
+
+//register user
+export function register(
+  name,
+  email,
+  password,
+  confirmPassword,
+  mobile,
+  country,
+  state,
+  city,
+  role,
+  navigate,
+) {
+  return async (dispatch) => {
+    const toastId = toast.loading("Loading...");
+    // dispatch(setLoading(true));
+    try {
+      if (password !== confirmPassword) {
+        throw new Error("Passwords do not match");
+      }
+      const token = JSON.parse(localStorage.getItem("token"));
+      const response = await apiConnector(
+        "POST",
+        REGISTER_API,
+        {
+          name,
+          email,
+          password,
+          confirmPassword,
+          mobile,
+          country,
+          state,
+          city,
+          role,
+        },
+        {
+          Authorization: `Bearer ${token}`,
+        },
+      );
+
+      //  console.log("REGISTRATION API RESPONSE............", response);
+
+      if (!response.data.success) {
+        throw new Error(response.data.message);
+      }
+      toast.success("Register Successful");
+      navigate("/admin/user-management");
+    } catch (error) {
+      // console.log("REGISRATION API ERROR............", error);
+      toast.error(
+        error?.response?.data?.message || error?.message || "Signup Failed",
+      );
+    }
+    //spatch(setLoading(false));
+    toast.dismiss(toastId);
+  };
+}
+
+//get all users
+export function getAllUsers() {
+  return async (dispatch) => {
+    try {
+      const token = JSON.parse(localStorage.getItem("token"));
+      const response = await apiConnector("GET", GET_ALL_USERS_API, null, {
+        Authorization: `Bearer ${token}`,
+      });
+
+      if (!response.data.success) {
+        throw new Error(response.data.message);
+      }
+
+      return response.data.users;
+    } catch (error) {
+      // console.error("GET_ALL_USERS ERROR:", error);
+      return [];
+    }
+  };
+}
+
+//edit user
+export function editUser(userId, updatedData, onSuccess) {
+  return async (dispatch) => {
+    const toastId = toast.loading("Updating user...");
+    //dispatch(setLoading(true));
+    try {
+      const token = JSON.parse(localStorage.getItem("token"));
+      const response = await apiConnector(
+        "PUT",
+        EDIT_USER_API(userId),
+        updatedData,
+        {
+          Authorization: `Bearer ${token}`,
+        },
+      );
+
+      if (!response.data.success) {
+        throw new Error(response.data.message);
+      }
+
+      toast.success("User updated successfully");
+      onSuccess && onSuccess(response.data.user); // Optional callback
+    } catch (error) {
+      //  console.error("EDIT_USER ERROR:", error);
+      toast.error(error?.response?.data?.message || "Failed to update user");
+    }
+    toast.dismiss(toastId);
+    // dispatch(setLoading(false));
+  };
+}
+
+//delete user
+export function deleteUser(userId, onSuccess) {
+
+  return async (dispatch) => {
+    const toastId = toast.loading("Deleting user...");
+    //dispatch(setLoading(true));
+    try {
+      const token = JSON.parse(localStorage.getItem("token"));
+     
+      const response = await apiConnector(
+        "DELETE",
+        DELETE_USER_API(userId),
+        {},
+        {
+          Authorization: `Bearer ${token}`,
+        },
+      );
+    
+
+      if (!response.data.success) {
+        throw new Error(response.data.message);
+      }
+
+      toast.success("User deleted successfully");
+      onSuccess && onSuccess(); // Optional callback to refresh UI
+    } catch (error) {
+      // console.error("DELETE_USER ERROR:", error);
+      toast.error(error?.response?.data?.message || "Failed to delete user");
+    }
+    toast.dismiss(toastId);
+    // dispatch(setLoading(false));
   };
 }

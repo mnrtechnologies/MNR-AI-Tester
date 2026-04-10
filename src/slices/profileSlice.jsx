@@ -19,9 +19,19 @@ const profileSlice = createSlice({
     setSelectedMode(state, value) { 
       state.selectedMode = value.payload
     },
+
+    // update usage without fetching the whole profile again
+    incrementUsageCount: (state, action) => {
+      if (state.user && state.user.subscription && state.user.subscription.length > 0) {
+        // Get the latest subscription
+        const latestSubIndex = state.user.subscription.length - 1;
+        
+        // Update the testsUsed value with the payload from the backend
+        state.user.subscription[latestSubIndex].planDetails.testsUsed = action.payload;
+      }}
   },
 })
 
-export const { setUser, setLoading, setSelectedMode  } = profileSlice.actions
+export const { setUser, setLoading, setSelectedMode, incrementUsageCount  } = profileSlice.actions
 
 export default profileSlice.reducer

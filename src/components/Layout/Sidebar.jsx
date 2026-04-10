@@ -1,8 +1,12 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Bot, Database, Smartphone, Globe } from "lucide-react";
+import {Users, LayoutDashboard, Bot, Database, Smartphone, Globe } from "lucide-react";
+import { useSelector } from "react-redux";
 
 const Sidebar = () => {
+
+  const { user } = useSelector((state) => state.profile);
+
   const menuItems = [
     { name: "Dashboard", icon: <LayoutDashboard size={20} />, path: "/dashboard" },
     { name: "Web Testing", icon: <Bot size={20} />, path: "/web-testing" },
@@ -10,6 +14,14 @@ const Sidebar = () => {
     { name: "Mobile App Testing", icon: <Smartphone size={20} />, path: "/mobile-testing" },
     { name: "API Testing", icon: <Globe size={20} />, path: "/api-testing" },
   ];
+
+  if (user?.role === "Admin") {
+    menuItems.push({
+      name: "User Management",
+      icon: <Users size={20} />,
+      path: "/admin/user-management",
+    });
+  }
 
   return (
     <aside className="w-64 border-r bg-white h-[calc(100vh-64px)] overflow-y-auto">

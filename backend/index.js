@@ -12,6 +12,8 @@ require("dotenv").config();
 
 const db = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
+const payRoute = require("./routes/paymentRouute")
+const subsRoute = require("./routes/subscriptionRoutes")
 const { errorHandler, notFound } = require("./middleware/errorMiddleware");
 
 const app = express();
@@ -185,6 +187,8 @@ io.on("connection", (socket) => {
  */
 
 app.use("/api/auth", authRoutes);
+app.use("/api/payment", payRoute);
+app.use("/api/subscription", subsRoute);
 
 /**
  * Health check endpoint

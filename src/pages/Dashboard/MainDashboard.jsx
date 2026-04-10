@@ -20,7 +20,6 @@ const MainDashboard = () => {
   const dispatch = useDispatch();
   const [date, setDate] = useState(new Date());
   const [onboardedCount, setOnboardedCount] = useState(0);
-  const [users, setUsers] = useState([]);
   const [hoveredCard, setHoveredCard] = useState(null);
   const [projects, setProjects] = useState([]);
   const [organizations, setOrganizations] = useState([]);
@@ -30,10 +29,10 @@ const MainDashboard = () => {
     const fetchUsers = async () => {
       // getAllUsers handles token, apiConnector, and error handling internally
       const userData = await dispatch(getAllUsers());
-      console.log("userdata",userData)
+     // console.log("userdata",userData)
       
       if (userData) {
-        setUsers(userData);
+    
         setOnboardedCount(userData.length);
       }
     };
@@ -94,28 +93,7 @@ const MainDashboard = () => {
               {stat.icon}
             </div>
 
-            {/* USERS HOVER DROPDOWN */}
-            {hoveredCard === "users" && stat.key === "users" && (
-              <div className="absolute top-full left-0 mt-2 w-64 max-h-64 overflow-y-auto bg-white border border-orange-100 rounded-lg shadow-xl p-3 z-50 animate-in fade-in slide-in-from-top-1">
-                <p className="text-xs font-semibold text-slate-500 mb-2 border-b pb-1">
-                  Onboarded Users
-                </p>
-                {users.length === 0 ? (
-                  <p className="text-xs text-slate-400 py-2">No users found</p>
-                ) : (
-                  users.map((user, idx) => (
-                    <div key={idx} className="py-2 border-b last:border-none flex flex-col hover:bg-orange-50/50 px-1 rounded transition-colors">
-                      <span className="text-xs text-slate-800 font-bold">
-                        {user.name || "Unnamed User"}
-                      </span>
-                      <span className="text-[10px] text-slate-500">
-                        {user.email}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
+     
             
             {/* ... Other Hover Logic for projects/orgs remains the same ... */}
           </div>

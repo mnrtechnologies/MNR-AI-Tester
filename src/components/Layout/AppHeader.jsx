@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useNavigate, useLocation } from "react-router-dom"; // Added useLocation
-import { useDispatch, useSelector } from "react-redux"; 
+import { useNavigate, useLocation } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
 import { logout, getUserDetails } from "../../services/operations/authAPIs";
-import { Settings, User, ChevronDown, Key, LogOut } from "lucide-react";
+import { Settings, User, ChevronDown, Key, LogOut, Crown } from "lucide-react";
 import logo from "../../assets/MNR_AT.png";
 
 const AppHeader = () => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
-  const location = useLocation(); // Get current URL path
+  const location = useLocation();
   const dispatch = useDispatch();
 
   const { user } = useSelector((state) => state.profile);
@@ -39,15 +39,23 @@ const AppHeader = () => {
   const getPageName = (pathname) => {
     switch (pathname) {
       case "/":
-      case "/dashboard": return "Dashboard";
-      case "/web-testing": return "Web Testing";
-      case "/db-testing": return "DB Testing";
-      case "/mobile-testing": return "Mobile App Testing";
-      case "/api-testing": return "API Testing";
-      case "/profile": return "Profile";
-      case "/change-password": return "Change Password";
+      case "/dashboard":
+        return "Dashboard";
+      case "/web-testing":
+        return "Web Testing";
+      case "/db-testing":
+        return "DB Testing";
+      case "/mobile-testing":
+        return "Mobile App Testing";
+      case "/api-testing":
+        return "API Testing";
+      case "/profile":
+        return "Profile";
+      case "/change-password":
+        return "Change Password";
+      case "/upgrade-plan":
+        return "Upgrade Plan";
       default:
-        // Generic fallback: turns "/some-page-name" into "Some Page Name"
         return pathname
           .substring(1)
           .split("-")
@@ -55,6 +63,18 @@ const AppHeader = () => {
           .join(" ");
     }
   };
+
+  const getLatestSubscription = (user) => {
+    if (user?.subscription?.length > 0) {
+      return user.subscription[user.subscription.length - 1];
+    }
+    return null;
+  };
+
+  const latestSub = getLatestSubscription(user);
+  
+  // Check if the plan is currently active
+  const hasActivePlan = latestSub?.status === "active" && latestSub?.plan;
 
   return (
     <header className="h-16 border-b bg-white flex items-center justify-between px-6 sticky top-0 z-50">
@@ -70,34 +90,58 @@ const AppHeader = () => {
           />
         </div>
         <nav className="text-sm text-gray-400">
-       
           <span className="text-gray-900 font-medium uppercase text-[10px] ml-16 tracking-widest">
-            {/* Dynamically display the page name */}
             {getPageName(location.pathname)}
           </span>
         </nav>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 md:gap-6">
+        
+        {/* Subscription Status & Upgrade Area */}
+        <div className="flex items-center gap-3">
+          {hasActivePlan ? (
+            /* --- Show for PAID Users --- */
+            <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-2 rounded-full shadow-sm">
+              <Crown size={14} className="text-emerald-500" />
+              <span className="text-xs font-bold uppercase tracking-wider">
+                {latestSub.plan} Plan
+              </span>
+            </div>
+          ) : (
+            /* --- Show for Users with NO Active Plan --- */
+            <button
+              onClick={() => navigate("/upgrade-plan")}
+              className="flex items-center gap-2 bg-gradient-to-r from-orange-500 to-orange-400 text-white px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm hover:shadow-md hover:shadow-orange-500/20 transition-all hover:-translate-y-0.5"
+            >
+              <Crown size={14} />
+              <span className="hidden sm:inline">Upgrade Plan</span>
+              <span className="sm:hidden">Upgrade</span>
+            </button>
+          )}
+        </div>
+
         {/* Dropdown Container */}
         <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className={`flex items-center gap-3 p-1 px-3 rounded-full border transition-all ${
-              isOpen ? "border-orange-200 bg-orange-50/30" : "border-slate-100"
+            className={`flex items-center gap-3 p-1 pr-3 rounded-full border transition-all ${
+              isOpen
+                ? "border-orange-200 bg-orange-50/30"
+                : "border-slate-100 hover:bg-slate-50"
             }`}
           >
-            <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center border border-orange-200">
+            <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center border border-orange-200 shrink-0">
               <User size={18} className="text-orange-600" />
             </div>
 
             {/* USER name */}
-            <div className="flex flex-col text-left leading-tight">
+            <div className="flex flex-col text-left leading-tight hidden sm:flex">
               <span className="text-xs font-semibold text-slate-800">
                 {user?.name || "User"}
               </span>
               {user?.email && (
-                <span className="text-[10px] text-slate-400">
+                <span className="text-[10px] text-slate-400 truncate max-w-[120px]">
                   {user.email.split("@")[0]}
                 </span>
               )}
@@ -114,6 +158,17 @@ const AppHeader = () => {
           {/* Dropdown Content */}
           {isOpen && (
             <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-100 rounded-xl shadow-2xl py-2 z-[60] animate-in fade-in slide-in-from-top-2 duration-200">
+              
+              {/* Active Plan Info */}
+              <div className="px-4 py-2 mb-1 border-b border-slate-50">
+                <p className="text-xs text-gray-500 truncate">
+                  Active Plan:{" "}
+                  <span className="font-bold text-[#012950]">
+                    {hasActivePlan ? latestSub.plan.toUpperCase() : "No Active Plan"}
+                  </span>
+                </p>
+              </div>
+
               <button
                 onClick={() => {
                   navigate("/profile");
@@ -140,7 +195,7 @@ const AppHeader = () => {
 
               <button
                 onClick={logoutUser}
-                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-400 hover:bg-red-50 transition-colors"
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-500 hover:bg-red-50 transition-colors"
               >
                 <LogOut size={16} />
                 <span className="font-bold">Log Out</span>
