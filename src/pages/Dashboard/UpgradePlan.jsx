@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
+import { useDispatch } from "react-redux";
+import { getUserDetails } from "../../services/operations/authAPIs"; 
 import { useNavigate } from "react-router-dom";
 import {
   CheckCircle2,
@@ -14,7 +16,8 @@ import {
   Copy,
 } from "lucide-react";
 
-const makeDirectPayment = async (amount, plan, days, currency, navigate) => {
+const makeDirectPayment = async (amount, plan, days, currency, navigate,dispatch) => {
+   
   try {
     const { data } = await axios.post(
       `${process.env.REACT_APP_AUTH_URL}/payment/user/order`,
@@ -61,6 +64,7 @@ const makeDirectPayment = async (amount, plan, days, currency, navigate) => {
 
         if (verifyRes.data.success) {
           toast.success("Payment verified successfully!");
+          await dispatch(getUserDetails());
           navigate("/dashboard");
         } else {
           toast.error("Payment verification failed!");
@@ -85,6 +89,8 @@ const UpgradePlan = () => {
   const [currency, setCurrency] = useState("INR");
   const [showModal, setShowModal] = useState(false);
   const navigate = useNavigate();
+  const dispatch = useDispatch();
+ 
 
   const handleCopyEmail = () => {
     navigator.clipboard.writeText("sales@mnrtechnologies.com");
@@ -177,7 +183,7 @@ const UpgradePlan = () => {
     const days = isAnnual ? 180 : 30;
 
     // 4. Trigger Razorpay Flow
-    makeDirectPayment(currentPrice, plan, days, currency, navigate);
+    makeDirectPayment(currentPrice, plan, days, currency, navigate,dispatch);
   };
 
   return (
