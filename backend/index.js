@@ -154,19 +154,29 @@ io.on("connection", (socket) => {
   console.log(`Socket connected: ${socket.id} | User: ${userId}`);
 
   /**
-   * STEP 1: Join a Room specific to this User ID
-   * Instead of a global object, we put the socket into a room named after the user.
-   * If they log in on 3 devices, all 3 sockets sit in this one room.
+   * Remove old socket mapping (if exists)
    */
-  socket.join(userId);
+
+  if (global.userSockets[userId]) {
+    delete global.userSockets[userId];
+  }
+
+  /**
+   * Register new socket mapping
+   */
+
+  global.userSockets[userId] = socket.id;
 
   /**
    * Cleanup mapping on disconnect
-   * Note: Socket.IO automatically removes the socket from all rooms upon disconnection,
-   * so no manual array/object cleanup is needed!
    */
+
   socket.on("disconnect", () => {
     console.log(`Socket disconnected: ${socket.id}`);
+
+    if (global.userSockets[userId] === socket.id) {
+      delete global.userSockets[userId];
+    }
   });
 });
 
