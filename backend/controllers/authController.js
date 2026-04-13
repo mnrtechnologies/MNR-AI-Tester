@@ -3,7 +3,7 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { signupEmail } = require("../mail/templates/signupEmail");
 const mailSender = require("../utils/mailSender");
-const { v4: uuidv4 } = require("uuid");
+const crypto = require("crypto");
 const axios = require("axios");
 require("dotenv").config();
 
@@ -57,7 +57,7 @@ exports.login = async (req, res) => {
        * STEP 2 — CREATE NEW SESSION ID
        */
 
-      const sessionId = uuidv4();
+      const sessionId = crypto.randomUUID();
 
       //---------------------------------------------------------
 

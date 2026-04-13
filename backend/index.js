@@ -17,6 +17,7 @@ const subsRoute = require("./routes/subscriptionRoutes")
 const { errorHandler, notFound } = require("./middleware/errorMiddleware");
 
 const app = express();
+app.set("trust proxy", 1);
 
 /**
  * ----------------------------------------------------
