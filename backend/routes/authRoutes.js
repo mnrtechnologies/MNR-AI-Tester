@@ -31,7 +31,8 @@ router.put("/update-profile", auth, updateBasicInfo);
 router.post("/reset-password-token", resetPasswordToken);
 router.post("/reset-password", resetPassword);
 
-// Route for user signup
+//ADMIN Routes
+// Route for user register
 router.post("/register",auth,isAdmin, register)
 //get all user
 router.get("/get-all-users",auth, getAllUser);

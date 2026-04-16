@@ -1,56 +1,81 @@
 import { useState, useEffect, useRef } from "react";
-import SubscriptionGuard from "../../components/UI/SubscriptionGuard"
+import SubscriptionGuard from "../../components/UI/SubscriptionGuard";
+import { useSelector } from "react-redux";
+
 const API = process.env.REACT_APP_AI_TESTER_BACKEND_URL;
-const CONTROL_API = API.replace("/api", "/control");
 const WS = API.replace(/^http/, "ws");
 
 // ── Light Professional Color Palette ─────────────────────────────────────────
 const C = {
-  bg: "#ffffff", // Clean white background
-  surface: "#fafafa", // Very light gray for cards
-  border: "#e5e7eb", // Light border (gray-200)
-  accent: "#3b82f6", // blue-500
-  accent2: "#6366f1", // indigo-500
-  green: "#10b981", // emerald-500
-  yellow: "#f59e0b", // amber-500
-  red: "#ef4444", // red-500
-  text: "#000000", // Black text
-  muted: "#6b7280", // gray-500
+  bg: "#ffffff",
+  surface: "#fafafa",
+  border: "#e5e7eb",
+  accent: "#3b82f6",
+  accent2: "#6366f1",
+  green: "#10b981",
+  yellow: "#f59e0b",
+  red: "#ef4444",
+  text: "#000000",
+  muted: "#6b7280",
 };
 
 // ── Tiny helpers ─────────────────────────────────────────────────────────────
 const cx = (...cls) => cls.filter(Boolean).join(" ");
 
-const copyToClipboard = (text) => {
-  if (navigator.clipboard && window.isSecureContext) {
-    navigator.clipboard.writeText(text);
-  } else {
-    const textArea = document.createElement("textarea");
-    textArea.value = text;
-    textArea.style.position = "absolute";
-    textArea.style.left = "-999999px";
-    document.body.prepend(textArea);
-    textArea.select();
-    try {
-      document.execCommand("copy");
-    } catch (error) {
-      console.error(error);
-    } finally {
-      textArea.remove();
-    }
-  }
-};
-
 function useInterval(cb, delay) {
   const saved = useRef(cb);
+
   useEffect(() => {
     saved.current = cb;
   }, [cb]);
+
   useEffect(() => {
     if (delay === null) return;
     const id = setInterval(() => saved.current(), delay);
     return () => clearInterval(id);
   }, [delay]);
+}
+
+// ── Reusable Copy Button ─────────────────────────────────────────────────────
+function CopyButton({ text }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text);
+    } else {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "absolute";
+      textArea.style.left = "-999999px";
+      document.body.prepend(textArea);
+      textArea.select();
+      try {
+        document.execCommand("copy");
+      } catch (error) {
+        console.error(error);
+      } finally {
+        textArea.remove();
+      }
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <button
+      className="btn"
+      style={{
+        padding: "4px 10px",
+        fontSize: 12,
+        border: `1px solid ${C.border}`,
+        minWidth: "64px",
+      }}
+      onClick={handleCopy}
+    >
+      {copied ? "Copied!" : "Copy"}
+    </button>
+  );
 }
 
 // ── Global CSS injected once ──────────────────────────────────────────────────
@@ -102,12 +127,12 @@ const GLOBAL_CSS = `
     box-shadow: 0 1px 2px rgba(0,0,0,0.05);
   }
   .btn:disabled { opacity: .5; cursor: not-allowed; }
-  
+
   .btn-primary {
     background: #000000; color: #ffffff;
   }
   .btn-primary:hover:not(:disabled) { background: #3f3f46; }
-  
+
   .btn-danger {
     background: transparent; color: ${C.red}; border-color: rgba(239,68,68,0.3);
   }
@@ -125,7 +150,8 @@ const GLOBAL_CSS = `
   .input::placeholder { color: ${C.muted}; }
 
   .label {
-    display: block; font-size: 12px; font-weight: 600; color: #000000; margin-bottom: 8px;
+    display: block; font-size: 12px; font-weight: 600;
+    color: #000000; margin-bottom: 8px;
   }
 
   /* Badges */
@@ -153,8 +179,7 @@ const GLOBAL_CSS = `
   }
   .progress-bar-fill {
     height: 100%; border-radius: 999px;
-    background: ${C.accent};
-    transition: width .4s cubic-bezier(0.4, 0, 0.2, 1);
+    background: ${C.accent}; transition: width .4s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   /* Terminal Logs */
@@ -185,7 +210,7 @@ const GLOBAL_CSS = `
   .browser-dot:nth-child(1) { background: #ef4444; }
   .browser-dot:nth-child(2) { background: #f59e0b; }
   .browser-dot:nth-child(3) { background: #10b981; }
-  
+
   .screen-wrap img {
     width: 100%; flex: 1; object-fit: contain; display: block; background: #ffffff;
   }
@@ -197,8 +222,7 @@ const GLOBAL_CSS = `
   .scan-line {
     position: absolute; top: 28px; left: 0; right: 0; height: 100%;
     background: linear-gradient(to bottom, transparent, rgba(59,130,246,.2) 50%, rgba(59,130,246,.8) 50%, transparent);
-    background-size: 100% 4px;
-    animation: scan 3s linear infinite; pointer-events: none; opacity: .4;
+    background-size: 100% 4px; animation: scan 3s linear infinite; pointer-events: none; opacity: .4;
   }
 
   /* Typography Structure */
@@ -212,7 +236,8 @@ const GLOBAL_CSS = `
 
   /* Toggle Group */
   .toggle-group {
-    display: flex; background: #f3f4f6; border: 1px solid ${C.border}; border-radius: 8px; padding: 4px;
+    display: flex; background: #f3f4f6; border: 1px solid ${C.border};
+    border-radius: 8px; padding: 4px;
   }
   .toggle-opt {
     flex: 1; padding: 8px 12px; text-align: center; cursor: pointer;
@@ -246,16 +271,31 @@ const GLOBAL_CSS = `
     padding: 6px 12px; border-radius: 6px;
     background: #ffffff; color: #000000;
     border: 1px solid ${C.border};
-    font-size: 12px; font-weight: 600; cursor: pointer; transition: all .2s;
+    font-size: 12px; font-weight: 600; cursor: pointer;
+    transition: all .2s;
     animation: slideIn .4s cubic-bezier(0.16, 1, 0.3, 1) both;
-    white-space: nowrap;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    white-space: nowrap; box-shadow: 0 1px 2px rgba(0,0,0,0.05);
   }
   .excel-pill:hover { background: #f9fafb; border-color: #d1d5db; }
 
+  .excel-pill-pending {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 12px; border-radius: 6px;
+    background: transparent; color: ${C.muted};
+    border: 1px dashed ${C.border};
+    font-size: 12px; font-weight: 600;
+    white-space: nowrap; cursor: not-allowed;
+  }
+
+  .spinner {
+    width: 16px; height: 16px; border-radius: 50%;
+    border: 2px solid ${C.border}; border-top-color: currentColor;
+    animation: spin .6s linear infinite; display: inline-block;
+  }
+
   /* List items for Phase 3 */
   .test-item {
-    display: flex; align-items: center; gap: 12px; padding: 12px; 
+    display: flex; align-items: center; gap: 12px; padding: 12px;
     border-radius: 8px; border: 1px solid ${C.border}; background: #ffffff;
     transition: all 0.2s;
   }
@@ -277,22 +317,12 @@ const GLOBAL_CSS = `
     100% { transform: rotate(360deg); }
   }
   .terminate-spinner {
-    width: 80px; height: 80px; border-radius: 50%;
-    background: ${C.red};
+    width: 80px; height: 80px; border-radius: 50%; background: ${C.red};
     animation: pulse-ring 2s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
-    display: flex; align-items: center; justify-content: center;
-    margin-bottom: 16px;
+    display: flex; align-items: center; justify-content: center; margin-bottom: 16px;
   }
   .terminate-icon {
     animation: terminate-spin 3s linear infinite;
-  }
-  .terminate-progress-bar {
-    width: 300px; height: 6px; background: rgba(255,255,255,0.2); 
-    border-radius: 4px; overflow: hidden; margin-top: 24px;
-  }
-  .terminate-progress-fill {
-    height: 100%; background: ${C.red};
-    transition: width 1s linear;
   }
 `;
 
@@ -335,7 +365,6 @@ function ScreenPanel({ src, label, scanning = true }) {
 // ── Log panel ─────────────────────────────────────────────────────────────────
 function LogPanel({ logs }) {
   const ref = useRef(null);
-
   useEffect(() => {
     if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
   }, [logs]);
@@ -399,7 +428,7 @@ function ProgressBar({ value = 0, max = 100, label }) {
   );
 }
 
-// ── Persistent Excel Download pill (shown in top bar) ────────────────────────
+// ── Persistent Excel Download pill ───────────────────────────────────────────
 function ExcelDownloadPill({ reports }) {
   if (!reports || reports.length === 0) return null;
 
@@ -463,6 +492,8 @@ function PhaseLogin({ onDone, onStatusChange }) {
   const [targetUrl, setTargetUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [anthropicApiKey, setAnthropicApiKey] = useState("");
+  const { user } = useSelector((state) => state.profile);
+  const userId = user?._id;
   const [mode, setMode] = useState("checking");
   const [goal, setGoal] = useState("");
   const [status, setStatus] = useState("idle");
@@ -472,7 +503,6 @@ function PhaseLogin({ onDone, onStatusChange }) {
   const [liveOtp, setLiveOtp] = useState("");
   const wsRef = useRef(null);
 
-  // Sync internal status with parent App state
   useEffect(() => {
     if (onStatusChange) onStatusChange(status);
   }, [status, onStatusChange]);
@@ -490,10 +520,8 @@ function PhaseLogin({ onDone, onStatusChange }) {
     wsRef.current = ws;
 
     ws.onopen = () => setStatus("running");
-
     ws.onmessage = (ev) => {
       const data = JSON.parse(ev.data);
-
       if (data.type === "connected") {
         pushLog(data.message, "cyan");
         ws.send(
@@ -504,6 +532,7 @@ function PhaseLogin({ onDone, onStatusChange }) {
             target_url: targetUrl,
             api_key: apiKey || undefined,
             anthropic_api_key: anthropicApiKey || undefined,
+            user_id: userId || undefined,
           }),
         );
         return;
@@ -521,16 +550,27 @@ function PhaseLogin({ onDone, onStatusChange }) {
         setNeedOtp(true);
         return;
       }
+
       if (data.type === "done") {
         pushLog("✅ Login complete — auth.json saved", "green");
         setStatus("done");
         ws.close();
         setTimeout(
-          () => onDone(targetUrl, mode, apiKey, anthropicApiKey, goal),
+          () =>
+            onDone(
+              targetUrl,
+              mode,
+              apiKey,
+              anthropicApiKey,
+              goal,
+              userId,
+              data.session_id,
+            ),
           800,
         );
         return;
       }
+
       if (data.type === "error") {
         pushLog(`✗ ${data.message}`, "red");
         setStatus("error");
@@ -643,6 +683,7 @@ function PhaseLogin({ onDone, onStatusChange }) {
               disabled={status === "running"}
             />
           </div>
+
           <div
             style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}
           >
@@ -756,7 +797,7 @@ function PhaseLogin({ onDone, onStatusChange }) {
                   style={{ display: "block", fontSize: 16, marginBottom: 4 }}
                 >
                   🔍
-                </span>
+                </span>{" "}
                 Standard Checking
               </button>
               <button
@@ -771,7 +812,7 @@ function PhaseLogin({ onDone, onStatusChange }) {
                   style={{ display: "block", fontSize: 16, marginBottom: 4 }}
                 >
                   🧠
-                </span>
+                </span>{" "}
                 Semantic AI Agent
               </button>
               <button
@@ -783,7 +824,7 @@ function PhaseLogin({ onDone, onStatusChange }) {
                   style={{ display: "block", fontSize: 16, marginBottom: 4 }}
                 >
                   🎯
-                </span>
+                </span>{" "}
                 Feature Testing
               </button>
             </div>
@@ -809,6 +850,7 @@ function PhaseLogin({ onDone, onStatusChange }) {
             onClick={connect}
             disabled={
               !email ||
+              !userId ||
               !targetUrl ||
               (!apiKey && !anthropicApiKey) ||
               (mode === "feature" && !goal) ||
@@ -894,11 +936,14 @@ function PhaseChecking({
   targetUrl,
   apiKey,
   anthropicApiKey,
+  userId,
+  authSessionId,
   onExcelReady,
+  onSessionReady,
   onStatusChange,
 }) {
   const [jobId, setJobId] = useState(null);
-  const [parentSessionId, setParentSessionId] = useState(null);
+
   const [status, setStatus] = useState("starting");
   const [screenshot, setScreenshot] = useState(null);
   const [logs, setLogs] = useState([]);
@@ -907,6 +952,15 @@ function PhaseChecking({
     completed: 0,
     current: "",
   });
+  const [parentSessionId, setParentSessionId] = useState(authSessionId || null);
+
+  // Add this effect right below your state declarations to inform the parent component instantly
+  useEffect(() => {
+    if (authSessionId) {
+      onSessionReady(authSessionId);
+    }
+  }, [authSessionId, onSessionReady]);
+
   const wsRef = useRef(null);
 
   useEffect(() => {
@@ -928,20 +982,35 @@ function PhaseChecking({
           base_url: targetUrl,
           api_key: apiKey || undefined,
           anthropic_api_key: anthropicApiKey || undefined,
+          user_id: userId || undefined,
+          auth_session_id: authSessionId || undefined,
+          session_id: authSessionId || undefined,
         }),
       });
       const data = await res.json();
       if (cancelled) return;
 
-      setJobId(data.job_id);
+      setJobId(data.session_id);
       pushLog(`Job ID Assigned: ${data.job_id}`, "cyan");
 
-      const ws = new WebSocket(`${WS}/ws/checking/${data.job_id}`);
+      const ws = new WebSocket(`${WS}/ws/checking/${data.session_id}`);
       wsRef.current = ws;
 
       ws.onmessage = (ev) => {
         const msg = JSON.parse(ev.data);
+
+        // 1. Failsafe: Catch parent_session on ANY incoming message
+        if (msg.parent_session && !parentSessionId) {
+          console.log(
+            "[WS:checking] setting parentSessionId →",
+            msg.parent_session,
+          );
+          setParentSessionId(msg.parent_session);
+          onSessionReady(msg.parent_session);
+        }
+
         if (msg.type === "ping") return;
+
         if (msg.type === "frame") {
           setScreenshot(`data:image/jpeg;base64,${msg.image}`);
           if (msg.current_url)
@@ -970,10 +1039,11 @@ function PhaseChecking({
           }));
           if (msg.s3_download_url && msg.excel_filename) {
             onExcelReady(msg.s3_download_url, msg.excel_filename);
-            pushLog(`📊 Report saved to S3: ${msg.excel_filename}`, "green");
+            pushLog(`📊 Report ready: ${msg.excel_filename}`, "green");
           }
-          if (msg.session_id && !parentSessionId) {
+          if (msg.parent_session && !parentSessionId) {
             setParentSessionId(msg.parent_session);
+            onSessionReady(msg.parent_session);
           }
           return;
         }
@@ -986,17 +1056,19 @@ function PhaseChecking({
                 ? "green"
                 : "white",
           );
+
         if (msg.type === "done") {
           setStatus("done");
           pushLog(
             "✅ Phase 1 Complete — All URLs indexed and reports generated",
             "green",
           );
+          if (msg.s3_download_url && msg.excel_filename) {
+            onExcelReady(msg.s3_download_url, msg.excel_filename);
+          }
           ws.close();
         }
-        if (msg.type === "error") {
-          setStatus("error");
-        }
+        if (msg.type === "error") setStatus("error");
       };
 
       ws.onerror = () => pushLog("WebSocket connection error", "red");
@@ -1004,6 +1076,7 @@ function PhaseChecking({
     };
 
     start().catch((e) => pushLog(String(e), "red"));
+
     return () => {
       cancelled = true;
       wsRef.current?.close();
@@ -1089,6 +1162,7 @@ function PhaseChecking({
             max={progress.total || 1}
             label="Crawl Progress"
           />
+
           {progress.current && (
             <div
               style={{
@@ -1144,17 +1218,7 @@ function PhaseChecking({
                 >
                   {parentSessionId}
                 </span>
-                <button
-                  className="btn"
-                  style={{
-                    padding: "4px 10px",
-                    fontSize: 12,
-                    border: `1px solid ${C.border}`,
-                  }}
-                  onClick={() => copyToClipboard(parentSessionId)}
-                >
-                  Copy
-                </button>
+                <CopyButton text={parentSessionId} />
               </div>
               <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>
                 Use this ID in the Phase 3 → Validation tab
@@ -1162,7 +1226,6 @@ function PhaseChecking({
             </div>
           )}
         </div>
-
         <LogPanel logs={logs} />
       </div>
     </div>
@@ -1177,6 +1240,8 @@ function PhaseSemantic({
   apiKey,
   anthropicApiKey,
   onExcelReady,
+  userId,
+  onSessionReady,
   onStatusChange,
 }) {
   const [testId, setTestId] = useState(null);
@@ -1195,7 +1260,6 @@ function PhaseSemantic({
     setLogs((p) => [...p, { message: msg, color }]);
 
   useEffect(() => {
-    localStorage.setItem("autopilotRunning", "true");
     let cancelled = false;
 
     const start = async () => {
@@ -1207,6 +1271,7 @@ function PhaseSemantic({
           url: targetUrl,
           api_key: apiKey || undefined,
           anthropic_api_key: anthropicApiKey || undefined,
+          user_id: userId || undefined,
         }),
       });
       const data = await res.json();
@@ -1215,6 +1280,7 @@ function PhaseSemantic({
       setTestId(data.test_id);
       pushLog(`Session ID: ${data.test_id}`, "cyan");
       setParentSessionId(data.parent_session_id);
+      if (data.parent_session_id) onSessionReady(data.parent_session_id);
 
       const ws = new WebSocket(`${WS}/ws/semantic/${data.test_id}`);
       wsRef.current = ws;
@@ -1222,6 +1288,7 @@ function PhaseSemantic({
       ws.onmessage = (ev) => {
         const msg = JSON.parse(ev.data);
         if (msg.type === "ping") return;
+
         if (msg.type === "frame") {
           setScreenshot(`data:image/jpeg;base64,${msg.image}`);
           if (msg.step !== undefined) setStep(msg.step);
@@ -1236,6 +1303,7 @@ function PhaseSemantic({
                 ? "green"
                 : "white",
           );
+
         if (msg.type === "done") {
           setStatus("done");
           if (msg.s3_download_url) {
@@ -1255,6 +1323,7 @@ function PhaseSemantic({
     };
 
     start().catch((e) => pushLog(String(e), "red"));
+
     return () => {
       cancelled = true;
       wsRef.current?.close();
@@ -1365,17 +1434,7 @@ function PhaseSemantic({
                 >
                   {parentSessionId}
                 </span>
-                <button
-                  className="btn"
-                  style={{
-                    padding: "4px 10px",
-                    fontSize: 12,
-                    border: `1px solid ${C.border}`,
-                  }}
-                  onClick={() => copyToClipboard(parentSessionId)}
-                >
-                  Copy
-                </button>
+                <CopyButton text={parentSessionId} />
               </div>
               <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>
                 Use this ID in the Phase 3 → Validation tab
@@ -1383,7 +1442,6 @@ function PhaseSemantic({
             </div>
           )}
         </div>
-
         <LogPanel logs={logs} />
       </div>
     </div>
@@ -1421,7 +1479,6 @@ function PhaseFeature({
     setLogs((p) => [...p, { message: msg, color }]);
 
   useEffect(() => {
-    localStorage.setItem("autopilotRunning", "true");
     let cancelled = false;
 
     const start = async () => {
@@ -1454,11 +1511,12 @@ function PhaseFeature({
       ws.onmessage = (ev) => {
         const msg = JSON.parse(ev.data);
         if (msg.type === "ping") return;
+
         if (msg.type === "frame") {
           setScreenshot(`data:image/jpeg;base64,${msg.image}`);
           return;
         }
-        if (msg.message) {
+        if (msg.message)
           pushLog(
             msg.message,
             msg.type === "error"
@@ -1467,7 +1525,7 @@ function PhaseFeature({
                 ? "green"
                 : "white",
           );
-        }
+
         if (msg.type === "done" || msg.status === "completed") {
           setStatus("done");
           ws.close();
@@ -1494,7 +1552,6 @@ function PhaseFeature({
       try {
         const r = await fetch(`${API}/tests/${testId}/status`);
         const d = await r.json();
-
         setProgress((p) => ({
           ...p,
           current: d.current_step !== undefined ? d.current_step : p.current,
@@ -1502,7 +1559,6 @@ function PhaseFeature({
           lastAction: d.last_action || p.lastAction,
           summary: d.summary || p.summary,
         }));
-
         if (d.status === "completed") setStatus("done");
         if (d.status === "failed") setStatus("error");
       } catch {}
@@ -1587,7 +1643,6 @@ function PhaseFeature({
               <div className="stat-lbl">Max Steps Allowed</div>
             </div>
           </div>
-
           <ProgressBar
             value={progress.current}
             max={progress.max || 1}
@@ -1613,7 +1668,6 @@ function PhaseFeature({
               <span>{progress.lastAction}</span>
             </div>
           )}
-
           {progress.summary && (
             <div
               className="fade-up"
@@ -1637,7 +1691,6 @@ function PhaseFeature({
             </div>
           )}
         </div>
-
         <LogPanel logs={logs} />
       </div>
     </div>
@@ -1647,12 +1700,18 @@ function PhaseFeature({
 // ════════════════════════════════════════════════════════════════════════════
 // PHASE 3 — MongoDB-Driven Validation (Manual Trigger)
 // ════════════════════════════════════════════════════════════════════════════
-function PhaseValidationMongoDB({ apiKey, anthropicApiKey, onStatusChange }) {
-  const [parentSessionId, setParentSessionId] = useState("");
+function PhaseValidationMongoDB({
+  onStatusChange,
+  parentSessionId,
+  setParentSessionId,
+}) {
   const [status, setStatus] = useState("idle");
   const [sessions, setSessions] = useState([]);
   const [anthropicKey, setAnthropicKey] = useState("");
   const [openaiKey, setOpenaiKey] = useState("");
+  const { user } = useSelector((state) => state.profile);
+  const userId = user?._id;
+  
   const [progress, setProgress] = useState({
     pending: 0,
     in_progress: 0,
@@ -1664,6 +1723,15 @@ function PhaseValidationMongoDB({ apiKey, anthropicApiKey, onStatusChange }) {
   const [screenshot, setScreenshot] = useState(null);
   const [activeSession, setActiveSession] = useState(null);
   const wsRef = useRef(null);
+
+  // 1. Cleanup: Ensure WebSocket closes if the component unmounts
+  useEffect(() => {
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (onStatusChange) onStatusChange(status);
@@ -1681,23 +1749,19 @@ function PhaseValidationMongoDB({ apiKey, anthropicApiKey, onStatusChange }) {
 
         setSessions(d.sessions || []);
         setProgress({
-          pending:
-            d.sessions?.filter((s) => s.phase3_status === "pending").length ||
-            0,
-          in_progress:
-            d.sessions?.filter((s) => s.phase3_status === "in_progress")
-              .length || 0,
-          completed:
-            d.sessions?.filter((s) => s.phase3_status === "completed").length ||
-            0,
-          failed:
-            d.sessions?.filter((s) => s.phase3_status === "failed").length || 0,
+          pending: d.sessions?.filter((s) => s.phase3_status === "pending").length || 0,
+          in_progress: d.sessions?.filter((s) => s.phase3_status === "in_progress").length || 0,
+          completed: d.sessions?.filter((s) => s.phase3_status === "completed").length || 0,
+          failed: d.sessions?.filter((s) => s.phase3_status === "failed").length || 0,
         });
 
-        if (d.all_done && status === "running") {
+        if ((d.all_done || d.status === "completed") && status === "running") {
           setStatus("done");
           pushLog("✅ All Phase 3 tests complete", "green");
-          wsRef.current?.close();
+          if (wsRef.current) {
+            wsRef.current.close();
+            wsRef.current = null;
+          }
         }
       } catch (e) {
         pushLog(`Status poll failed: ${e}`, "red");
@@ -1724,8 +1788,10 @@ function PhaseValidationMongoDB({ apiKey, anthropicApiKey, onStatusChange }) {
         body: JSON.stringify({
           anthropic_api_key: anthropicKey || undefined,
           api_key: openaiKey || undefined,
+          user_id: userId || undefined,
         }),
       });
+
       const data = await res.json();
 
       if (data.error) {
@@ -1733,66 +1799,58 @@ function PhaseValidationMongoDB({ apiKey, anthropicApiKey, onStatusChange }) {
         setStatus("error");
         return;
       }
-
       pushLog(`✓ Found ${data.total_tests} tests to run`, "green");
 
       const ws = new WebSocket(`${WS}/ws/phase3/${parentSessionId}`);
       wsRef.current = ws;
-
+      
       ws.onopen = () => pushLog("✅ Connected to Phase 3 stream", "green");
 
       ws.onmessage = (ev) => {
         const msg = JSON.parse(ev.data);
 
-        if (msg.type === "status") {
-          if (msg.sessions) setSessions(msg.sessions);
-          setProgress({
-            pending: msg.pending || 0,
-            in_progress: msg.in_progress || 0,
-            completed: msg.completed || 0,
-            failed: msg.failed || 0,
-          });
-          return;
-        }
-
         if (msg.type === "frame") {
           setScreenshot(`data:image/jpeg;base64,${msg.image}`);
           return;
         }
-
         if (msg.type === "session_started") {
           setActiveSession(msg.session_id);
           pushLog(`▶ Starting: ${msg.page_url}`, "cyan");
           return;
         }
-
         if (msg.type === "session_progress") {
           pushLog(msg.message, "white");
           return;
         }
-
         if (msg.type === "session_completed") {
           setActiveSession(null);
           pushLog(`✅ Completed: ${msg.page_url}`, "green");
           return;
         }
-
         if (msg.type === "session_failed") {
           setActiveSession(null);
           pushLog(`❌ Failed: ${msg.page_url} - ${msg.reason}`, "red");
           return;
         }
-
         if (msg.type === "task_progress") {
           setTaskProgress({ done: msg.tasks_done, total: msg.tasks_total });
           return;
         }
-
+        
+        // 2. Updated batch_done logic
         if (msg.type === "batch_done") {
           setStatus("done");
+          // Ensure progress bars hit 100%
           setTaskProgress((p) => ({ ...p, done: p.total }));
-          pushLog("🎉 All Phase 3 tests complete", "green");
+          
+          const summary = msg.completed !== undefined 
+            ? `(Passed: ${msg.completed}, Failed: ${msg.failed})` 
+            : "";
+          pushLog(`🎉 All Phase 3 tests complete ${summary}`, "green");
+          
+          // Close and clean up reference
           ws.close();
+          wsRef.current = null;
           return;
         }
 
@@ -1802,8 +1860,13 @@ function PhaseValidationMongoDB({ apiKey, anthropicApiKey, onStatusChange }) {
       };
 
       ws.onerror = () => pushLog("❌ WebSocket error", "red");
+
       ws.onclose = () => {
-        if (status === "running") pushLog("🔌 Connection closed", "yellow");
+        // Only log "closed" if we didn't intentionally finish via batch_done
+        if (wsRef.current !== null && status === "running") {
+          pushLog("🔌 Connection closed unexpectedly", "yellow");
+        }
+        wsRef.current = null;
       };
     } catch (e) {
       pushLog(`❌ Start failed: ${e}`, "red");
@@ -1889,6 +1952,7 @@ function PhaseValidationMongoDB({ apiKey, anthropicApiKey, onStatusChange }) {
               onClick={startPhase3}
               disabled={
                 !parentSessionId.trim() ||
+                !userId ||
                 (!anthropicKey.trim() && !openaiKey.trim())
               }
             >
@@ -2099,51 +2163,11 @@ function PhaseValidationMongoDB({ apiKey, anthropicApiKey, onStatusChange }) {
                       >
                         {s.phase3_status}
                       </span>
-                      {s.final_report_url && (
-                        <a
-                          href={s.final_report_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="btn"
-                          style={{
-                            padding: "4px 8px",
-                            fontSize: 10,
-                            border: `1px solid ${C.border}`,
-                            background: "#ffffff",
-                            color: "#000000",
-                            textDecoration: "none",
-                            marginLeft: "auto",
-                          }}
-                          title="Download Final Report"
-                        >
-                          <svg
-                            width="12"
-                            height="12"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            style={{
-                              marginRight: 4,
-                              display: "inline-block",
-                              verticalAlign: "middle",
-                            }}
-                          >
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                            <polyline points="7 10 12 15 17 10" />
-                            <line x1="12" y1="15" x2="12" y2="3" />
-                          </svg>
-                          Report
-                        </a>
-                      )}
                     </div>
                   </div>
                 ))}
               </div>
             </div>
-
             <LogPanel logs={logs} />
           </div>
         </>
@@ -2157,19 +2181,22 @@ function PhaseValidationMongoDB({ apiKey, anthropicApiKey, onStatusChange }) {
 // ════════════════════════════════════════════════════════════════════════════
 export default function App() {
   const [phase, setPhase] = useState("login");
-  const [authStatus, setAuthStatus] = useState("idle");
   const [activePhaseStatus, setActivePhaseStatus] = useState("idle");
-
   const [targetUrl, setTargetUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [anthropicApiKey, setAnthropicApiKey] = useState("");
   const [mode, setMode] = useState("checking");
   const [goal, setGoal] = useState("");
+  const { user } = useSelector((state) => state.profile);
+  const userId = user?._id;
+  const [activeSessionId, setActiveSessionId] = useState("");
 
-  const [terminateCountdown, setTerminateCountdown] = useState(null);
+  // Replaced timer countdown logic with an active boolean flag
+  const [isTerminating, setIsTerminating] = useState(false);
+  const [phase3SessionId, setPhase3SessionId] = useState("");
+
   const [excelReports, setExcelReports] = useState([]);
-
-  // Check if ANY phase is actively processing
+  const [authSessionId, setAuthSessionId] = useState("");
   const isProcessing = ["connecting", "starting", "running"].includes(
     activePhaseStatus,
   );
@@ -2178,32 +2205,9 @@ export default function App() {
     if (isProcessing) {
       localStorage.setItem("autopilotRunning", "true");
     } else {
-      // Crucial fix: turn it off when idle, done, or errored
       localStorage.setItem("autopilotRunning", "false");
     }
   }, [isProcessing]);
-
-  const handleLoginDone = (
-    url,
-    selectedMode,
-    openaiKey,
-    antKey,
-    selectedGoal,
-  ) => {
-    localStorage.setItem("targetUrl", url);
-    localStorage.setItem("autopilotRunning", "true");
-    setTargetUrl(url);
-    setApiKey(openaiKey);
-    setAnthropicApiKey(antKey);
-    setMode(selectedMode);
-    setGoal(selectedGoal || "");
-    setExcelReports([]);
-    setPhase("phase2");
-  };
-
-  const handleExcelReady = (urlOrB64, name) => {
-    setExcelReports((prev) => [...prev, { urlOrB64, name }]);
-  };
 
   // Browser level refresh/close blocking
   useEffect(() => {
@@ -2221,271 +2225,301 @@ export default function App() {
   // Reliable API hit if the user accepts the browser unload popup
   useEffect(() => {
     const handleUnload = () => {
-      if (isProcessing) {
-        navigator.sendBeacon(`${CONTROL_API}/terminate-and-restart`);
+      const idToTerminate =
+        phase === "phase3" ? phase3SessionId : activeSessionId;
+      if (isProcessing && idToTerminate) {
+        navigator.sendBeacon(`${API}/terminate/${idToTerminate}`);
       }
     };
     window.addEventListener("unload", handleUnload);
     return () => window.removeEventListener("unload", handleUnload);
-  }, [isProcessing]);
+  }, [isProcessing, activeSessionId, phase, phase3SessionId]);
 
-  // Custom UI terminate timer
-  useEffect(() => {
-    if (terminateCountdown === null) return;
-    if (terminateCountdown <= 0) {
-      window.location.reload();
+  // Terminate Logic directly awaiting fetch
+  const handleTerminateClick = async () => {
+    const idToTerminate =
+      phase === "phase3" ? phase3SessionId : activeSessionId;
+
+    if (!idToTerminate) {
+      console.warn("No active session ID found to terminate.");
       return;
     }
-    const timer = setTimeout(
-      () => setTerminateCountdown((prev) => prev - 1),
-      1000,
-    );
-    return () => clearTimeout(timer);
-  }, [terminateCountdown]);
 
-  const handleTerminateClick = () => {
-    fetch(`${CONTROL_API}/terminate-and-restart`, { method: "POST" }).catch(
-      (err) => console.error("Termination request failed:", err),
-    );
-    setTerminateCountdown(60);
+    setIsTerminating(true);
+
+    try {
+      const res = await fetch(`${API}/terminate/${idToTerminate}`, {
+        method: "POST",
+      });
+      const data = await res.json();
+
+      // Successfully processed by the backend
+      if (data.status === "terminated") {
+        window.location.reload();
+      } else {
+        // Fallback reloading if the termination succeeds with a different payload
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error("Termination error:", error);
+      setIsTerminating(false);
+      // Let the user try again
+    }
   };
 
-  const handleTabClick = async (p) => {
+  const handleTabClick = (p) => {
     if (p === phase) return;
-
-    // If we are actively processing, explicitly block tab clicks so we don't accidentally terminate
-    // the user must use the manual "Terminate" button to break out.
     if (isProcessing) return;
-
+    // Block switching visually if processing is ongoing
     setPhase(p);
+  };
+
+  const handleLoginDone = (
+    url,
+    selectedMode,
+    openaiKey,
+    antKey,
+    selectedGoal,
+    uid,
+    loginSessionId,
+  ) => {
+    localStorage.setItem("targetUrl", url);
+    localStorage.setItem("autopilotRunning", "true");
+    setTargetUrl(url);
+    setApiKey(openaiKey);
+    setAnthropicApiKey(antKey);
+    setActiveSessionId(loginSessionId || "");
+    setMode(selectedMode);
+    setGoal(selectedGoal || "");
+
+    setAuthSessionId(loginSessionId || "");
+    setExcelReports([]);
+    setPhase("phase2");
+  };
+
+  const handleExcelReady = (urlOrB64, name) => {
+    setExcelReports((prev) => [...prev, { urlOrB64, name }]);
   };
 
   return (
     <SubscriptionGuard>
-    <>
-      <style dangerouslySetInnerHTML={{ __html: GLOBAL_CSS }} />
-      <div style={{ display: "flex", minHeight: "100vh", background: C.bg }}>
-        <div
-          style={{
-            flex: 1,
-            padding: "32px 40px",
-            overflowY: "auto",
-            maxWidth: "1400px",
-            margin: "0 auto",
-            width: "100%",
-          }}
-        >
+      <>
+        <style dangerouslySetInnerHTML={{ __html: GLOBAL_CSS }} />
+        <div style={{ display: "flex", minHeight: "100vh", background: C.bg }}>
           <div
             style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 36,
+              flex: 1,
+              padding: "32px 40px",
+              overflowY: "auto",
+              maxWidth: "1400px",
+              margin: "0 auto",
+              width: "100%",
             }}
           >
             <div
               style={{
                 display: "flex",
-                gap: 8,
-                borderBottom: `1px solid ${C.border}`,
-                width: "100%",
-                maxWidth: "500px",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 36,
               }}
             >
-              {["login", "phase2", "phase3"].map((p, i) => {
-                let isDisabled = false;
-
-                if (isProcessing) {
-                  isDisabled = p !== phase; // Block switching visually if processing is ongoing
-                } else if (authStatus === "idle" || authStatus === "error") {
-                  if (p === "phase2") isDisabled = true; // Block discovery if auth not completed
-                } else {
-                  if (p === "phase2" && !targetUrl) isDisabled = true;
-                }
-
-                return (
-                  <button
-                    key={p}
-                    className={cx("nav-tab", phase === p ? "active" : "")}
-                    style={{ flex: 1 }}
-                    onClick={() => handleTabClick(p)}
-                    disabled={isDisabled}
-                  >
-                    {["0. Auth", "1. Discovery", "2. Validation"][i]}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-              <ExcelDownloadPill reports={excelReports} />
-
               <div
                 style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: C.muted,
-                  background: C.surface,
-                  padding: "6px 12px",
-                  borderRadius: 6,
-                  border: `1px solid ${C.border}`,
+                  display: "flex",
+                  gap: 8,
+                  borderBottom: `1px solid ${C.border}`,
+                  width: "100%",
+                  maxWidth: "500px",
                 }}
               >
-                {targetUrl ? (
-                  <div
-                    style={{ display: "flex", alignItems: "center", gap: 6 }}
-                  >
-                    <div
-                      style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: "50%",
-                        background: C.accent,
-                        boxShadow: `0 0 6px ${C.accent}`,
-                      }}
-                    />
-                    {targetUrl}
-                  </div>
-                ) : (
-                  "Environment not configured"
-                )}
+                {["login", "phase2", "phase3"].map((p, i) => {
+                  let isDisabled = false;
+                  if (isProcessing) {
+                    isDisabled = p !== phase;
+                  } else {
+                    if (p === "phase2" && !targetUrl) isDisabled = true;
+                  }
+
+                  return (
+                    <button
+                      key={p}
+                      className={cx("nav-tab", phase === p ? "active" : "")}
+                      style={{ flex: 1 }}
+                      onClick={() => handleTabClick(p)}
+                      disabled={isDisabled}
+                    >
+                      {["0. Auth", "1. Discovery", "2. Validation"][i]}
+                    </button>
+                  );
+                })}
               </div>
 
-              <button
-                className="btn btn-danger"
-                style={{ padding: "6px 12px", fontSize: 12 }}
-                onClick={handleTerminateClick}
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                <ExcelDownloadPill reports={excelReports} />
+
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: C.muted,
+                    background: C.surface,
+                    padding: "6px 12px",
+                    borderRadius: 6,
+                    border: `1px solid ${C.border}`,
+                  }}
                 >
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                  <line x1="9" y1="9" x2="15" y2="15" />
-                  <line x1="15" y1="9" x2="9" y2="15" />
-                </svg>
-                Terminate
-              </button>
-            </div>
-          </div>
+                  {targetUrl ? (
+                    <div
+                      style={{ display: "flex", alignItems: "center", gap: 6 }}
+                    >
+                      <div
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: "50%",
+                          background: C.accent,
+                          boxShadow: `0 0 6px ${C.accent}`,
+                        }}
+                      />
+                      {targetUrl}
+                    </div>
+                  ) : (
+                    "Environment not configured"
+                  )}
+                </div>
 
-          {isProcessing && (
-            <div
+                <button
+                  className="btn btn-danger"
+                  style={{ padding: "6px 12px", fontSize: 12 }}
+                  onClick={handleTerminateClick}
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                    <line x1="9" y1="9" x2="15" y2="15" />
+                    <line x1="15" y1="9" x2="9" y2="15" />
+                  </svg>
+                  Terminate
+                </button>
+              </div>
+            </div>
+
+            {isProcessing && (
+              <div
+                style={{
+                  background: "#fef3c7",
+                  border: "1px solid #f59e0b",
+                  padding: "10px 14px",
+                  borderRadius: 6,
+                  fontSize: 13,
+                  marginBottom: 20,
+                  fontWeight: 600,
+                }}
+              >
+                ⚠️ Autopilot test is currently running. Please do not refresh or
+                leave this page until execution completes.
+              </div>
+            )}
+
+            {phase === "login" && (
+              <PhaseLogin
+                onDone={handleLoginDone}
+                onStatusChange={setActivePhaseStatus}
+              />
+            )}
+
+            {phase === "phase2" && targetUrl && mode === "checking" && (
+              <PhaseChecking
+                targetUrl={targetUrl}
+                apiKey={apiKey}
+                anthropicApiKey={anthropicApiKey}
+                userId={userId}
+                authSessionId={authSessionId}
+                onExcelReady={handleExcelReady}
+                onSessionReady={(sid) => setActiveSessionId(sid)}
+                onStatusChange={setActivePhaseStatus}
+              />
+            )}
+
+            {phase === "phase2" && targetUrl && mode === "semantic" && (
+              <PhaseSemantic
+                targetUrl={targetUrl}
+                apiKey={apiKey}
+                anthropicApiKey={anthropicApiKey}
+                onExcelReady={handleExcelReady}
+                userId={userId}
+                onSessionReady={(sid) => setActiveSessionId(sid)}
+                onStatusChange={setActivePhaseStatus}
+              />
+            )}
+            {phase === "phase2" && targetUrl && mode === "feature" && (
+              <PhaseFeature
+                targetUrl={targetUrl}
+                apiKey={apiKey}
+                anthropicApiKey={anthropicApiKey}
+                goal={goal}
+                onStatusChange={setActivePhaseStatus}
+              />
+            )}
+
+            {phase === "phase3" && (
+              <PhaseValidationMongoDB
+                apiKey={apiKey}
+                anthropicApiKey={anthropicApiKey}
+                onStatusChange={setActivePhaseStatus}
+                parentSessionId={phase3SessionId}
+                setParentSessionId={setPhase3SessionId}
+              />
+            )}
+          </div>
+        </div>
+
+        {isTerminating && (
+          <div className="terminate-overlay">
+            <h2 style={{ fontSize: 24, marginBottom: 16 }}>
+              Terminating Session...
+            </h2>
+            <div className="terminate-spinner">
+              <svg
+                className="terminate-icon"
+                width="32"
+                height="32"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#fff"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+              </svg>
+            </div>
+            <p
               style={{
-                background: "#fef3c7",
-                border: "1px solid #f59e0b",
-                padding: "10px 14px",
-                borderRadius: 6,
-                fontSize: 13,
-                marginBottom: 20,
-                fontWeight: 600,
+                marginTop: 24,
+                fontSize: 18,
+                fontWeight: 700,
+                color: "#fff",
+                letterSpacing: "0.5px",
               }}
             >
-              ⚠️ Autopilot test is currently running. Please do not refresh or
-              leave this page until execution completes.
-            </div>
-          )}
-
-          {phase === "login" && (
-            <PhaseLogin
-              onDone={handleLoginDone}
-              onStatusChange={(s) => {
-                setAuthStatus(s);
-                setActivePhaseStatus(s);
-              }}
-            />
-          )}
-
-          {phase === "phase2" && targetUrl && mode === "checking" && (
-            <PhaseChecking
-              targetUrl={targetUrl}
-              apiKey={apiKey}
-              anthropicApiKey={anthropicApiKey}
-              onExcelReady={handleExcelReady}
-              onStatusChange={setActivePhaseStatus}
-            />
-          )}
-          {phase === "phase2" && targetUrl && mode === "semantic" && (
-            <PhaseSemantic
-              targetUrl={targetUrl}
-              apiKey={apiKey}
-              anthropicApiKey={anthropicApiKey}
-              onExcelReady={handleExcelReady}
-              onStatusChange={setActivePhaseStatus}
-            />
-          )}
-          {phase === "phase2" && targetUrl && mode === "feature" && (
-            <PhaseFeature
-              targetUrl={targetUrl}
-              apiKey={apiKey}
-              anthropicApiKey={anthropicApiKey}
-              goal={goal}
-              onStatusChange={setActivePhaseStatus}
-            />
-          )}
-
-          {phase === "phase3" && (
-            <PhaseValidationMongoDB
-              apiKey={apiKey}
-              anthropicApiKey={anthropicApiKey}
-              onStatusChange={setActivePhaseStatus}
-            />
-          )}
-        </div>
-      </div>
-
-      {terminateCountdown !== null && (
-        <div className="terminate-overlay">
-          <h2 style={{ fontSize: 24, marginBottom: 16 }}>
-            Terminating Session...
-          </h2>
-
-          <div className="terminate-spinner">
-            <svg
-              className="terminate-icon"
-              width="32"
-              height="32"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#fff"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-            </svg>
+              Don't refresh the page.
+            </p>
+            <p style={{ marginTop: 8, color: "#a1a1aa" }}>
+              Allowing graceful teardown. Please wait...
+            </p>
           </div>
-
-          <div className="terminate-progress-bar">
-            <div
-              className="terminate-progress-fill"
-              style={{ width: `${((60 - terminateCountdown) / 60) * 100}%` }}
-            />
-          </div>
-
-          <p
-            style={{
-              marginTop: 24,
-              fontSize: 18,
-              fontWeight: 700,
-              color: "#fff",
-              letterSpacing: "0.5px",
-            }}
-          >
-            Don't refresh the page.
-          </p>
-          <p style={{ marginTop: 8, color: "#a1a1aa" }}>
-            Allowing graceful teardown. Please wait...
-          </p>
-        </div>
-      )}
-    </>
+        )}
+      </>
     </SubscriptionGuard>
   );
 }

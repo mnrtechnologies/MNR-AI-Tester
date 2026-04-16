@@ -56,6 +56,7 @@ const Profile = () => {
         city: user.city || "",
       });
     }
+  
   }, [user]);
 
   // Handle input change

@@ -12,7 +12,7 @@ require("dotenv").config();
 
 const db = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
-const payRoute = require("./routes/paymentRouute")
+const payRoute = require("./routes/paymentRoute")
 const subsRoute = require("./routes/subscriptionRoutes")
 const { errorHandler, notFound } = require("./middleware/errorMiddleware");
 

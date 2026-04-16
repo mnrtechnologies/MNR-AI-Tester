@@ -7,10 +7,10 @@ const crypto = require("crypto");
 const axios = require("axios");
 require("dotenv").config();
 
-const isValidEmail = (email) => {
-  const regex = /^[\w.-]+@(mnrtechnologies\.com|adventglobal\.com)$/i;
-  return regex.test(email);
-};
+// const isValidEmail = (email) => {
+//   const regex = /^[\w.-]+@(mnrtechnologies\.com|adventglobal\.com)$/i;
+//   return regex.test(email);
+// };
 
 // Login controller for authenticating users
 exports.login = async (req, res) => {

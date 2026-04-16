@@ -2,7 +2,8 @@ const Payment = require("../models/Payments");
 const User = require("../models/User");
 const Razorpay = require("razorpay");
 const crypto = require("crypto");
-const axios = require("axios");
+const { subscriptionUpdatedEmail } = require("../mail/templates/subscriptionUpdatedEmail");
+const mailSender = require("../utils/mailSender");
 require("dotenv").config();
 
 const razorpayInstance = new Razorpay({
@@ -141,15 +142,25 @@ exports.verifyPayment = async (req, res) => {
 
       await user.save();
 
-      try {
-        const response = await axios.post(
-          "https://mnr-pppvue-jira-backend.onrender.com/upgraded_plan_flow",
-          { userid: userId },
-          { headers: { "Content-Type": "application/json" } }
+      // try {
+      //   const response = await axios.post(
+      //     "https://mnr-pppvue-jira-backend.onrender.com/upgraded_plan_flow",
+      //     { userid: userId },
+      //     { headers: { "Content-Type": "application/json" } }
+      //   );
+      //   console.log("response",response.data);
+      // } catch (error) {
+      //   console.error("response error",error.response?.data || error.message);
+      // }
+
+            try {
+        await mailSender(
+          user.email,
+          "Subscription Updated - MNR AI Tester",
+          subscriptionUpdatedEmail(user.email, user.name, plan ,days), 
         );
-        console.log("response",response.data);
-      } catch (error) {
-        console.error("response error",error.response?.data || error.message);
+      } catch (mailError) {
+        console.error("Mail sending failed:", mailError.message);
       }
 
       return res.json({

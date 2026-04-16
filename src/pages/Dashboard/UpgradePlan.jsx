@@ -16,8 +16,8 @@ import {
   Copy,
 } from "lucide-react";
 
-const makeDirectPayment = async (amount, plan, days, currency, navigate,dispatch) => {
-   
+// 1. Added setIsVerifying as a parameter
+const makeDirectPayment = async (amount, plan, days, currency, navigate, dispatch, setIsVerifying) => {
   try {
     const { data } = await axios.post(
       `${process.env.REACT_APP_AUTH_URL}/payment/user/order`,
@@ -43,32 +43,44 @@ const makeDirectPayment = async (amount, plan, days, currency, navigate,dispatch
       description: `${plan.name} Plan Subscription`,
       order_id: order_id,
       handler: async function (response) {
-        const token = JSON.parse(localStorage.getItem("token"));
-        const verifyRes = await axios.post(
-          `${process.env.REACT_APP_AUTH_URL}/payment/user/verify`,
-          {
-            razorpay_order_id: response.razorpay_order_id,
-            razorpay_payment_id: response.razorpay_payment_id,
-            razorpay_signature: response.razorpay_signature,
-            plan: plan.name?.toLowerCase(),
-            days: days,
-            amount: amount,
-            currency: currency,
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
+        // 2. Start the loading overlay
+        setIsVerifying(true);
+        
+        try {
+          const token = JSON.parse(localStorage.getItem("token"));
+          const verifyRes = await axios.post(
+            `${process.env.REACT_APP_AUTH_URL}/payment/user/verify`,
+            {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              plan: plan.name?.toLowerCase(),
+              days: days,
+              amount: amount,
+              currency: currency,
             },
-          },
-        );
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            },
+          );
 
-        if (verifyRes.data.success) {
-          toast.success("Payment verified successfully!");
-          await dispatch(getUserDetails());
+          if (verifyRes.data.success) {
+            toast.success("Payment verified successfully!");
+            await dispatch(getUserDetails());
+            navigate("/dashboard");
+          } else {
+            toast.error("Payment verification failed!");
+            navigate("/dashboard");
+          }
+        } catch (error) {
+          console.error("Verification error:", error);
+          toast.error("An error occurred during verification.");
           navigate("/dashboard");
-        } else {
-          toast.error("Payment verification failed!");
-          navigate("/dashboard");
+        } finally {
+          // 3. Stop the loading overlay once API is done
+          setIsVerifying(false);
         }
       },
       theme: {
@@ -88,9 +100,11 @@ const UpgradePlan = () => {
   const [isAnnual, setIsAnnual] = useState(false);
   const [currency, setCurrency] = useState("INR");
   const [showModal, setShowModal] = useState(false);
+  // 4. Added state for the verification overlay
+  const [isVerifying, setIsVerifying] = useState(false);
+  
   const navigate = useNavigate();
   const dispatch = useDispatch();
- 
 
   const handleCopyEmail = () => {
     navigator.clipboard.writeText("sales@mnrtechnologies.com");
@@ -102,7 +116,7 @@ const UpgradePlan = () => {
       name: "Platform Demo",
       icon: <Rocket size={24} />,
       desc: "Schedule a live walkthrough to see our automation capabilities in action.",
-      isDemo: true, // Special flag for demo
+      isDemo: true,
       features: [
         "Live Platform Walkthrough",
         "Custom Architecture Review",
@@ -162,7 +176,6 @@ const UpgradePlan = () => {
   ];
 
   const handleAction = (plan) => {
-    // 1. Trigger Modal for Demo or Custom Plans
     if (plan.isDemo || plan.isCustom) {
       setShowModal(true);
       return;
@@ -172,18 +185,16 @@ const UpgradePlan = () => {
       ? plan.semiAnnualPrice[currency]
       : plan.monthlyPrice[currency];
 
-    // 2. Handle Free Trial fallback (If you ever add a $0 plan back)
     if (currentPrice === 0) {
       toast.success("Trial started successfully!");
       navigate("/dashboard");
       return;
     }
 
-    // 3. Determine Subscription Duration (Days)
     const days = isAnnual ? 180 : 30;
 
-    // 4. Trigger Razorpay Flow
-    makeDirectPayment(currentPrice, plan, days, currency, navigate,dispatch);
+    // 5. Pass setIsVerifying into the payment function
+    makeDirectPayment(currentPrice, plan, days, currency, navigate, dispatch, setIsVerifying);
   };
 
   return (
@@ -200,7 +211,6 @@ const UpgradePlan = () => {
 
         {/* TOGGLES SECTION */}
         <div className="flex flex-col items-center justify-center gap-5 mt-8">
-          {/* Currency Toggle */}
           <div className="flex bg-slate-100 p-1 rounded-xl">
             <button
               onClick={() => setCurrency("INR")}
@@ -224,7 +234,6 @@ const UpgradePlan = () => {
             </button>
           </div>
 
-          {/* Billing Toggle */}
           <div className="flex items-center justify-center gap-4">
             <span
               className={`text-sm font-bold ${!isAnnual ? "text-slate-900" : "text-slate-400"}`}
@@ -253,10 +262,9 @@ const UpgradePlan = () => {
         </div>
       </div>
 
-      {/* PRICING CARDS GRID - Adjusted to lg:grid-cols-4 for perfect centering */}
+      {/* PRICING CARDS GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
         {plans.map((plan, idx) => {
-          
           let displayPrice = "";
           let durationText = "";
           const currencySymbol = currency === "INR" ? "₹" : "$";
@@ -366,7 +374,6 @@ const UpgradePlan = () => {
         })}
       </div>
 
-      {/* FOOTER SECTION */}
       <p className="text-center text-sm text-gray-500 mt-8">
         Need a more specific testing arrangement?{" "}
         <button
@@ -381,7 +388,6 @@ const UpgradePlan = () => {
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl p-8 w-full max-w-md text-center relative shadow-2xl">
-            {/* Close Button */}
             <button
               className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 hover:bg-slate-100 p-2 rounded-full transition-colors"
               onClick={() => setShowModal(false)}
@@ -389,7 +395,6 @@ const UpgradePlan = () => {
               <X size={20} />
             </button>
 
-            {/* Modal Icon */}
             <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-6 text-orange-500 border border-orange-200">
               <PhoneCall size={32} />
             </div>
@@ -401,7 +406,6 @@ const UpgradePlan = () => {
               To schedule your personalized platform walkthrough or discuss a custom plan, please reach out to our sales team directly at the email address below. We typically respond within a few hours.
             </p>
 
-            {/* Email Copy Box */}
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-2 flex items-center justify-between mt-2">
               <div className="pl-4 pr-2 py-2 overflow-hidden">
                 <span className="text-slate-700 font-bold text-sm md:text-base truncate block">
@@ -416,6 +420,17 @@ const UpgradePlan = () => {
                 Copy
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. VERIFICATION LOADING OVERLAY */}
+      {isVerifying && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <div className="bg-white p-8 rounded-3xl shadow-2xl flex flex-col items-center gap-5 max-w-sm w-full animate-in zoom-in-95 duration-200">
+             <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+             <p className="text-lg font-bold text-slate-900">Payment is verifying......</p>
+             <p className="text-sm text-slate-500 text-center">Please do not close or refresh this window.</p>
           </div>
         </div>
       )}
