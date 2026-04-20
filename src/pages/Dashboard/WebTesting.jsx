@@ -1711,18 +1711,23 @@ function PhaseValidationMongoDB({
   const [openaiKey, setOpenaiKey] = useState("");
   const { user } = useSelector((state) => state.profile);
   const userId = user?._id;
-  
+
   const [progress, setProgress] = useState({
     pending: 0,
     in_progress: 0,
     completed: 0,
     failed: 0,
   });
+  
   const [taskProgress, setTaskProgress] = useState({ done: 0, total: 0 });
   const [logs, setLogs] = useState([]);
   const [screenshot, setScreenshot] = useState(null);
-  const [activeSession, setActiveSession] = useState(null);
+  const [finalReportUrl, setFinalReportUrl] = useState(null);
   const wsRef = useRef(null);
+
+  // Derive the active session based on in_progress status
+  const activeSessionItem = sessions.find((s) => s.phase3_status === "in_progress");
+  const activeSessionId = activeSessionItem?.session_id || null;
 
   // 1. Cleanup: Ensure WebSocket closes if the component unmounts
   useEffect(() => {
@@ -1740,6 +1745,7 @@ function PhaseValidationMongoDB({
   const pushLog = (msg, color = "white") =>
     setLogs((p) => [...p, { message: msg, color }]);
 
+  // 2. Fallback / Sync Polling via REST API
   useInterval(
     async () => {
       if (!parentSessionId || status !== "running") return;
@@ -1747,27 +1753,21 @@ function PhaseValidationMongoDB({
         const r = await fetch(`${API}/phase3/status/${parentSessionId}`);
         const d = await r.json();
 
-        setSessions(d.sessions || []);
-        setProgress({
-          pending: d.sessions?.filter((s) => s.phase3_status === "pending").length || 0,
-          in_progress: d.sessions?.filter((s) => s.phase3_status === "in_progress").length || 0,
-          completed: d.sessions?.filter((s) => s.phase3_status === "completed").length || 0,
-          failed: d.sessions?.filter((s) => s.phase3_status === "failed").length || 0,
-        });
-
-        if ((d.all_done || d.status === "completed") && status === "running") {
-          setStatus("done");
-          pushLog("✅ All Phase 3 tests complete", "green");
-          if (wsRef.current) {
-            wsRef.current.close();
-            wsRef.current = null;
-          }
+        if (d.sessions) {
+          setSessions(d.sessions);
+          setProgress({
+            pending: d.pending || 0,
+            in_progress: d.in_progress || 0,
+            completed: d.completed || 0,
+            failed: d.failed || 0,
+          });
         }
       } catch (e) {
-        pushLog(`Status poll failed: ${e}`, "red");
+        // Suppress poll errors to not clog the logs, or log minimally
+        console.warn(`Status poll failed: ${e}`);
       }
     },
-    status === "running" ? 3000 : null,
+    status === "running" ? 5000 : null
   );
 
   const startPhase3 = async () => {
@@ -1779,9 +1779,14 @@ function PhaseValidationMongoDB({
     setStatus("running");
     setLogs([]);
     setSessions([]);
+    setTaskProgress({ done: 0, total: 0 });
+    setFinalReportUrl(null);
+    setScreenshot(null);
+    
     pushLog(`🚀 Starting Phase 3 for session: ${parentSessionId}`, "cyan");
 
     try {
+      // Step 1: Fire the POST request to start the job
       const res = await fetch(`${API}/phase3/start/${parentSessionId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1794,13 +1799,15 @@ function PhaseValidationMongoDB({
 
       const data = await res.json();
 
-      if (data.error) {
-        pushLog(`❌ ${data.error}`, "red");
+      if (data.error || res.status !== 200) {
+        pushLog(`❌ Start Error: ${data.error || "Failed to initiate phase 3"}`, "red");
         setStatus("error");
         return;
       }
-      pushLog(`✓ Found ${data.total_tests} tests to run`, "green");
+      
+      pushLog(`✓ ${data.message || `Found ${data.total_tasks} tasks to run`}`, "green");
 
+      // Step 2: Establish the WebSocket connection
       const ws = new WebSocket(`${WS}/ws/phase3/${parentSessionId}`);
       wsRef.current = ws;
       
@@ -1809,86 +1816,84 @@ function PhaseValidationMongoDB({
       ws.onmessage = (ev) => {
         const msg = JSON.parse(ev.data);
 
-        if (msg.type === "frame") {
-          setScreenshot(`data:image/jpeg;base64,${msg.image}`);
-          return;
-        }
-        if (msg.type === "session_started") {
-          setActiveSession(msg.session_id);
-          pushLog(`▶ Starting: ${msg.page_url}`, "cyan");
-          return;
-        }
-        if (msg.type === "session_progress") {
-          pushLog(msg.message, "white");
-          return;
-        }
-        if (msg.type === "session_completed") {
-          setActiveSession(null);
-          pushLog(`✅ Completed: ${msg.page_url}`, "green");
-          // Update the session in state immediately with the final report url
-          setSessions((prev) => 
-            prev.map((s) => 
-              s.session_id === msg.session_id 
-                ? { ...s, phase3_status: "completed", final_report_url: msg.final_report_url } 
-                : s
-            )
-          );
-          return;
-        }
-        if (msg.type === "session_failed") {
-          setActiveSession(null);
-          pushLog(`❌ Failed: ${msg.page_url} - ${msg.reason}`, "red");
-          return;
-        }
-        if (msg.type === "task_progress") {
-          setTaskProgress({ done: msg.tasks_done, total: msg.tasks_total });
-          return;
-        }
-        
-        // 2. Updated batch_done logic
-        if (msg.type === "batch_done") {
-          setStatus("done");
-          // Ensure progress bars hit 100%
-          setTaskProgress((p) => ({ ...p, done: p.total }));
-          
-          const summary = msg.completed !== undefined 
-            ? `(Passed: ${msg.completed}, Failed: ${msg.failed})` 
-            : "";
-          pushLog(`🎉 All Phase 3 tests complete ${summary}`, "green");
-          
-          // Close and clean up reference
-          ws.close();
-          wsRef.current = null;
-          return;
-        }
+        switch (msg.type) {
+          case "status":
+            // Sync overall target sessions from WS
+            setSessions(msg.sessions || []);
+            setProgress({
+              pending: msg.pending || 0,
+              in_progress: msg.in_progress || 0,
+              completed: msg.completed || 0,
+              failed: msg.failed || 0,
+            });
+            break;
 
-        if (msg.message) {
-          pushLog(msg.message, msg.type === "error" ? "red" : "white");
+          case "log":
+            pushLog(msg.message, msg.color || "white");
+            break;
+
+          case "task_progress":
+            setTaskProgress({ done: msg.tasks_done, total: msg.tasks_total });
+            break;
+
+          case "frame":
+            // Check if backend sends raw base64 or a full data URI / URL
+            const imgSrc = msg.image.startsWith("http") || msg.image.startsWith("data:") 
+              ? msg.image 
+              : `data:image/jpeg;base64,${msg.image}`;
+            setScreenshot(imgSrc);
+            break;
+
+          case "batch_done":
+            setStatus("done");
+            
+            // Force progress bar to full visually
+            setTaskProgress((p) => ({ ...p, done: p.total > 0 ? p.total : 1, total: p.total > 0 ? p.total : 1 }));
+            
+            const summary = `(Passed: ${msg.completed || 0}, Failed: ${msg.failed || 0})`;
+            pushLog(`🎉 Phase 3 complete ${summary}`, "green");
+
+            // Expose the download URL directly to the UI
+            if (msg.message === "Phase 3 complete" && msg.s3_download_url) {
+              setFinalReportUrl(msg.s3_download_url);
+              pushLog(`📄 Report generated: ${msg.excel_filename}`, "cyan");
+            }
+
+            ws.close();
+            wsRef.current = null;
+            break;
+
+          default:
+            if (msg.message) {
+              pushLog(msg.message, msg.type === "error" ? "red" : "white");
+            }
+            break;
         }
       };
 
       ws.onerror = () => pushLog("❌ WebSocket error", "red");
 
       ws.onclose = () => {
-        // Only log "closed" if we didn't intentionally finish via batch_done
         if (wsRef.current !== null && status === "running") {
           pushLog("🔌 Connection closed unexpectedly", "yellow");
         }
         wsRef.current = null;
       };
+      
     } catch (e) {
-      pushLog(`❌ Start failed: ${e}`, "red");
+      pushLog(`❌ Start failed: ${e.message}`, "red");
       setStatus("error");
     }
   };
 
-  const total = sessions.length;
-  const done = progress.completed + progress.failed;
-  const sessionPct = total > 0 ? Math.round((done / total) * 100) : 0;
-  const pct =
-    taskProgress.total > 0
-      ? Math.round((taskProgress.done / taskProgress.total) * 100)
-      : sessionPct;
+  // Calculate percentage based on tasks if available, otherwise fallback to sessions
+  const totalSess = sessions.length;
+  const doneSess = progress.completed + progress.failed;
+  const sessionPct = totalSess > 0 ? Math.round((doneSess / totalSess) * 100) : 0;
+  
+  const pct = taskProgress.total > 0
+    ? Math.round((taskProgress.done / taskProgress.total) * 100)
+    : sessionPct;
 
   return (
     <div
@@ -1931,7 +1936,7 @@ function PhaseValidationMongoDB({
             <input
               className="input"
               type="password"
-              placeholder="sk-..."
+              placeholder="sk-proj-..."
               value={openaiKey}
               onChange={(e) => setOpenaiKey(e.target.value)}
             />
@@ -1943,13 +1948,12 @@ function PhaseValidationMongoDB({
             Parent Session ID <span style={{ color: C.red }}>*</span>
           </label>
           <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>
-            Enter the session_id from a completed Phase 2 run. This will execute
-            validation tests for all URLs in that session.
+            Enter the parent session ID (e.g. 640ef321) from Phase 2.
           </div>
           <div style={{ display: "flex", gap: 12 }}>
             <input
               className="input"
-              placeholder="e.g. 20240326_143022"
+              placeholder="e.g. 640ef321"
               value={parentSessionId}
               onChange={(e) => setParentSessionId(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && startPhase3()}
@@ -1976,7 +1980,7 @@ function PhaseValidationMongoDB({
         </div>
       )}
 
-      {(status === "running" || status === "done") && (
+      {(status === "running" || status === "done" || status === "error") && (
         <>
           <div
             style={{
@@ -1991,29 +1995,58 @@ function PhaseValidationMongoDB({
                 {parentSessionId}
               </span>
             </div>
-            <span
-              className={cx(
-                "badge",
-                status === "running" ? "badge-running" : "badge-done",
+            
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              {finalReportUrl && (
+                <a
+                  href={finalReportUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn"
+                  style={{
+                    background: C.green || "#10b981",
+                    color: "white",
+                    padding: "6px 12px",
+                    fontSize: 13,
+                    textDecoration: "none",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                  Download Report
+                </a>
               )}
-            >
-              {status === "running" && (
-                <span className="spinner" style={{ width: 10, height: 10 }} />
-              )}
-              {status}
-            </span>
+              
+              <span
+                className={cx(
+                  "badge",
+                  status === "running" ? "badge-running" : status === "error" ? "badge-failed" : "badge-done",
+                )}
+              >
+                {status === "running" && (
+                  <span className="spinner" style={{ width: 10, height: 10 }} />
+                )}
+                {status}
+              </span>
+            </div>
           </div>
 
           <ScreenPanel
             src={screenshot}
             scanning={status === "running"}
-            label={activeSession ? `Running: ${activeSession}` : "Idle"}
+            label={activeSessionId ? `Running: ${activeSessionId}` : "Idle"}
           />
 
           <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
             <div className="card">
               <div style={{ marginBottom: 20 }}>
-                <div className="stat-val">{pct}%</div>
+                <div className="stat-val">{Math.min(pct, 100)}%</div>
                 <div className="stat-lbl">Completion Progress</div>
               </div>
 
@@ -2032,7 +2065,7 @@ function PhaseValidationMongoDB({
                     left: 0,
                     top: 0,
                     height: "100%",
-                    width: `${pct}%`,
+                    width: `${Math.min(pct, 100)}%`,
                     background: status === "done" ? C.green : C.accent,
                     transition: "width .5s ease",
                   }}
@@ -2072,7 +2105,7 @@ function PhaseValidationMongoDB({
                   >
                     {progress.completed}
                   </div>
-                  <div className="stat-lbl">Passed</div>
+                  <div className="stat-lbl">Completed</div>
                 </div>
                 <div>
                   <div
@@ -2085,143 +2118,100 @@ function PhaseValidationMongoDB({
                 </div>
               </div>
 
-              <div
-                style={{
-                  marginTop: 20,
-                  maxHeight: 300,
-                  overflowY: "auto",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 6,
-                }}
-              >
-                {sessions.map((s, i) => (
-                  <div
-                    key={i}
-                    className={cx(
-                      "test-item",
-                      s.session_id === activeSession ? "active" : "",
-                    )}
-                    style={{ padding: "8px 12px", fontSize: 12 }}
-                  >
+              {sessions.length > 0 && (
+                <div
+                  style={{
+                    marginTop: 20,
+                    maxHeight: 300,
+                    overflowY: "auto",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 6,
+                  }}
+                >
+                  {sessions.map((s, i) => (
                     <div
-                      style={{ display: "flex", alignItems: "center", gap: 8 }}
+                      key={i}
+                      className={cx(
+                        "test-item",
+                        s.session_id === activeSessionId ? "active" : "",
+                      )}
+                      style={{ padding: "8px 12px", fontSize: 12 }}
                     >
-                      {s.phase3_status === "completed" ? (
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke={C.green}
-                          strokeWidth="3"
-                        >
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                      ) : s.phase3_status === "failed" ? (
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke={C.red}
-                          strokeWidth="3"
-                        >
-                          <line x1="18" y1="6" x2="6" y2="18" />
-                          <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                      ) : s.phase3_status === "in_progress" ? (
-                        <span
-                          className="spinner"
-                          style={{ width: 10, height: 10, borderWidth: "2px" }}
-                        />
-                      ) : (
-                        <div
-                          style={{
-                            width: 6,
-                            height: 6,
-                            borderRadius: "50%",
-                            background: C.muted,
-                          }}
-                        />
-                      )}
-                      
-                      <span
-                        className="font-mono"
-                        style={{
-                          flex: 1,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
+                      <div
+                        style={{ display: "flex", alignItems: "center", gap: 8 }}
                       >
-                        {s.page_url}
-                      </span>
-                      
-                      <span
-                        className={cx(
-                          "badge",
-                          s.phase3_status === "completed"
-                            ? "badge-done"
-                            : s.phase3_status === "failed"
-                              ? "badge-failed"
-                              : s.phase3_status === "in_progress"
-                                ? "badge-running"
-                                : "badge-idle",
-                        )}
-                        style={{ fontSize: 9, padding: "2px 6px" }}
-                      >
-                        {s.phase3_status}
-                      </span>
-
-                      {/* Final Report Download Button */}
-                      {s.final_report_url && (
-                        <a
-                          href={s.final_report_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 4,
-                            padding: "3px 8px",
-                            background: "rgba(16, 185, 129, 0.1)",
-                            color: C.green || "#10b981",
-                            borderRadius: 6,
-                            textDecoration: "none",
-                            fontWeight: 600,
-                            border: `1px solid rgba(16, 185, 129, 0.2)`,
-                            transition: "all 0.2s ease"
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = "rgba(16, 185, 129, 0.2)";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = "rgba(16, 185, 129, 0.1)";
-                          }}
-                          title="Download Final Report"
-                        >
-                          <svg 
-                            width="10" 
-                            height="10" 
-                            viewBox="0 0 24 24" 
-                            fill="none" 
-                            stroke="currentColor" 
-                            strokeWidth="2.5" 
-                            strokeLinecap="round" 
-                            strokeLinejoin="round"
+                        {s.phase3_status === "completed" ? (
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke={C.green}
+                            strokeWidth="3"
                           >
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                            <polyline points="7 10 12 15 17 10" />
-                            <line x1="12" y1="15" x2="12" y2="3" />
+                            <polyline points="20 6 9 17 4 12" />
                           </svg>
-                          Report
-                        </a>
-                      )}
+                        ) : s.phase3_status === "failed" ? (
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke={C.red}
+                            strokeWidth="3"
+                          >
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                          </svg>
+                        ) : s.phase3_status === "in_progress" ? (
+                          <span
+                            className="spinner"
+                            style={{ width: 10, height: 10, borderWidth: "2px" }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: "50%",
+                              background: C.muted,
+                            }}
+                          />
+                        )}
+                        
+                        <span
+                          className="font-mono"
+                          style={{
+                            flex: 1,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {s.page_url}
+                        </span>
+                        
+                        <span
+                          className={cx(
+                            "badge",
+                            s.phase3_status === "completed"
+                              ? "badge-done"
+                              : s.phase3_status === "failed"
+                                ? "badge-failed"
+                                : s.phase3_status === "in_progress"
+                                  ? "badge-running"
+                                  : "badge-idle",
+                          )}
+                          style={{ fontSize: 9, padding: "2px 6px" }}
+                        >
+                          {s.phase3_status}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
             <LogPanel logs={logs} />
           </div>
