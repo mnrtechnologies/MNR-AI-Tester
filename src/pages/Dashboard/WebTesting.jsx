@@ -483,7 +483,7 @@ function ExcelDownloadPill({ reports }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// PHASE 0 — Login
+// PHASE 1 — Login
 // ════════════════════════════════════════════════════════════════════════════
 function PhaseLogin({ onDone, onStatusChange }) {
   const [email, setEmail] = useState("");
@@ -1157,11 +1157,11 @@ function PhaseChecking({
               <div className="stat-lbl">Total Discovered</div>
             </div>
           </div>
-          <ProgressBar
+          {/* <ProgressBar
             value={progress.completed}
             max={progress.total || 1}
             label="Crawl Progress"
-          />
+          /> */}
 
           {progress.current && (
             <div
@@ -1718,15 +1718,17 @@ function PhaseValidationMongoDB({
     completed: 0,
     failed: 0,
   });
-  
+
   const [taskProgress, setTaskProgress] = useState({ done: 0, total: 0 });
   const [logs, setLogs] = useState([]);
   const [screenshot, setScreenshot] = useState(null);
-  const [finalReportUrl, setFinalReportUrl] = useState(null);
+  const [globalBatchReport, setGlobalBatchReport] = useState(null);
   const wsRef = useRef(null);
 
   // Derive the active session based on in_progress status
-  const activeSessionItem = sessions.find((s) => s.phase3_status === "in_progress");
+  const activeSessionItem = sessions.find(
+    (s) => s.phase3_status === "in_progress",
+  );
   const activeSessionId = activeSessionItem?.session_id || null;
 
   // 1. Cleanup: Ensure WebSocket closes if the component unmounts
@@ -1763,11 +1765,10 @@ function PhaseValidationMongoDB({
           });
         }
       } catch (e) {
-        // Suppress poll errors to not clog the logs, or log minimally
         console.warn(`Status poll failed: ${e}`);
       }
     },
-    status === "running" ? 5000 : null
+    status === "running" ? 5000 : null,
   );
 
   const startPhase3 = async () => {
@@ -1780,13 +1781,12 @@ function PhaseValidationMongoDB({
     setLogs([]);
     setSessions([]);
     setTaskProgress({ done: 0, total: 0 });
-    setFinalReportUrl(null);
+    setGlobalBatchReport(null);
     setScreenshot(null);
-    
+
     pushLog(`🚀 Starting Phase 3 for session: ${parentSessionId}`, "cyan");
 
     try {
-      // Step 1: Fire the POST request to start the job
       const res = await fetch(`${API}/phase3/start/${parentSessionId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1800,17 +1800,22 @@ function PhaseValidationMongoDB({
       const data = await res.json();
 
       if (data.error || res.status !== 200) {
-        pushLog(`❌ Start Error: ${data.error || "Failed to initiate phase 3"}`, "red");
+        pushLog(
+          `❌ Start Error: ${data.error || "Failed to initiate phase 3"}`,
+          "red",
+        );
         setStatus("error");
         return;
       }
-      
-      pushLog(`✓ ${data.message || `Found ${data.total_tasks} tasks to run`}`, "green");
 
-      // Step 2: Establish the WebSocket connection
+      pushLog(
+        `✓ ${data.message || `Found ${data.total_tasks} tasks to run`}`,
+        "green",
+      );
+
       const ws = new WebSocket(`${WS}/ws/phase3/${parentSessionId}`);
       wsRef.current = ws;
-      
+
       ws.onopen = () => pushLog("✅ Connected to Phase 3 stream", "green");
 
       ws.onmessage = (ev) => {
@@ -1818,7 +1823,6 @@ function PhaseValidationMongoDB({
 
         switch (msg.type) {
           case "status":
-            // Sync overall target sessions from WS
             setSessions(msg.sessions || []);
             setProgress({
               pending: msg.pending || 0,
@@ -1837,26 +1841,30 @@ function PhaseValidationMongoDB({
             break;
 
           case "frame":
-            // Check if backend sends raw base64 or a full data URI / URL
-            const imgSrc = msg.image.startsWith("http") || msg.image.startsWith("data:") 
-              ? msg.image 
-              : `data:image/jpeg;base64,${msg.image}`;
+            const imgSrc =
+              msg.image.startsWith("http") || msg.image.startsWith("data:")
+                ? msg.image
+                : `data:image/jpeg;base64,${msg.image}`;
             setScreenshot(imgSrc);
             break;
 
           case "batch_done":
             setStatus("done");
-            
-            // Force progress bar to full visually
-            setTaskProgress((p) => ({ ...p, done: p.total > 0 ? p.total : 1, total: p.total > 0 ? p.total : 1 }));
-            
+            setTaskProgress((p) => ({
+              ...p,
+              done: p.total > 0 ? p.total : 1,
+              total: p.total > 0 ? p.total : 1,
+            }));
+
             const summary = `(Passed: ${msg.completed || 0}, Failed: ${msg.failed || 0})`;
             pushLog(`🎉 Phase 3 complete ${summary}`, "green");
 
-            // Expose the download URL directly to the UI
             if (msg.message === "Phase 3 complete" && msg.s3_download_url) {
-              setFinalReportUrl(msg.s3_download_url);
-              pushLog(`📄 Report generated: ${msg.excel_filename}`, "cyan");
+              setGlobalBatchReport(msg.s3_download_url);
+              pushLog(
+                `📄 Batch Report generated: ${msg.excel_filename}`,
+                "cyan",
+              );
             }
 
             ws.close();
@@ -1879,21 +1887,21 @@ function PhaseValidationMongoDB({
         }
         wsRef.current = null;
       };
-      
     } catch (e) {
       pushLog(`❌ Start failed: ${e.message}`, "red");
       setStatus("error");
     }
   };
 
-  // Calculate percentage based on tasks if available, otherwise fallback to sessions
   const totalSess = sessions.length;
   const doneSess = progress.completed + progress.failed;
-  const sessionPct = totalSess > 0 ? Math.round((doneSess / totalSess) * 100) : 0;
-  
-  const pct = taskProgress.total > 0
-    ? Math.round((taskProgress.done / taskProgress.total) * 100)
-    : sessionPct;
+  const sessionPct =
+    totalSess > 0 ? Math.round((doneSess / totalSess) * 100) : 0;
+
+  const pct =
+    taskProgress.total > 0
+      ? Math.round((taskProgress.done / taskProgress.total) * 100)
+      : sessionPct;
 
   return (
     <div
@@ -1948,12 +1956,12 @@ function PhaseValidationMongoDB({
             Parent Session ID <span style={{ color: C.red }}>*</span>
           </label>
           <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>
-            Enter the parent session ID (e.g. 640ef321) from Phase 2.
+            Enter the parent session ID (e.g. 57d5b0ba) from Phase 2.
           </div>
           <div style={{ display: "flex", gap: 12 }}>
             <input
               className="input"
-              placeholder="e.g. 640ef321"
+              placeholder="e.g. 57d5b0ba"
               value={parentSessionId}
               onChange={(e) => setParentSessionId(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && startPhase3()}
@@ -1995,11 +2003,12 @@ function PhaseValidationMongoDB({
                 {parentSessionId}
               </span>
             </div>
-            
+
             <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-              {finalReportUrl && (
+              {/* Global Batch Report from websocket final message */}
+              {globalBatchReport && (
                 <a
-                  href={finalReportUrl}
+                  href={globalBatchReport}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="btn"
@@ -2011,22 +2020,35 @@ function PhaseValidationMongoDB({
                     textDecoration: "none",
                     display: "flex",
                     alignItems: "center",
-                    gap: 6
+                    gap: 6,
                   }}
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                     <polyline points="7 10 12 15 17 10" />
                     <line x1="12" y1="15" x2="12" y2="3" />
                   </svg>
-                  Download Report
+                  Global Batch Report
                 </a>
               )}
-              
+
               <span
                 className={cx(
                   "badge",
-                  status === "running" ? "badge-running" : status === "error" ? "badge-failed" : "badge-done",
+                  status === "running"
+                    ? "badge-running"
+                    : status === "error"
+                      ? "badge-failed"
+                      : "badge-done",
                 )}
               >
                 {status === "running" && (
@@ -2136,10 +2158,21 @@ function PhaseValidationMongoDB({
                         "test-item",
                         s.session_id === activeSessionId ? "active" : "",
                       )}
-                      style={{ padding: "8px 12px", fontSize: 12 }}
+                      style={{
+                        padding: "8px 12px",
+                        fontSize: 12,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}
                     >
                       <div
-                        style={{ display: "flex", alignItems: "center", gap: 8 }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          overflow: "hidden",
+                        }}
                       >
                         {s.phase3_status === "completed" ? (
                           <svg
@@ -2167,7 +2200,11 @@ function PhaseValidationMongoDB({
                         ) : s.phase3_status === "in_progress" ? (
                           <span
                             className="spinner"
-                            style={{ width: 10, height: 10, borderWidth: "2px" }}
+                            style={{
+                              width: 10,
+                              height: 10,
+                              borderWidth: "2px",
+                            }}
                           />
                         ) : (
                           <div
@@ -2179,19 +2216,18 @@ function PhaseValidationMongoDB({
                             }}
                           />
                         )}
-                        
+
                         <span
                           className="font-mono"
                           style={{
-                            flex: 1,
+                            whiteSpace: "nowrap",
                             overflow: "hidden",
                             textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
                           }}
                         >
                           {s.page_url}
                         </span>
-                        
+
                         <span
                           className={cx(
                             "badge",
@@ -2207,6 +2243,85 @@ function PhaseValidationMongoDB({
                         >
                           {s.phase3_status}
                         </span>
+                      </div>
+
+                      {/* INDIVIDUAL SESSION DOWNLOAD BUTTONS */}
+                      <div style={{ display: "flex", gap: 8, marginLeft: 12 }}>
+                        {s.s3_download_url && (
+                          <a
+                            href={s.s3_download_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 4,
+                              padding: "3px 8px",
+                              background: "rgba(107, 114, 128, 0.1)",
+                              color: C.muted,
+                              borderRadius: 6,
+                              textDecoration: "none",
+                              fontWeight: 600,
+                              border: `1px solid rgba(107, 114, 128, 0.2)`,
+                              transition: "all 0.2s ease",
+                            }}
+                            title="Download Initial Test Report"
+                          >
+                            <svg
+                              width="10"
+                              height="10"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                              <polyline points="7 10 12 15 17 10" />
+                              <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                            Test Report
+                          </a>
+                        )}
+
+                        {s.final_report_url && (
+                          <a
+                            href={s.final_report_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 4,
+                              padding: "3px 8px",
+                              background: "rgba(16, 185, 129, 0.1)",
+                              color: C.green || "#10b981",
+                              borderRadius: 6,
+                              textDecoration: "none",
+                              fontWeight: 600,
+                              border: `1px solid rgba(16, 185, 129, 0.2)`,
+                              transition: "all 0.2s ease",
+                            }}
+                            title="Download Final Validation Report"
+                          >
+                            <svg
+                              width="10"
+                              height="10"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                              <polyline points="7 10 12 15 17 10" />
+                              <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                            Final Report
+                          </a>
+                        )}
                       </div>
                     </div>
                   ))}
