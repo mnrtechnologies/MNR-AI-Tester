@@ -1825,6 +1825,14 @@ function PhaseValidationMongoDB({
         if (msg.type === "session_completed") {
           setActiveSession(null);
           pushLog(`✅ Completed: ${msg.page_url}`, "green");
+          // Update the session in state immediately with the final report url
+          setSessions((prev) => 
+            prev.map((s) => 
+              s.session_id === msg.session_id 
+                ? { ...s, phase3_status: "completed", final_report_url: msg.final_report_url } 
+                : s
+            )
+          );
           return;
         }
         if (msg.type === "session_failed") {
@@ -2137,6 +2145,7 @@ function PhaseValidationMongoDB({
                           }}
                         />
                       )}
+                      
                       <span
                         className="font-mono"
                         style={{
@@ -2148,6 +2157,7 @@ function PhaseValidationMongoDB({
                       >
                         {s.page_url}
                       </span>
+                      
                       <span
                         className={cx(
                           "badge",
@@ -2163,6 +2173,51 @@ function PhaseValidationMongoDB({
                       >
                         {s.phase3_status}
                       </span>
+
+                      {/* Final Report Download Button */}
+                      {s.final_report_url && (
+                        <a
+                          href={s.final_report_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 4,
+                            padding: "3px 8px",
+                            background: "rgba(16, 185, 129, 0.1)",
+                            color: C.green || "#10b981",
+                            borderRadius: 6,
+                            textDecoration: "none",
+                            fontWeight: 600,
+                            border: `1px solid rgba(16, 185, 129, 0.2)`,
+                            transition: "all 0.2s ease"
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = "rgba(16, 185, 129, 0.2)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = "rgba(16, 185, 129, 0.1)";
+                          }}
+                          title="Download Final Report"
+                        >
+                          <svg 
+                            width="10" 
+                            height="10" 
+                            viewBox="0 0 24 24" 
+                            fill="none" 
+                            stroke="currentColor" 
+                            strokeWidth="2.5" 
+                            strokeLinecap="round" 
+                            strokeLinejoin="round"
+                          >
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                          </svg>
+                          Report
+                        </a>
+                      )}
                     </div>
                   </div>
                 ))}
