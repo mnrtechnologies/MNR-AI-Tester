@@ -6,7 +6,6 @@ import AppHeader from "./components/Layout/AppHeader.jsx";
 import Sidebar from "./components/Layout/Sidebar.jsx";
 import Home from "./pages/Home.jsx";
 import Login from "./pages/AuthFlow/Login.jsx";
-import Signup from "./pages/AuthFlow/Signup.jsx";
 
 import MainDashboard from "./pages/Dashboard/MainDashboard.jsx";
 import Profile from "./pages/Settings/Profile.jsx";
@@ -25,6 +24,7 @@ import UserManagement from "./pages/Dashboard/Admin/UserManagement.jsx";
 import AddUserForm from "./pages/Dashboard/Admin/AddUserForm.jsx";
 import { getUserDetails } from "./services/operations/authAPIs.js";
 import UpgradePlan from "./pages/Dashboard/UpgradePlan.jsx";
+import Projects from "./pages/Dashboard/Projects.jsx";
 
 // Layout for Dashboard pages ONLY
 const DashboardLayout = ({ children }) => (
@@ -141,14 +141,7 @@ function App() {
           </OpenRoute>
         }
       />
-      {/* <Route
-        path="/signup"
-        element={
-          <OpenRoute>
-            <Signup />
-          </OpenRoute>
-        }
-      /> */}
+
       <Route
         path="/forgot-password"
         element={
@@ -232,6 +225,18 @@ function App() {
           <ProtectedRoute>
             <DashboardLayout>
               <APITesting />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* --- /projects Route --- */}
+      <Route
+        path="/projects"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <Projects/>
             </DashboardLayout>
           </ProtectedRoute>
         }

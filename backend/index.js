@@ -13,6 +13,7 @@ require("dotenv").config();
 const db = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const payRoute = require("./routes/paymentRoute")
+const projectRoute = require("./routes/projectRoutes")
 const subsRoute = require("./routes/subscriptionRoutes")
 const { errorHandler, notFound } = require("./middleware/errorMiddleware");
 
@@ -189,6 +190,7 @@ io.on("connection", (socket) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/payment", payRoute);
 app.use("/api/subscription", subsRoute);
+app.use("/api/projects", projectRoute);
 
 /**
  * Health check endpoint

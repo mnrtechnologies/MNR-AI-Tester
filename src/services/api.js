@@ -25,8 +25,11 @@ export const endpoints = {
 };
 
 export const subscriptionEndpoints = {
-   
-  // SIGNUP_API: `${BASE_URL}/subscription`,
 
   INCREMENT_TEST_USAGE_API: `${BASE_URL}/subscription/usage/increment`,
+};
+
+export const projectsEndpoints = {
+
+  GET_USER_SESSIONS_API: `${BASE_URL}/projects/get-user-sessions`,
 };

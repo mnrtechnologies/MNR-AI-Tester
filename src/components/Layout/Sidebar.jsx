@@ -1,6 +1,6 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
-import {Users, LayoutDashboard, Bot, Database, Smartphone, Globe } from "lucide-react";
+import {Users, LayoutDashboard,FolderKanban, Bot, Database, Smartphone, Globe } from "lucide-react";
 import { useSelector } from "react-redux";
 
 const Sidebar = () => {
@@ -9,6 +9,7 @@ const Sidebar = () => {
 
   const menuItems = [
     { name: "Dashboard", icon: <LayoutDashboard size={20} />, path: "/dashboard" },
+    { name: "Projects", icon: <FolderKanban size={20} />, path: "/projects" },
     { name: "Web Testing", icon: <Bot size={20} />, path: "/web-testing" },
     { name: "DB Testing", icon: <Database size={20} />, path: "/db-testing" },
     { name: "Mobile App Testing", icon: <Smartphone size={20} />, path: "/mobile-testing" },
