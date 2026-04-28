@@ -1,5 +1,5 @@
 const { default: mongoose } = require("mongoose");
-const Company = require("../models/company"); // Updated Import
+const Company = require("../models/Company"); 
 const User = require("../models/User");
 const bcrypt = require("bcrypt");
 
