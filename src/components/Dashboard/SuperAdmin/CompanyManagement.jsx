@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { Pencil, Trash2, Building, Plus, MapPin, Mail, X } from "lucide-react";
+import { Pencil, Trash2, Building, Plus, MapPin, Mail, X ,ArrowLeft} from "lucide-react";
 
 
 // --- REAL API IMPORTS ---
@@ -129,6 +129,13 @@ const CompanyManagement = () => {
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-4">
         <div>
+                  <button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="mt-1 mr-2 sm:mt-0 p-2.5 bg-white border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-xl transition-all shadow-sm shrink-0"
+          >
+            <ArrowLeft size={20} />
+          </button>
           <div className="inline-flex items-center gap-2 text-orange-600 bg-orange-50 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-3 border border-orange-100">
             <Building size={14} />
             <span>Organization Directory</span>

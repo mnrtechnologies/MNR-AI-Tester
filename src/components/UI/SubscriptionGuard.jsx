@@ -6,6 +6,12 @@ import { Link } from "react-router-dom";
 const SubscriptionGuard = ({ children, featureName = "this feature" }) => {
   const { user } = useSelector((state) => state.profile);
 
+  const isSuperAdmin = user?.role === 'super_admin';
+
+  if (isSuperAdmin) {
+    return <>{children}</>;
+  }
+
   const currentSub = user?.activeSubscription;
 
   // 1. FIRST check if the plan is expired or doesn't exist

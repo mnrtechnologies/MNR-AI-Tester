@@ -9,6 +9,7 @@ import {
   ShieldCheck,
   Mail,
   Building,
+  ArrowLeft
 } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -152,6 +153,13 @@ export default function UsersManagement() {
       {/* HEADER SECTION */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-2">
         <div>
+                  <button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="mt-1 mr-2 sm:mt-0 p-2.5 bg-white border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-xl transition-all shadow-sm shrink-0"
+          >
+            <ArrowLeft size={20} />
+          </button>
           <div className="inline-flex items-center gap-2 text-orange-600 bg-orange-50 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-3 border border-orange-100">
             <ShieldCheck size={14} />
             <span>User Matrix</span>
