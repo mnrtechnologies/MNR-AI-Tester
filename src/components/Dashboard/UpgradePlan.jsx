@@ -1,9 +1,5 @@
 import React, { useState } from "react";
-import axios from "axios";
 import toast from "react-hot-toast";
-import { useDispatch } from "react-redux";
-import { getUserDetails } from "../../services/operations/authAPIs"; 
-import { useNavigate } from "react-router-dom";
 import {
   CheckCircle2,
   Rocket,
@@ -16,95 +12,10 @@ import {
   Copy,
 } from "lucide-react";
 
-// 1. Added setIsVerifying as a parameter
-const makeDirectPayment = async (amount, plan, days, currency, navigate, dispatch, setIsVerifying) => {
-  try {
-    const { data } = await axios.post(
-      `${process.env.REACT_APP_AUTH_URL}/payment/user/order`,
-      { amount, currency },
-    );
-
-    if (!data.success) {
-      toast.error("Failed to create Razorpay order");
-      return;
-    }
-
-    const {
-      id: order_id,
-      amount: order_amount,
-      currency: order_currency,
-    } = data.data;
-
-    const options = {
-      key: process.env.REACT_APP_RAZORPAY_KEY_ID,
-      amount: order_amount,
-      currency: order_currency,
-      name: "MNR Technologies",
-      description: `${plan.name} Plan Subscription`,
-      order_id: order_id,
-      handler: async function (response) {
-        // 2. Start the loading overlay
-        setIsVerifying(true);
-        
-        try {
-          const token = JSON.parse(localStorage.getItem("token"));
-          const verifyRes = await axios.post(
-            `${process.env.REACT_APP_AUTH_URL}/payment/user/verify`,
-            {
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-              plan: plan.name?.toLowerCase(),
-              days: days,
-              amount: amount,
-              currency: currency,
-            },
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            },
-          );
-
-          if (verifyRes.data.success) {
-            toast.success("Payment verified successfully!");
-            await dispatch(getUserDetails());
-            navigate("/dashboard");
-          } else {
-            toast.error("Payment verification failed!");
-            navigate("/dashboard");
-          }
-        } catch (error) {
-          console.error("Verification error:", error);
-          toast.error("An error occurred during verification.");
-          navigate("/dashboard");
-        } finally {
-          // 3. Stop the loading overlay once API is done
-          setIsVerifying(false);
-        }
-      },
-      theme: {
-        color: "#f97316",
-      },
-    };
-
-    const rzp = new window.Razorpay(options);
-    rzp.open();
-  } catch (error) {
-    console.error(error);
-    toast.error("Something went wrong while processing payment.");
-  }
-};
-
 const UpgradePlan = () => {
   const [isAnnual, setIsAnnual] = useState(false);
   const [currency, setCurrency] = useState("INR");
   const [showModal, setShowModal] = useState(false);
-  // 4. Added state for the verification overlay
-  const [isVerifying, setIsVerifying] = useState(false);
-  
-  const navigate = useNavigate();
-  const dispatch = useDispatch();
 
   const handleCopyEmail = () => {
     navigator.clipboard.writeText("sales@mnrtechnologies.com");
@@ -175,26 +86,9 @@ const UpgradePlan = () => {
     },
   ];
 
-  const handleAction = (plan) => {
-    if (plan.isDemo || plan.isCustom) {
-      setShowModal(true);
-      return;
-    }
-
-    const currentPrice = isAnnual
-      ? plan.semiAnnualPrice[currency]
-      : plan.monthlyPrice[currency];
-
-    if (currentPrice === 0) {
-      toast.success("Trial started successfully!");
-      navigate("/dashboard");
-      return;
-    }
-
-    const days = isAnnual ? 180 : 30;
-
-    // 5. Pass setIsVerifying into the payment function
-    makeDirectPayment(currentPrice, plan, days, currency, navigate, dispatch, setIsVerifying);
+  // Simply show the modal for all plans
+  const handleAction = () => {
+    setShowModal(true);
   };
 
   return (
@@ -356,7 +250,7 @@ const UpgradePlan = () => {
 
               {plan.buttonText && (
                 <button
-                  onClick={() => handleAction(plan)}
+                  onClick={() => handleAction()}
                   className={`w-full py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all duration-200
                   ${
                     plan.highlighted
@@ -420,17 +314,6 @@ const UpgradePlan = () => {
                 Copy
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* 6. VERIFICATION LOADING OVERLAY */}
-      {isVerifying && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-          <div className="bg-white p-8 rounded-3xl shadow-2xl flex flex-col items-center gap-5 max-w-sm w-full animate-in zoom-in-95 duration-200">
-             <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-             <p className="text-lg font-bold text-slate-900">Payment is verifying......</p>
-             <p className="text-sm text-slate-500 text-center">Please do not close or refresh this window.</p>
           </div>
         </div>
       )}

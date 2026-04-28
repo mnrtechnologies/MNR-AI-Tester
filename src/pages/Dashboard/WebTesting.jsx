@@ -1866,6 +1866,7 @@ function PhaseValidationMongoDB({
                 "cyan",
               );
             }
+            
 
             ws.close();
             wsRef.current = null;

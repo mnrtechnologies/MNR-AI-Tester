@@ -16,13 +16,23 @@ const Sidebar = () => {
     { name: "API Testing", icon: <Globe size={20} />, path: "/api-testing" },
   ];
 
-  if (user?.role === "Admin") {
+  if (user?.role === "company_admin") {
     menuItems.push({
-      name: "User Management",
+      name: "Admin Portal",
       icon: <Users size={20} />,
-      path: "/admin/user-management",
+      path: "/organization-admin-dashboard",
     });
   }
+
+    if (user?.role === "super_admin") {
+    menuItems.push({
+      name: "Super Admin Portal",
+      icon: <Users size={20} />,
+      path: "/dashboard/super-admin",
+    });
+  }
+
+  
 
   return (
     <aside className="w-64 border-r bg-white h-[calc(100vh-64px)] overflow-y-auto">

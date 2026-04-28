@@ -13,7 +13,6 @@ const ensureSocketConnected = () => {
 
 const {
   LOGIN_API,
-  SIGNUP_API,
 
   RESETPASSTOKEN_API,
   RESET_PASSWORD_API,
@@ -26,6 +25,10 @@ const {
   GET_ALL_USERS_API,
   EDIT_USER_API,
   DELETE_USER_API,
+
+  GET_COMPANY_ALL_STAFF_API,
+  GET_COMPANY_USER_DETAILS_API,
+  GET_USER_BY_ID_API
 } = endpoints;
 
 //login
@@ -67,48 +70,6 @@ export function login(email, password, navigate) {
   };
 }
 
-//signup no auth require
-export function signUp(
-  name,
-  email,
-  password,
-  confirmPassword,
-  mobile,
-  navigate,
-) {
-  return async (dispatch) => {
-    const toastId = toast.loading("Loading...");
-    // dispatch(setLoading(true));
-    try {
-      if (password !== confirmPassword) {
-        throw new Error("Passwords do not match");
-      }
-
-      const response = await apiConnector("POST", SIGNUP_API, {
-        name,
-        email,
-        password,
-        confirmPassword,
-        mobile,
-      });
-
-      // console.log("SIGNUP API RESPONSE............", response);
-
-      if (!response.data.success) {
-        throw new Error(response.data.message);
-      }
-      toast.success("Signup Successful");
-      navigate("/login");
-    } catch (error) {
-      // console.log("SIGNUP API ERROR............",error);
-      toast.error(
-        error?.response?.data?.message || error?.message || "Signup Failed",
-      );
-    }
-    //spatch(setLoading(false));
-    toast.dismiss(toastId);
-  };
-}
 
 export function getUserDetails() {
   return async (dispatch) => {
@@ -293,16 +254,19 @@ export function register(
   state,
   city,
   role,
+  companyId, 
   navigate,
+  returnPath
 ) {
   return async (dispatch) => {
-    const toastId = toast.loading("Loading...");
-    // dispatch(setLoading(true));
+    const toastId = toast.loading("Processing Registration...");
     try {
       if (password !== confirmPassword) {
         throw new Error("Passwords do not match");
       }
+      
       const token = JSON.parse(localStorage.getItem("token"));
+      
       const response = await apiConnector(
         "POST",
         REGISTER_API,
@@ -316,26 +280,27 @@ export function register(
           state,
           city,
           role,
+          companyId, // <--- ADDED TO PAYLOAD
         },
         {
           Authorization: `Bearer ${token}`,
         },
       );
 
-      //  console.log("REGISTRATION API RESPONSE............", response);
-
       if (!response.data.success) {
         throw new Error(response.data.message);
       }
-      toast.success("Register Successful");
-      navigate("/admin/user-management");
+      
+      toast.success(response.data.message || "Register Successful");
+
+
+      navigate(returnPath || "/dashboard");
     } catch (error) {
-      // console.log("REGISRATION API ERROR............", error);
+      console.error("REGISTRATION API ERROR............", error);
       toast.error(
         error?.response?.data?.message || error?.message || "Signup Failed",
       );
     }
-    //spatch(setLoading(false));
     toast.dismiss(toastId);
   };
 }
@@ -423,5 +388,83 @@ export function deleteUser(userId, onSuccess) {
     }
     toast.dismiss(toastId);
     // dispatch(setLoading(false));
+  };
+}
+
+
+// get user id
+export function getUserById(userid) {
+  return async (dispatch) => {
+    //const toastId = toast.loading("Loading...");
+    dispatch(setLoading(true));
+
+    try {
+      const response = await apiConnector("POST", GET_USER_BY_ID_API, {
+        userid,
+      });
+
+      if (!response.data.success) {
+        throw new Error(response.data.message);
+      }
+
+      return response.data.user;
+      //console.log("response",response)
+    } catch (error) {
+     // toast.error("Fail To Fetched");
+    }
+
+    //  toast.dismiss(toastId);
+    dispatch(setLoading(false));
+  };
+}
+
+// get all Company data
+export function getAllCompanyUsers() {
+  return async (dispatch) => {
+    const token = JSON.parse(localStorage.getItem("token"));
+    try {
+      const response = await apiConnector("GET", GET_COMPANY_USER_DETAILS_API, null, {
+        Authorization: `Bearer ${token}`,
+      });
+
+      if (!response.data.success) {
+        throw new Error(response.data.message);
+      }
+      
+      console.log("company users", response.data);
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching company users:", error);
+      toast.error(
+        error?.response?.data?.message ||
+          "Failed to fetch company users. Please login again."
+      );
+    }
+  };
+}
+
+// get company staff (and admins)
+export function getCompanyAllStaff() {
+  return async (dispatch) => {
+    try {
+      const token = JSON.parse(localStorage.getItem("token"));
+      
+      const response = await apiConnector("GET", GET_COMPANY_ALL_STAFF_API, null, {
+        Authorization: `Bearer ${token}`,
+      });
+      
+      if (!response.data.success) {
+        throw new Error(response.data.message);
+      }
+      
+      // Return the combined personnel roster, fallback to empty array if undefined
+      return response.data.staff || []; 
+      
+    } catch (error) {
+      console.error("GET_COMPANY_ALL_STAFF_API ERROR:", error?.response?.data || error.message);
+      // If you are using react-hot-toast, you can uncomment the line below to alert the user
+      // toast.error(error?.response?.data?.message || "Failed to fetch company personnel");
+      return []; // Always return an array to prevent .map() crashes in the UI
+    }
   };
 }

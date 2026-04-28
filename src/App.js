@@ -20,11 +20,21 @@ import { useDispatch } from "react-redux";
 import APITesting from "./pages/Dashboard/APITesting.jsx";
 import MobileAppTesting from "./pages/Dashboard/MobileAppTesting.jsx";
 import DBTesting from "./pages/Dashboard/DBTesting.jsx";
-import UserManagement from "./pages/Dashboard/Admin/UserManagement.jsx";
-import AddUserForm from "./pages/Dashboard/Admin/AddUserForm.jsx";
 import { getUserDetails } from "./services/operations/authAPIs.js";
-import UpgradePlan from "./pages/Dashboard/UpgradePlan.jsx";
 import Projects from "./pages/Dashboard/Projects.jsx";
+import SuperAdmin from "./pages/Dashboard/SuperAdmin/SuperAdmin.jsx";
+import Footer from "./components/UI/Footer.jsx";
+import UsersManagement from "./components/Dashboard/SuperAdmin/UsersManagement.jsx";
+import UsersAddForm from "./components/Dashboard/SuperAdmin/AddUsersForm.jsx";
+import SubscriptionManagement from "./components/Dashboard/SuperAdmin/SubscriptionManagement.jsx";
+import AddCompanyPage from "./components/Dashboard/SuperAdmin/AddCompanyPage.jsx";
+import CompanyManagement from "./components/Dashboard/SuperAdmin/CompanyManagement.jsx";
+import CompanyDetails from "./components/Dashboard/SuperAdmin/CompanyDetails.jsx";
+import CompanyAdminDashboard from "./pages/Dashboard/CompanyAdmin/CompanyAdminDashboard.jsx";
+import CompanyStaffManagement from "./components/Dashboard/CompanyAdmin/CompanyStaffManagement.jsx";
+import AddStaff from "./components/Dashboard/CompanyAdmin/AddStaff.jsx";
+import CompanySubscription from "./components/Dashboard/CompanyAdmin/CompanySubscription.jsx";
+import UpgradePlan from "./components/Dashboard/UpgradePlan.jsx";
 
 // Layout for Dashboard pages ONLY
 const DashboardLayout = ({ children }) => (
@@ -67,8 +77,7 @@ const OpenRoute = ({ children }) => {
 };
 
 // Admin Route helper ---
-// --- UPDATED: Admin Route helper ---
-const AdminRoute = ({ children }) => {
+const CompanyAdminRoute = ({ children }) => {
   const { user } = useSelector((state) => state.profile);
   const hasToken = localStorage.getItem("token");
 
@@ -85,13 +94,46 @@ const AdminRoute = ({ children }) => {
   }
 
   // 2. Once the user data is loaded, check if they are an Admin.
-  if (currentRole === "Admin") {
+  if (currentRole === "company_admin") {
     return children;
   }
 
   // 3. If they are completely loaded and NOT an Admin, redirect them.
   return <Navigate to="/dashboard" replace />;
 };
+const SuperAdminRoute = ({ children }) => {
+  const { user } = useSelector((state) => state.profile);
+  const hasToken = localStorage.getItem("token");
+
+  const currentRole = user?.role;
+
+  // 1. If we don't have user data yet, but a token exists, we are likely still fetching the profile.
+  // Show a loading state instead of immediately kicking them out.
+  if (!user && hasToken) {
+    return (
+      <div className="flex h-screen items-center justify-center text-blue-900 font-semibold">
+        Loading...
+      </div>
+    );
+  }
+
+  // 2. Once the user data is loaded, check if they are an Admin.
+  if (currentRole === "super_admin") {
+    return children;
+  }
+
+  // 3. If they are completely loaded and NOT an Admin, redirect them.
+  return <Navigate to="/dashboard" replace />;
+};
+// Layout for Admin pages to keep the Footer at the bottom
+const AdminLayout = ({ children }) => (
+  <div className="flex flex-col min-h-screen bg-slate-50">
+    <AppHeader />
+    {/* flex-grow pushes the footer to the bottom, pb-6 adds breathing room */}
+    <main className="flex-grow pb-6">{children}</main>
+    <Footer />
+  </div>
+);
 
 function App() {
   const navigate = useNavigate();
@@ -159,13 +201,93 @@ function App() {
         }
       />
 
+      {/* Super Admin */}
+
       <Route
-        path="/upgrade-plan"
+        path="/dashboard/super-admin"
         element={
           <ProtectedRoute>
-           <AppHeader/>
-              <UpgradePlan />
-           
+            <SuperAdminRoute>
+              <AdminLayout>
+                <SuperAdmin />
+              </AdminLayout>
+            </SuperAdminRoute>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/dashboard/super-admin/users-management"
+        element={
+          <ProtectedRoute>
+            <SuperAdminRoute>
+              <AdminLayout>
+                <UsersManagement />
+              </AdminLayout>
+            </SuperAdminRoute>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/dashboard/super-admin/users-management/add-users"
+        element={
+          <ProtectedRoute>
+            <SuperAdminRoute>
+              <AdminLayout>
+                <UsersAddForm />
+              </AdminLayout>
+            </SuperAdminRoute>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/dashboard/super-admin/subscriptions"
+        element={
+          <ProtectedRoute>
+            <SuperAdminRoute>
+              <AdminLayout>
+                <SubscriptionManagement />
+              </AdminLayout>
+            </SuperAdminRoute>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/dashboard/super-admin/companies-management"
+        element={
+          <ProtectedRoute>
+            <SuperAdminRoute>
+              <AdminLayout>
+                <CompanyManagement />
+              </AdminLayout>
+            </SuperAdminRoute>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/dashboard/super-admin/companies-management/add-company"
+        element={
+          <ProtectedRoute>
+            <SuperAdminRoute>
+              <AdminLayout>
+                <AddCompanyPage />
+              </AdminLayout>
+            </SuperAdminRoute>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/dashboard/super-admin/companies-management/:id"
+        element={
+          <ProtectedRoute>
+            <SuperAdminRoute>
+              <AdminLayout>
+                <CompanyDetails />
+              </AdminLayout>
+            </SuperAdminRoute>
           </ProtectedRoute>
         }
       />
@@ -236,7 +358,7 @@ function App() {
         element={
           <ProtectedRoute>
             <DashboardLayout>
-              <Projects/>
+              <Projects />
             </DashboardLayout>
           </ProtectedRoute>
         }
@@ -266,30 +388,66 @@ function App() {
         }
       />
 
-      {/* --- Admin Route --- */}
       <Route
-        path="/admin/user-management"
+        path="/upgrade-plan"
         element={
           <ProtectedRoute>
-            <AdminRoute>
-              <DashboardLayout>
-                <UserManagement />
-              </DashboardLayout>
-            </AdminRoute>
+            <AppHeader />
+            <UpgradePlan />
           </ProtectedRoute>
         }
       />
 
       {/* --- Admin Route --- */}
       <Route
-        path="/admin/user-management/add-user"
+        path="/organization-admin-dashboard"
         element={
           <ProtectedRoute>
-            <AdminRoute>
-              <DashboardLayout>
-                <AddUserForm />
-              </DashboardLayout>
-            </AdminRoute>
+            <CompanyAdminRoute>
+              <AdminLayout>
+                <CompanyAdminDashboard />
+              </AdminLayout>
+            </CompanyAdminRoute>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/organization-admin-dashboard/staff-management"
+        element={
+          <ProtectedRoute>
+            <CompanyAdminRoute>
+              <AdminLayout>
+                {" "}
+                <CompanyStaffManagement />
+              </AdminLayout>
+            </CompanyAdminRoute>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/organization-admin-dashboard/staff-management/add-staff"
+        element={
+          <ProtectedRoute>
+            <CompanyAdminRoute>
+              <AdminLayout>
+                <AddStaff />
+              </AdminLayout>
+            </CompanyAdminRoute>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/organization-admin-dashboard/organization-profile"
+        element={
+          <ProtectedRoute>
+            <CompanyAdminRoute>
+              <AdminLayout>
+                <CompanySubscription />
+              </AdminLayout>
+            </CompanyAdminRoute>
           </ProtectedRoute>
         }
       />

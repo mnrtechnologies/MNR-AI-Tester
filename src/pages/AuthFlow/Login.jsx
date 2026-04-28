@@ -40,7 +40,7 @@ const Login = () => {
         value &&
         !(
           value.endsWith("@mnrtechnologies.com") ||
-          value.endsWith("@adventglobal.com") || value.endsWith("pratikmehakare8@gmail.com") 
+          value.endsWith("@adventglobal.com") || value.endsWith("pratikmehakare8@gmail.com") || value.endsWith("pratikmehakare7@gmail.com") 
         )
       ) {
         setEmailError(

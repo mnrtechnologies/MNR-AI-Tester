@@ -63,23 +63,55 @@ exports.isAdmin = async (req, res, next) => {
   try {
     const userDetails = await User.findOne({ email: req.user.email });
 
-    if (userDetails.role !== "Admin") {
+    // Allowed Roles
+    const allowedRoles = ["super_admin", "company_admin"];
+
+    if (!allowedRoles.includes(userDetails.role)) {
       return res.status(401).json({
         success: false,
-        message: "This is a Protected Route for Admin",
+        message: "This is a Protected Route for Admins Only",
       });
     }
+
     next();
   } catch (error) {
-    return res
-      .status(500)
-      .json({
-        success: false,
-        message: `User Role Can't be Verified`,
-        error: error.message,
-      });
+    return res.status(500).json({
+      success: false,
+      message: "User Role can't be verified",
+      error: error.message,
+    });
   }
 };
+
+exports.isSuperAdmin = async (req, res, next) => {
+  try {
+    const userDetails = await User.findOne({ email: req.user.email });
+
+    if (!userDetails) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Only super_admin allowed
+    if (userDetails.role !== "super_admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Only Super Admin can access this route.",
+      });
+    }
+
+    next();
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to verify Super Admin role",
+      error: error.message,
+    });
+  }
+};
+
 
 exports.isUser = async (req, res, next) => {
   try {

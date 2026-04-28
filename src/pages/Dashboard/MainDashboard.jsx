@@ -1,399 +1,162 @@
-import React, { useState, useEffect } from "react";
-import Calendar from "react-calendar";
-import { useDispatch } from "react-redux"; // Added useDispatch
-import { getAllUsers } from "../../services/operations/authAPIs"; // Import your Redux action
-import "react-calendar/dist/Calendar.css";
+import React from "react";
+import { useNavigate } from "react-router-dom";
 import {
-  Users,
-  LayoutGrid,
-  Network,
-  BarChart3,
-  PieChart,
-  History,
-  Key,
-  Trash2,
-  Edit3,
+  Globe,
+  Smartphone,
+  Database,
+  Activity,
+  FolderGit2,
   ArrowRight,
+  ShieldCheck,
+  Code2,
+  TerminalSquare
 } from "lucide-react";
 
 const MainDashboard = () => {
-  const dispatch = useDispatch();
-  const [date, setDate] = useState(new Date());
-  const [onboardedCount, setOnboardedCount] = useState(0);
-  const [hoveredCard, setHoveredCard] = useState(null);
-  const [projects, setProjects] = useState([]);
-  const [organizations, setOrganizations] = useState([]);
+  const navigate = useNavigate();
 
-  // --- REFACTORED: Using getAllUsers from Redux Operations ---
-  useEffect(() => {
-    const fetchUsers = async () => {
-      // getAllUsers handles token, apiConnector, and error handling internally
-      const userData = await dispatch(getAllUsers());
-     // console.log("userdata",userData)
-      
-      if (userData) {
-    
-        setOnboardedCount(userData.length);
-      }
-    };
-
-    fetchUsers();
-  }, [dispatch]);
-
-  // Handle Projects and Orgs (Static for now based on your previous code)
-  useEffect(() => {
-    const storedTarget = localStorage.getItem("targetUrl") || sessionStorage.getItem("targetUrl");
-    if (storedTarget) {
-      setProjects([{ url: storedTarget }]);
-    }
-    setOrganizations([{ name: "MNR Technologies Pvt. Ltd." }]);
-  }, []);
-
-  const topStats = [
+  const testingModules = [
     {
-      key: "users",
-      label: "On Boarded Users",
-      value: onboardedCount,
+      title: "Web Testing",
+      desc: "Configure and run end-to-end automated tests for web applications across multiple browsers.",
+      path: "/web-testing",
+      color: "bg-blue-500",
+      lightBg: "bg-blue-50",
+      iconColor: "text-blue-500",
+      icon: <Globe size={28} />,
+    },
+    {
+      title: "API Testing",
+      desc: "Validate REST and GraphQL endpoints, check status codes, and monitor response schemas.",
+      path: "/api-testing",
       color: "bg-orange-500",
-      icon: <Users size={16} />,
+      lightBg: "bg-orange-50",
+      iconColor: "text-orange-500",
+      icon: <Activity size={28} />,
     },
     {
-      key: "projects",
-      label: "Projects",
-      value: projects.length,
-      color: "bg-orange-300",
-      icon: <LayoutGrid size={16} />,
+      title: "Mobile Testing",
+      desc: "Execute automated UI and functional tests for iOS and Android applications.",
+      path: "/mobile-testing",
+      color: "bg-emerald-500",
+      lightBg: "bg-emerald-50",
+      iconColor: "text-emerald-500",
+      icon: <Smartphone size={28} />,
     },
     {
-      key: "orgs",
-      label: "Organizations",
-      value: organizations.length,
-      color: "bg-orange-200",
-      icon: <Network size={16} />,
+      title: "DB Testing",
+      desc: "Verify data integrity, schema consistency, and execute automated migration checks.",
+      path: "/db-testing",
+      color: "bg-purple-500",
+      lightBg: "bg-purple-50",
+      iconColor: "text-purple-500",
+      icon: <Database size={28} />,
     },
   ];
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-12">
-      {/* --- TOP METRIC CARDS --- */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {topStats.map((stat, i) => (
-          <div
-            key={i}
-            onMouseEnter={() => stat.key && setHoveredCard(stat.key)}
-            onMouseLeave={() => setHoveredCard(null)}
-            className="relative bg-white p-4 rounded-xl shadow-sm border border-orange-100 flex justify-between items-center transition-all hover:shadow-md"
-          >
-            <div>
-              <p className="text-2xl font-bold text-slate-800">{stat.value}</p>
-              <p className="text-xs text-slate-500 font-medium">{stat.label}</p>
-            </div>
-
-            <div className={`p-2 rounded-lg text-white ${stat.color}`}>
-              {stat.icon}
-            </div>
-
-     
-            
-            {/* ... Other Hover Logic for projects/orgs remains the same ... */}
-          </div>
-        ))}
-      </div>
-
+    <div className="max-w-7xl mx-auto space-y-8 pb-12 pt-6 px-4 sm:px-6 lg:px-8 font-sans">
+      
       {/* --- BANNER HERO SECTION --- */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white rounded-2xl p-8 border border-orange-100 shadow-sm flex items-center justify-between relative overflow-hidden">
-          <div className="z-10 max-w-md">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-              Built by MNR Technologies Global Pvt. Ltd.
-            </p>
-            <h2 className="text-3xl font-bold text-slate-900 mb-3">
-              <span className="font-bold text-blue-900 text-2xl">MNR</span>{" "}
-              <span className="font-bold text-orange-500 text-3xl">AT</span>{" "}
-              Dashboard
-            </h2>
-            <p className="text-sm text-slate-500 leading-relaxed">
-              Crafted with precision and innovation, this solution is brought to
-              you by MNR Technologies Global Pvt. Ltd.
-            </p>
+      <div className="bg-gradient-to-br from-white to-orange-50/50 rounded-3xl p-8 border border-orange-100 shadow-sm flex flex-col md:flex-row items-center justify-between relative overflow-hidden">
+        <div className="z-10 max-w-xl mb-6 md:mb-0">
+          <div className="inline-flex items-center gap-2 text-orange-600 bg-orange-100 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-4">
+            <ShieldCheck size={14} />
+            <span>Autonomous QA Platform</span>
           </div>
-
-          <div className="w-32 h-32 bg-orange-50 rounded-2xl flex items-center justify-center p-4">
-            <div className="text-orange-600 font-black text-xl italic tracking-tighter">
-              MNR<span className="text-orange-400 text-2xl ">AT</span>
-            </div>
-          </div>
+          <h2 className="text-3xl sm:text-4xl font-black text-slate-900 mb-4 tracking-tight">
+            Welcome to <span className="text-orange-500">MNR AT</span>
+          </h2>
+          <p className="text-base text-slate-500 leading-relaxed font-medium">
+            Select a testing module below to configure your environments, write test scripts, and launch automated executions. Manage all your configurations in the Projects section.
+          </p>
         </div>
 
-        <div className="relative rounded-2xl overflow-hidden group shadow-lg">
-          <img
-            src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=800&q=80"
-            alt="Autopilot"
-            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent p-6 flex flex-col justify-end">
-            <h3 className="text-xl font-bold text-white mb-2">MNR AT Autopilot</h3>
-            <button className="flex items-center gap-2 bg-white/20 backdrop-blur-md text-white px-4 py-2 rounded-lg text-xs font-semibold hover:bg-white/30 transition-all w-fit">
-              Explore Auto Pilot <ArrowRight size={14} />
+        {/* Decorative Graphic */}
+        <div className="w-32 h-32 bg-white rounded-3xl border border-orange-100 shadow-lg flex items-center justify-center p-4 relative z-10 shrink-0 transform rotate-3 hover:rotate-0 transition-transform">
+          <div className="text-slate-800 font-black text-2xl tracking-tighter text-center leading-tight">
+            MNR<br/><span className="text-orange-500 text-3xl">AT</span>
+          </div>
+        </div>
+        
+        {/* Decorative blur */}
+        <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-orange-400/10 blur-3xl rounded-full pointer-events-none"></div>
+      </div>
+
+      {/* --- YOUR PROJECTS SECTION --- */}
+      <div>
+        <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2 mb-4">
+          <span className="text-orange-500">✦</span> Workspace
+        </h3>
+        
+        <div 
+          onClick={() => navigate("/projects")}
+          className="bg-slate-900 rounded-2xl p-6 lg:p-8 text-white shadow-xl relative overflow-hidden group cursor-pointer border border-slate-800 transition-all hover:shadow-orange-500/10 hover:border-orange-500/30"
+        >
+          {/* Background Accents */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-orange-500/20 to-transparent rounded-bl-full pointer-events-none group-hover:scale-110 transition-transform duration-700"></div>
+          <div className="absolute -bottom-8 -right-8 opacity-10 group-hover:opacity-20 transition-opacity duration-500">
+            <FolderGit2 size={120} />
+          </div>
+
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="flex items-start gap-5">
+              <div className="p-4 bg-white/10 rounded-2xl text-orange-400 backdrop-blur-sm">
+                <FolderGit2 size={32} />
+              </div>
+              <div>
+                <h3 className="text-2xl font-black text-white mb-2">Your Projects</h3>
+                <p className="text-slate-400 text-sm max-w-md">
+                  View and manage all your active test suites, environment variables, and saved automation scripts.
+                </p>
+              </div>
+            </div>
+            
+            <button className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-xl text-sm font-bold transition-colors shrink-0 w-fit">
+              Open Workspace <ArrowRight size={16} />
             </button>
           </div>
         </div>
       </div>
 
-      {/* --- CHARTS SECTION --- */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <DynamicMonthlyChart />
-        <DynamicTraffic />
-      </div>
-
-      {/* --- CALENDAR & LOGS --- */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="bg-orange-400 rounded-2xl p-4 text-white shadow-lg custom-calendar-container">
-          <Calendar
-            onChange={setDate}
-            value={date}
-            className="border-none bg-transparent text-white w-full"
-            next2Label={null}
-            prev2Label={null}
-          />
-        </div>
-
-        <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-orange-100">
-          <h3 className="font-medium text-slate-700 mb-6 border-b pb-4 flex items-center gap-2">
-            <span>📚</span> Activity Log
-          </h3>
-          <div className="space-y-6">
-            <ActivityItem bg="bg-orange-500" icon={<Key size={14} />} title="Super Admin logged in" time="03:30 PM" />
-            <ActivityItem bg="bg-orange-400" icon={<Edit3 size={14} />} title="Updated user permissions" time="08:00 PM" />
-            <ActivityItem bg="bg-red-500" icon={<Trash2 size={14} />} title="Deleted account" time="02:45 PM" />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const ActivityItem = ({ icon, bg, title, time }) => (
-  <div className="flex items-start gap-4">
-    <div
-      className={`p-2 rounded-full ${bg} text-white shrink-0 flex items-center justify-center`}
-    >
-      {icon}
-    </div>
-    <div className="flex-1">
-      <h4 className="text-sm font-medium text-slate-800">{title}</h4>
-      <p className="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
-        <History size={10} /> {time}
-      </p>
-    </div>
-  </div>
-);
-
-const DynamicMonthlyChart = () => {
-  const [data, setData] = useState([
-    { coverage: 48, defects: 22, saved: 30 },
-    { coverage: 55, defects: 30, saved: 42 },
-    { coverage: 62, defects: 35, saved: 50 },
-    { coverage: 71, defects: 44, saved: 60 },
-    { coverage: 78, defects: 52, saved: 68 },
-    { coverage: 86, defects: 63, saved: 78 },
-    { coverage: 92, defects: 70, saved: 90 },
-    { coverage: 97, defects: 85, saved: 100 },
-  ]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setData((prev) =>
-        prev.map((m) => ({
-          coverage: Math.min(
-            98,
-            Math.max(45, m.coverage + (Math.random() * 3 - 1.5)),
-          ),
-          defects: Math.max(
-            15,
-            Math.min(90, m.defects + (Math.random() * 6 - 3)),
-          ),
-          saved: Math.min(
-            95,
-            Math.max(25, m.saved + (Math.random() * 3 - 1.5)),
-          ),
-        })),
-      );
-    }, 3500);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  return (
-    <div className="lg:col-span-2 bg-[#1e293b] rounded-2xl p-6 text-white shadow-xl">
-      <h3 className="flex items-center gap-2 font-medium mb-6 text-sm">
-        <BarChart3 size={18} className="text-orange-400" />
-        Autopilot AI Coverage • Defects Detected • Time Saved
-      </h3>
-
-      <div className="relative h-56">
-        <div className="absolute inset-0 flex flex-col justify-between text-[10px] text-slate-600">
-          {[100, 75, 50, 25, 0].map((v, i) => (
-            <div key={i} className="border-t border-slate-700/40" />
-          ))}
-        </div>
-
-        <div className="h-full flex items-end justify-between gap-6 px-2 relative overflow-x-auto">
-          {data.map((month, i) => (
+      {/* --- TESTING MODULES GRID --- */}
+      <div>
+        <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2 mb-4 mt-8">
+          <span className="text-orange-500">✦</span> Testing Modules
+        </h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {testingModules.map((module, i) => (
             <div
               key={i}
-              className="flex flex-col items-center gap-2 min-w-[70px]"
+              onClick={() => navigate(module.path)}
+              className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden group cursor-pointer hover:shadow-md hover:border-slate-300 transition-all duration-300 flex flex-col"
             >
-              <div className="flex gap-2 items-end w-full justify-center h-40">
-                <div className="flex flex-col items-center justify-end h-full">
-                  <div
-                    className="w-4 bg-emerald-500 rounded-md transition-all duration-700"
-                    style={{ height: `${month.coverage}%` }}
-                  />
-                  <span className="text-[9px] text-emerald-400 mt-1">
-                    {Math.round(month.coverage)}%
-                  </span>
+              {/* Corner Accent */}
+              <div className={`absolute top-0 right-0 w-24 h-24 ${module.lightBg} rounded-bl-full -z-0 group-hover:scale-125 transition-transform duration-500`}></div>
+              
+              <div className="relative z-10 flex items-start justify-between mb-4">
+                <div className={`p-3 rounded-xl bg-white border border-slate-100 shadow-sm ${module.iconColor}`}>
+                  {module.icon}
                 </div>
-
-                <div className="flex flex-col items-center justify-end h-full">
-                  <div
-                    className="w-4 bg-orange-500 rounded-md transition-all duration-700"
-                    style={{ height: `${month.defects}%` }}
-                  />
-                  <span className="text-[9px] text-orange-300 mt-1">
-                    {Math.round(month.defects)}
-                  </span>
-                </div>
-
-                <div className="flex flex-col items-center justify-end h-full">
-                  <div
-                    className="w-4 bg-blue-400 rounded-md transition-all duration-700"
-                    style={{ height: `${month.saved}%` }}
-                  />
-                  <span className="text-[9px] text-blue-300 mt-1">
-                    {Math.round(month.saved)}%
-                  </span>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center bg-slate-50 text-slate-400 group-hover:${module.color} group-hover:text-white transition-colors`}>
+                  <ArrowRight size={16} />
                 </div>
               </div>
 
-              <span className="text-[10px] text-slate-400 font-bold mt-2">
-                {["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG"][i]}
-              </span>
+              <div className="relative z-10 flex-grow">
+                <h4 className="text-xl font-bold text-slate-800 mb-2 group-hover:text-slate-900 transition-colors">
+                  {module.title}
+                </h4>
+                <p className="text-sm text-slate-500 leading-relaxed">
+                  {module.desc}
+                </p>
+              </div>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="flex gap-6 mt-5 text-xs text-slate-400">
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-3 bg-emerald-500 rounded-sm" />
-          AI Coverage
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-3 bg-orange-500 rounded-sm" />
-          Defects Detected
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-3 bg-blue-400 rounded-sm" />
-          Time Saved
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const DynamicTraffic = () => {
-  const [traffic, setTraffic] = useState({
-    organic: 46,
-    direct: 32,
-    referral: 14,
-    paid: 8,
-  });
-
-  const total =
-    traffic.organic + traffic.direct + traffic.referral + traffic.paid;
-
-  const organic = (traffic.organic / total) * 100;
-  const direct = (traffic.direct / total) * 100;
-  const referral = (traffic.referral / total) * 100;
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setTraffic({
-        organic: 40 + Math.floor(Math.random() * 20),
-        direct: 25 + Math.floor(Math.random() * 15),
-        referral: 10 + Math.floor(Math.random() * 10),
-        paid: 5 + Math.floor(Math.random() * 10),
-      });
-    }, 4000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  return (
-    <div className="bg-white rounded-2xl p-6 shadow-sm border border-orange-100 flex flex-col items-center">
-      <div className="w-full mb-6 flex items-center gap-2">
-        <PieChart size={18} className="text-orange-500" />
-        <h3 className="font-semibold text-slate-700 text-sm">
-          Automation Traffic Sources
-        </h3>
-      </div>
-
-      <div className="relative w-44 h-44">
-        <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
-          <circle
-            cx="18"
-            cy="18"
-            r="16"
-            fill="none"
-            className="stroke-slate-100"
-            strokeWidth="4"
-          />
-
-          <circle
-            cx="18"
-            cy="18"
-            r="16"
-            fill="none"
-            className="stroke-orange-600 transition-all duration-700"
-            strokeWidth="4"
-            strokeDasharray={`${organic} 100`}
-          />
-
-          <circle
-            cx="18"
-            cy="18"
-            r="16"
-            fill="none"
-            className="stroke-orange-400 transition-all duration-700"
-            strokeWidth="4"
-            strokeDasharray={`${direct} 100`}
-            strokeDashoffset={-organic}
-          />
-
-          <circle
-            cx="18"
-            cy="18"
-            r="16"
-            fill="none"
-            className="stroke-orange-200 transition-all duration-700"
-            strokeWidth="4"
-            strokeDasharray={`${referral} 100`}
-            strokeDashoffset={-(organic + direct)}
-          />
-        </svg>
-
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <p className="text-xl font-bold text-slate-800">
-            {organic.toFixed(0)}%
-          </p>
-          <p className="text-xs text-slate-400">Organic</p>
-        </div>
-      </div>
-
-      <div className="mt-5 text-xs text-slate-500 space-y-1">
-        <p>Organic • Direct • Referral • Paid</p>
-      </div>
     </div>
   );
 };

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { logout, getUserDetails } from "../../services/operations/authAPIs";
-import { Settings, User, ChevronDown, Key, LogOut, Crown } from "lucide-react";
+import { Settings, User, ChevronDown, Key, LogOut } from "lucide-react";
 import logo from "../../assets/MNR_AT.png";
 
 const AppHeader = () => {
@@ -64,18 +64,6 @@ const AppHeader = () => {
     }
   };
 
-  const getLatestSubscription = (user) => {
-    if (user?.subscription?.length > 0) {
-      return user.subscription[user.subscription.length - 1];
-    }
-    return null;
-  };
-
-  const latestSub = getLatestSubscription(user);
-  
-  // Check if the plan is currently active
-  const hasActivePlan = latestSub?.status === "active" && latestSub?.plan;
-
   return (
     <header className="h-16 border-b bg-white flex items-center justify-between px-6 sticky top-0 z-50">
       <div className="flex items-center gap-8">
@@ -98,28 +86,7 @@ const AppHeader = () => {
 
       <div className="flex items-center gap-4 md:gap-6">
         
-        {/* Subscription Status & Upgrade Area */}
-        <div className="flex items-center gap-3">
-          {hasActivePlan ? (
-            /* --- Show for PAID Users --- */
-            <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-2 rounded-full shadow-sm">
-              <Crown size={14} className="text-emerald-500" />
-              <span className="text-xs font-bold uppercase tracking-wider">
-                {latestSub.plan} Plan
-              </span>
-            </div>
-          ) : (
-            /* --- Show for Users with NO Active Plan --- */
-            <button
-              onClick={() => navigate("/upgrade-plan")}
-              className="flex items-center gap-2 bg-gradient-to-r from-orange-500 to-orange-400 text-white px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm hover:shadow-md hover:shadow-orange-500/20 transition-all hover:-translate-y-0.5"
-            >
-              <Crown size={14} />
-              <span className="hidden sm:inline">Upgrade Plan</span>
-              <span className="sm:hidden">Upgrade</span>
-            </button>
-          )}
-        </div>
+
 
         {/* Dropdown Container */}
         <div className="relative" ref={dropdownRef}>
@@ -158,16 +125,6 @@ const AppHeader = () => {
           {/* Dropdown Content */}
           {isOpen && (
             <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-100 rounded-xl shadow-2xl py-2 z-[60] animate-in fade-in slide-in-from-top-2 duration-200">
-              
-              {/* Active Plan Info */}
-              <div className="px-4 py-2 mb-1 border-b border-slate-50">
-                <p className="text-xs text-gray-500 truncate">
-                  Active Plan:{" "}
-                  <span className="font-bold text-[#012950]">
-                    {hasActivePlan ? latestSub.plan.toUpperCase() : "No Active Plan"}
-                  </span>
-                </p>
-              </div>
 
               <button
                 onClick={() => {

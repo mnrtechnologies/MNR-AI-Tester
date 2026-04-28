@@ -1,14 +1,37 @@
-import React from "react";
+import React, { useState } from "react";
+import { useDispatch } from "react-redux";
 import {
   Globe,
   Activity,
   ShieldCheck,
   Construction,
   Clock,
-  Send
+  Send,
+  Loader2 // Added for a loading spinner
 } from "lucide-react";
 
+// TODO: Update this import path to point to your actual file
+import { incrementTestUsage } from "../../services/operations/subsAPIs";
+
 const APITesting = () => {
+  const dispatch = useDispatch();
+  const [isTesting, setIsTesting] = useState(false);
+
+  const handleTestUsage = async () => {
+    setIsTesting(true);
+    
+    // Dispatch the thunk action and wait for the true/false response
+    const success = await dispatch(incrementTestUsage());
+    
+    if (success) {
+      console.log("Usage successfully incremented in Redux!");
+      // The toast.error is already handled inside the Redux action on failure,
+      // but you could add a toast.success here if desired.
+    }
+    
+    setIsTesting(false);
+  };
+
   const plannedFeatures = [
     {
       title: "Endpoint Monitoring",
@@ -45,15 +68,31 @@ const APITesting = () => {
             Automate REST and GraphQL endpoint testing. We're finalizing the tools you need to secure and monitor your backend infrastructure.
           </p>
 
+          {/* ACTION BUTTON */}
+          <button 
+           // onClick={handleTestUsage}
+            disabled={isTesting}
+            className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-white transition-all shadow-sm
+              ${isTesting 
+                ? 'bg-orange-400 cursor-not-allowed' 
+                : 'bg-orange-500 hover:bg-orange-600 active:scale-95'}`}
+          >
+            {isTesting ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <Send className="w-5 h-5" />
+            )}
+            {isTesting ? "Executing Test..." : "Run Manual API Test"}
+          </button>
         </div>
 
         {/* Graphical Placeholder */}
-        <div className="w-56 h-56 relative z-10 flex items-center justify-center">
+        <div className="w-56 h-56 relative z-10 flex items-center justify-center hidden md:flex">
           {/* Dashed outer circle */}
           <div className="absolute inset-0 border-2 border-dashed border-orange-200 rounded-full animate-[spin_10s_linear_infinite]"></div>
           {/* Inner circle */}
           <div className="absolute inset-4 bg-white border border-orange-100 rounded-full shadow-lg flex items-center justify-center">
-             <Globe className="text-orange-300" size={64} strokeWidth={1} />
+            <Globe className="text-orange-300" size={64} strokeWidth={1} />
           </div>
           {/* Floating badge */}
           <div className="absolute -top-2 right-4 bg-white px-3 py-2 rounded-lg shadow-md border border-slate-100 flex items-center gap-2">

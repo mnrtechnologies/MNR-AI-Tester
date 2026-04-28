@@ -5,6 +5,9 @@ const { signupEmail } = require("../mail/templates/signupEmail");
 const mailSender = require("../utils/mailSender");
 const crypto = require("crypto");
 const axios = require("axios");
+const Company = require("../models/Company");
+const Subscription = require("../models/Subscription");
+const mongoose = require("mongoose");
 require("dotenv").config();
 
 // const isValidEmail = (email) => {
@@ -15,9 +18,8 @@ require("dotenv").config();
 // Login controller for authenticating users
 exports.login = async (req, res) => {
   try {
-    // Destructure fields from the request body
     const { email, password } = req.body;
-    // Check if All Details are there or not
+
     if (!email || !password) {
       return res.status(403).send({
         success: false,
@@ -25,41 +27,31 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Find user with provided email
     const user = await User.findOne({ email });
 
-    // If user not found with provided email
     if (!user) {
-      // Return 401 Unauthorized status code with error message
       return res.status(401).json({
         success: false,
         message: `User is not Registered with Us Please SignUp to Continue`,
       });
     }
 
-    // Generate JWT token and Compare Password
     if (await bcrypt.compare(password, user.password)) {
-      /**
-       * STEP 1 — FORCE LOGOUT OLD DEVICE---------------------
-       */
-
-      const oldSocketId = global.userSockets[user._id.toString()];
+      
+      // STEP 1 — FORCE LOGOUT OLD DEVICE
+      const oldSocketId = global.userSockets?.[user._id.toString()];
 
       if (oldSocketId) {
-        // CALL EXTERNAL API HERE
-
-        await axios.post(process.env.AI_BACKEND_API_TERMINATE);
-
-        global.io.to(oldSocketId).emit("forceLogout");
+        try {
+          await axios.post(process.env.AI_BACKEND_API_TERMINATE);
+          global.io.to(oldSocketId).emit("forceLogout");
+        } catch (err) {
+          console.error("Error terminating old session:", err);
+        }
       }
 
-      /**
-       * STEP 2 — CREATE NEW SESSION ID
-       */
-
+      // STEP 2 — CREATE NEW SESSION ID
       const sessionId = crypto.randomUUID();
-
-      //---------------------------------------------------------
 
       const payload = {
         email: user.email,
@@ -67,25 +59,57 @@ exports.login = async (req, res) => {
         role: user.role,
         sessionId,
       };
+
       const token = jwt.sign(payload, process.env.JWT_SECRET, {
         expiresIn: "24h",
       });
 
-      // Save token to user document in database
       user.token = token;
       user.sessionId = sessionId;
       user.lastActive = new Date();
       await user.save();
-      user.password = undefined;
-      // Set cookie for token and return success response
+
+      // Convert Mongoose doc to plain object to attach custom properties safely
+      const userResponse = user.toObject();
+      userResponse.password = undefined;
+      userResponse.activeSubscription = null;
+
+      // STEP 3 — FETCH AND ATTACH ACTIVE SUBSCRIPTION
+      if (userResponse.companyId) {
+        const currentSub = await Subscription.findOne({
+          companyId: userResponse.companyId,
+          isActive: true,
+        });
+
+        if (currentSub && currentSub.endDate) {
+          const today = new Date();
+          const diff = currentSub.endDate - today;
+          
+          const remainingDays = Math.max(
+            Math.ceil(diff / (1000 * 60 * 60 * 24)),
+            0
+          );
+
+          currentSub.remainingDays = remainingDays;
+
+          if (remainingDays === 0 && currentSub.isActive) {
+            currentSub.isActive = false;
+          }
+
+          await currentSub.save();
+          userResponse.activeSubscription = currentSub;
+        }
+      }
+
       const options = {
         expires: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
         httpOnly: true,
       };
-      res.cookie("token", token, options).status(200).json({
+
+      return res.cookie("token", token, options).status(200).json({
         success: true,
         token,
-        user,
+        user: userResponse,
         message: `User Login Success`,
       });
     } else {
@@ -160,8 +184,9 @@ exports.getUserDetails = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    // Fetch user (exclude password and token)
-    const user = await User.findById(userId).select("-password -token");
+    // Use .lean() to convert the Mongoose document to a plain JavaScript object.
+    // This allows us to attach the activeSubscription property later.
+    const user = await User.findById(userId).select("-password -token").lean();
 
     if (!user) {
       return res.status(404).json({
@@ -170,39 +195,43 @@ exports.getUserDetails = async (req, res) => {
       });
     }
 
-    // -------------------------------
-    // ✅ Compute remainingDays (Trial logic removed)
-    // -------------------------------
-    
-    // 1. Check if they actually have a subscription history
-    if (user.subscription && user.subscription.length > 0) {
-      
-      // 2. Grab the latest subscription from the array
-      const currentSub = user.subscription[user.subscription.length - 1];
+    // Initialize the subscription as null by default
+    user.activeSubscription = null;
 
-      // 3. Check for the expiration date on the current sub
-      if (currentSub.planExpireDate) {
+    // 1. Check if the user is linked to a company
+    if (user.companyId) {
+      // 2. Fetch the active subscription for that company
+      const currentSub = await Subscription.findOne({
+        companyId: user.companyId,
+        isActive: true,
+      });
+
+      if (currentSub && currentSub.endDate) {
+        // 3. Compute remaining days
         const today = new Date();
-        const diff = currentSub.planExpireDate - today;
-        
-        // Calculate days, ensuring it never goes below 0
-        const remainingDays = Math.max(Math.ceil(diff / (1000 * 60 * 60 * 24)), 0);
+        const diff = currentSub.endDate - today;
 
-        // 4. Save snapshot in DB to the specific array item
+        const remainingDays = Math.max(
+          Math.ceil(diff / (1000 * 60 * 60 * 24)),
+          0
+        );
+
         currentSub.remainingDays = remainingDays;
 
-        // 🔥 Auto-Expire Logic: If days are 0, flip status to expired!
-        if (remainingDays === 0 && currentSub.status !== "expired") {
-          currentSub.status = "expired";
+        // 4. Auto-Expire Logic
+        if (remainingDays === 0 && currentSub.isActive) {
+          currentSub.isActive = false;
         }
 
-        // Save updated fields back to the database
-        await user.save();
+        // Save updated fields back to the Subscription database
+        await currentSub.save();
+        
+        // Attach the subscription data to the user object for the frontend
+        user.activeSubscription = currentSub;
       }
     }
 
-    // -------------------------------
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "User details fetched successfully",
       user,
@@ -279,6 +308,93 @@ exports.updateBasicInfo = async (req, res) => {
 //ADMIN----------------------------------------------------
 
 //register
+// exports.register = async (req, res) => {
+//   try {
+//     const {
+//       name,
+//       email,
+//       password,
+//       confirmPassword,
+//       mobile,
+//       country,
+//       state,
+//       city,
+//       role,
+//     } = req.body;
+
+//     // validation
+//     if (!name || !email || !password || !confirmPassword || !role) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "All required fields must be filled",
+//       });
+//     }
+
+//     // Validate email domain
+//     // if (!isValidEmail(email)) {
+//     //   return res.status(400).json({
+//     //     success: false,
+//     //     message: "Mail must be @mnrtechnologies.com or @adventglobal",
+//     //   });
+//     // }
+
+//     if (password !== confirmPassword) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Password and Confirm Password do not match",
+//       });
+//     }
+
+//     // check existing user
+//     const existingUser = await User.findOne({ email });
+//     if (existingUser) {
+//       return res.status(409).json({
+//         success: false,
+//         message: "User already exists. Please login.",
+//       });
+//     }
+
+//     // hash password
+//     const hashedPassword = await bcrypt.hash(password, 10);
+
+//     const user = await User.create({
+//       name,
+//       email,
+//       password: hashedPassword,
+//       mobile,
+//       country,
+//       state,
+//       city,
+//       role: role,
+//       subscription: []
+//     });
+
+//     user.password = undefined;
+
+//     try {
+//       await mailSender(
+//         email,
+//         "Welcome to MNR AI Tester - Account Created",
+//         signupEmail(email, name),
+//       );
+//     } catch (mailError) {
+//       console.error("Mail sending failed:", mailError.message);
+//     }
+
+//     return res.status(201).json({
+//       success: true,
+//       user,
+//       message: "User registered successfully.",
+//     });
+//   } catch (error) {
+//     console.error(error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "User cannot be registered. Please try again.",
+//     });
+//   }
+// };
+
 exports.register = async (req, res) => {
   try {
     const {
@@ -291,6 +407,7 @@ exports.register = async (req, res) => {
       state,
       city,
       role,
+      companyId,
     } = req.body;
 
     // validation
@@ -316,6 +433,14 @@ exports.register = async (req, res) => {
       });
     }
 
+    // If they are registering as a company admin (or staff), they MUST provide a companyId.
+    if ((role === "company_admin" || role === "staff") && !companyId) {
+      return res.status(400).json({
+        success: false,
+        message: `Company ID is required to register as ${role.replace('_', ' ')}.`,
+      });
+    }
+
     // check existing user
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -328,7 +453,17 @@ exports.register = async (req, res) => {
     // hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-
+    // Validate CompanyId if provided
+    let validCompanyId = null;
+    if (companyId) {
+      if (!mongoose.Types.ObjectId.isValid(companyId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid companyId",
+        });
+      }
+      validCompanyId = companyId;
+    }
 
     const user = await User.create({
       name,
@@ -339,10 +474,35 @@ exports.register = async (req, res) => {
       state,
       city,
       role: role,
-      subscription: []
+      companyId: validCompanyId,
     });
 
     user.password = undefined;
+
+    // ---- ADD USER TO COMAPNY SCHEMA ----
+    if (validCompanyId && role !== "super_admin") {
+      const company = await Company.findById(companyId);
+
+      if (!company) {
+        return res.status(404).json({
+          success: false,
+          message: "company not found",
+        });
+      }
+
+      switch (role) {
+        case "staff":
+          company.staff.push(user._id); // NOW WORKS: company is defined
+          break;
+
+        case "company_admin":
+          // Note: Ensure "company_admin" matches the exact role string in your User schema.
+          company.admins.push(user._id); // NOW WORKS: company is defined
+          break;
+      }
+
+      await company.save();
+    }
 
     try {
       await mailSender(
@@ -441,14 +601,52 @@ exports.editUser = async (req, res) => {
   }
 };
 
-// Delete User by ID
+// deletd user by id and also remove from company
 exports.deleteUser = async (req, res) => {
   try {
     const { userId } = req.params;
 
-    const deletedUser = await User.findByIdAndDelete(userId);
+    const user = await User.findById(userId);
 
-    if (!deletedUser) {
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    if (user.companyId) {
+      await Company.findByIdAndUpdate(user.companyId, {
+        $pull: {
+          staff: userId,
+          admins: userId
+        }
+      });
+    }
+
+    await User.findByIdAndDelete(userId);
+
+    return res.status(200).json({
+      success: true,
+      message: "User deleted successfully and removed from company records",
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Error deleting user",
+      error: error.message,
+    });
+  }
+};
+
+//get user by id bodyuserid
+exports.getUserDetailsById = async (req, res) => {
+  try {
+    const userId = req.body.userid;
+
+    let user = await User.findById(userId).select("-password -token");
+
+    if (!user) {
       return res.status(404).json({
         success: false,
         message: "User not found",
@@ -457,13 +655,131 @@ exports.deleteUser = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "User deleted successfully",
+      user,
+      message: "User details fetched successfully",
     });
   } catch (error) {
-    console.error("Error deleting user:", error);
+    console.error("Error fetching user:", error);
     return res.status(500).json({
       success: false,
-      message: "Error deleting user",
+      message: "Internal server error while fetching user",
+    });
+  }
+};
+
+// Get All Staff for a Specific Company
+exports.getCompanyStaff = async (req, res) => {
+ try {
+    // Step 1: Get the logged-in user's company ID
+    // Assuming your auth middleware attaches the user payload to req.user
+    const loggedInUserId = req.user.id;
+    const loggedInUser = await User.findById(loggedInUserId);
+
+    if (!loggedInUser || !loggedInUser.companyId) {
+      return res.status(400).json({
+        success: false,
+        message: "User is not associated with any company",
+      });
+    }
+
+    const companyId = loggedInUser.companyId;
+
+    // Step 2: Fetch the company and populate the admins and staff arrays
+    const companyData = await Company.findById(companyId)
+      .populate({
+        path: "admins",
+        select: "-password -__v -token", // Exclude sensitive fields
+      })
+      .populate({
+        path: "staff",
+        select: "-password -__v -token",
+      });
+
+    if (!companyData) {
+      return res.status(404).json({
+        success: false,
+        message: "Company record not found",
+      });
+    }
+
+    // Step 3: Combine the populated arrays into one flat roster
+    // Default to empty arrays just in case they are undefined in the DB
+    const admins = companyData.admins || [];
+    const staff = companyData.staff || [];
+    
+    const allPersonnel = [...admins, ...staff];
+
+    if (allPersonnel.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No personnel found for this company",
+      });
+    }
+
+    // Step 4: Return the combined array
+    // Note: We return it as 'staff' so it perfectly aligns with your frontend's response.data.staff expectation
+    return res.status(200).json({
+      success: true,
+      count: allPersonnel.length,
+      staff: allPersonnel, 
+      message: "Company personnel fetched successfully",
+    });
+
+  } catch (error) {
+    console.error("Error fetching company personnel:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while fetching company personnel",
+      error: error.message,
+    });
+  }
+};
+
+//Company Admin
+// Get All compnay Users (excluding passwords)
+exports.getCompanyUsers = async (req, res) => {
+  try {
+    // Step 1: Get logged-in user (full document)
+    const loggedInUser = await User.findById(req.user.id);
+
+    if (!loggedInUser) {
+      return res.status(404).json({
+        success: false,
+        message: "Logged-in user not found",
+      });
+    }
+
+    // Step 2: Validate companyId
+    if (!loggedInUser.companyId) {
+      return res.status(400).json({
+        success: false,
+        message: "User is not associated with any company",
+      });
+    }
+
+    // Step 3: Fetch all users from the same company (exclude super_admin)
+    const users = await User.find({
+      companyId: loggedInUser.companyId,
+      role: { $ne: "super_admin" },
+    }).select("-password");
+
+    if (users.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No users found for this company",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Users fetched successfully",
+      users,
+    });
+  } catch (error) {
+    console.error("Error fetching company users:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch users",
       error: error.message,
     });
   }
