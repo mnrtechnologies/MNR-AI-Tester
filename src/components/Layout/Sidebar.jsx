@@ -1,19 +1,34 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
-import {Users, LayoutDashboard,FolderKanban, Bot, Database, Smartphone, Globe } from "lucide-react";
+import {
+  Users,
+  LayoutDashboard,
+  FolderKanban,
+  Bot,
+  Database,
+  Smartphone,
+  Globe,
+} from "lucide-react";
 import { useSelector } from "react-redux";
 
 const Sidebar = () => {
-
   const { user } = useSelector((state) => state.profile);
 
   const menuItems = [
-    { name: "Dashboard", icon: <LayoutDashboard size={20} />, path: "/dashboard" },
+    {
+      name: "Dashboard",
+      icon: <LayoutDashboard size={20} />,
+      path: "/dashboard",
+    },
     { name: "Projects", icon: <FolderKanban size={20} />, path: "/projects" },
     { name: "Web Testing", icon: <Bot size={20} />, path: "/web-testing" },
-    { name: "DB Testing", icon: <Database size={20} />, path: "/db-testing" },
-    { name: "Mobile App Testing", icon: <Smartphone size={20} />, path: "/mobile-testing" },
     { name: "API Testing", icon: <Globe size={20} />, path: "/api-testing" },
+    { name: "DB Testing", icon: <Database size={20} />, path: "/db-testing" },
+    {
+      name: "Mobile App Testing",
+      icon: <Smartphone size={20} />,
+      path: "/mobile-testing",
+    },
   ];
 
   if (user?.role === "company_admin") {
@@ -24,15 +39,13 @@ const Sidebar = () => {
     });
   }
 
-    if (user?.role === "super_admin") {
+  if (user?.role === "super_admin") {
     menuItems.push({
       name: "Super Admin Portal",
       icon: <Users size={20} />,
       path: "/dashboard/super-admin",
     });
   }
-
-  
 
   return (
     <aside className="w-64 border-r bg-white h-[calc(100vh-64px)] overflow-y-auto">
@@ -43,20 +56,21 @@ const Sidebar = () => {
               to={item.path}
               onClick={(e) => {
                 // Check if autopilot is actively running
-                const isRunning = localStorage.getItem("autopilotRunning") === "true";
+                const isRunning =
+                  localStorage.getItem("autopilotRunning") === "true";
                 const goingToAutopilot = item.path === "/autopilot";
 
                 // Only block navigation if running AND leaving the autopilot page
                 if (isRunning && !goingToAutopilot) {
                   const confirmLeave = window.confirm(
-                    "An Autopilot test is currently running. Leaving this page may interrupt the process. Continue?"
+                    "An Autopilot test is currently running. Leaving this page may interrupt the process. Continue?",
                   );
 
                   if (!confirmLeave) {
                     e.preventDefault(); // Stop navigation if they click "Cancel"
                   } else {
                     // Optional: Clean up if they forcefully leave
-                    localStorage.setItem("autopilotRunning", "false"); 
+                    localStorage.setItem("autopilotRunning", "false");
                   }
                 }
               }}

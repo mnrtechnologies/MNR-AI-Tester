@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import SubscriptionGuard from "../../components/UI/SubscriptionGuard";
 import { useSelector } from "react-redux";
 
-const API = process.env.REACT_APP_AI_TESTER_BACKEND_URL;
+const API = process.env.REACT_APP_AI_WEB_TESTER_BACKEND_URL;
 const WS = API.replace(/^http/, "ws");
 
 // ── Light Professional Color Palette ─────────────────────────────────────────
