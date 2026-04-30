@@ -2286,9 +2286,9 @@ function PhaseValidationMongoDB({
                           </a>
                         )}
 
-                        {s.final_report_url && (
+                        {s.final_s3_url && (
                           <a
-                            href={s.final_report_url}
+                            href={s.final_s3_url}
                             target="_blank"
                             rel="noopener noreferrer"
                             style={{
