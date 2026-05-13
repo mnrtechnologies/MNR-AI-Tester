@@ -35,6 +35,7 @@ import CompanyStaffManagement from "./components/Dashboard/CompanyAdmin/CompanyS
 import AddStaff from "./components/Dashboard/CompanyAdmin/AddStaff.jsx";
 import CompanySubscription from "./components/Dashboard/CompanyAdmin/CompanySubscription.jsx";
 import UpgradePlan from "./components/Dashboard/UpgradePlan.jsx";
+import RegressionTesting from "./pages/Dashboard/RegressionTesting.jsx";
 
 // Layout for Dashboard pages ONLY
 const DashboardLayout = ({ children }) => (
@@ -311,6 +312,18 @@ function App() {
           <ProtectedRoute>
             <DashboardLayout>
               <AutoPilot />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Regression Testing */}
+      <Route
+        path="/regression-testing"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <RegressionTesting />
             </DashboardLayout>
           </ProtectedRoute>
         }

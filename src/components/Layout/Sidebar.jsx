@@ -22,13 +22,15 @@ const Sidebar = () => {
     },
     { name: "Projects", icon: <FolderKanban size={20} />, path: "/projects" },
     { name: "Web Testing", icon: <Bot size={20} />, path: "/web-testing" },
-    { name: "API Testing", icon: <Globe size={20} />, path: "/api-testing" },
-    { name: "DB Testing", icon: <Database size={20} />, path: "/db-testing" },
+        { name: "Regression Testing", icon: <Bot size={20} />, path: "/regression-testing" },
+
     {
       name: "Mobile App Testing",
       icon: <Smartphone size={20} />,
       path: "/mobile-testing",
     },
+        { name: "API Testing", icon: <Globe size={20} />, path: "/api-testing" },
+    { name: "DB Testing", icon: <Database size={20} />, path: "/db-testing" },
   ];
 
   if (user?.role === "company_admin") {
