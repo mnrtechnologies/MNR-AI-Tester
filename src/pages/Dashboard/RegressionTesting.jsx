@@ -448,7 +448,7 @@ const PerformanceDashboard = () => {
   const userId = user?._id;
 
   // Global & Navigation State
-  const [apiBase, setApiBase] = useState(API || "https://mnr-at.com/api-v3");
+  const [apiBase, setApiBase] = useState(API);
   const [activePage, setActivePage] = useState("projects");
   const [activeProject, setActiveProject] = useState(null);
   const [projects, setProjects] = useState([]);
