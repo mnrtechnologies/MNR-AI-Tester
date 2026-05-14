@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
 import {
   Users,
@@ -8,28 +8,23 @@ import {
   Database,
   Smartphone,
   Globe,
+  ChevronLeft,
+  Menu,
+  History
 } from "lucide-react";
 import { useSelector } from "react-redux";
 
 const Sidebar = () => {
   const { user } = useSelector((state) => state.profile);
+  const [isCollapsed, setIsCollapsed] = useState(false); // State for toggle
 
   const menuItems = [
-    {
-      name: "Dashboard",
-      icon: <LayoutDashboard size={20} />,
-      path: "/dashboard",
-    },
+    { name: "Dashboard", icon: <LayoutDashboard size={20} />, path: "/dashboard" },
     { name: "Projects", icon: <FolderKanban size={20} />, path: "/projects" },
     { name: "Web Testing", icon: <Bot size={20} />, path: "/web-testing" },
-        { name: "Regression Testing", icon: <Bot size={20} />, path: "/regression-testing" },
-
-    {
-      name: "Mobile App Testing",
-      icon: <Smartphone size={20} />,
-      path: "/mobile-testing",
-    },
-        { name: "API Testing", icon: <Globe size={20} />, path: "/api-testing" },
+    { name: "Regression Testing", icon: <History size={20} />, path: "/regression-testing" },
+    { name: "Mobile App Testing", icon: <Smartphone size={20} />, path: "/mobile-testing" },
+    { name: "API Testing", icon: <Globe size={20} />, path: "/api-testing" },
     { name: "DB Testing", icon: <Database size={20} />, path: "/db-testing" },
   ];
 
@@ -50,42 +45,53 @@ const Sidebar = () => {
   }
 
   return (
-    <aside className="w-64 border-r bg-white h-[calc(100vh-64px)] overflow-y-auto">
-      <ul className="p-4 space-y-2">
+    <aside
+      className={`relative border-r bg-white h-[calc(100vh-64px)] transition-all duration-300 ease-in-out ${
+        isCollapsed ? "w-20" : "w-64"
+      }`}
+    >
+      {/* Toggle Button */}
+      <button
+        onClick={() => setIsCollapsed(!isCollapsed)}
+        className="absolute -right-3 top-4 bg-white border rounded-full p-1 hover:bg-gray-100 shadow-md z-10"
+      >
+        {isCollapsed ? <Menu size={16} /> : <ChevronLeft size={16} />}
+      </button>
+
+      <ul className="p-4 space-y-2 overflow-y-auto h-full">
         {menuItems.map((item, idx) => (
           <li key={idx}>
             <NavLink
               to={item.path}
               onClick={(e) => {
-                // Check if autopilot is actively running
-                const isRunning =
-                  localStorage.getItem("autopilotRunning") === "true";
+                const isRunning = localStorage.getItem("autopilotRunning") === "true";
                 const goingToAutopilot = item.path === "/autopilot";
 
-                // Only block navigation if running AND leaving the autopilot page
                 if (isRunning && !goingToAutopilot) {
                   const confirmLeave = window.confirm(
-                    "An Autopilot test is currently running. Leaving this page may interrupt the process. Continue?",
+                    "An Autopilot test is currently running. Leaving this page may interrupt the process. Continue?"
                   );
 
                   if (!confirmLeave) {
-                    e.preventDefault(); // Stop navigation if they click "Cancel"
+                    e.preventDefault();
                   } else {
-                    // Optional: Clean up if they forcefully leave
                     localStorage.setItem("autopilotRunning", "false");
                   }
                 }
               }}
               className={({ isActive }) =>
-                `w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                `flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                  isCollapsed ? "justify-center px-2" : "justify-start"
+                } ${
                   isActive
                     ? "bg-orange-50 text-orange-600 shadow-sm"
                     : "text-gray-400 hover:bg-gray-50 hover:text-gray-600"
                 }`
               }
+              title={isCollapsed ? item.name : ""} // Show tooltip when collapsed
             >
-              {item.icon}
-              {item.name}
+              <span className="shrink-0">{item.icon}</span>
+              {!isCollapsed && <span className="truncate">{item.name}</span>}
             </NavLink>
           </li>
         ))}
