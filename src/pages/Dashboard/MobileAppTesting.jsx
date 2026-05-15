@@ -276,7 +276,9 @@ export default function MobileTestingDashboard() {
     setLoadingState('starting');
 
     try {
-      const sessionBody = { apkPath, maxActions: formData.maxActions };
+      const appPackage  = uploadedApkInfo?.appPackage;
+      const appActivity = uploadedApkInfo?.appActivity;
+      const sessionBody = { apkPath, appPackage, appActivity, maxActions: formData.maxActions };
       if (formData.email || formData.password) {
         sessionBody.credentials = { username: formData.email, password: formData.password };
       }
@@ -347,8 +349,10 @@ export default function MobileTestingDashboard() {
       addLog('▶ Initializing AI test agent…');
 
       const sessionBody = {
-        apkPath:    serverApkPath,
-        maxActions: formData.maxActions,
+        apkPath:     serverApkPath,
+        appPackage,
+        appActivity,
+        maxActions:  formData.maxActions,
       };
       if (formData.email || formData.password) {
         sessionBody.credentials = { username: formData.email, password: formData.password };
