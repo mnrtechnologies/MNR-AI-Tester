@@ -13,7 +13,7 @@ import {
   Activity,
   AlertTriangle,
   X,
-  ArrowLeft
+  ArrowLeft,
 } from "lucide-react";
 
 // --- ACTUAL API IMPORTS ---
@@ -69,6 +69,7 @@ const ManageModal = ({ selectedCompany, form, setForm, onSubmit, onClose }) => {
             >
               <option value="basic">Basic</option>
               <option value="premium">Premium</option>
+              <option value="custom">Custom</option>
             </select>
           </div>
 
@@ -84,21 +85,24 @@ const ManageModal = ({ selectedCompany, form, setForm, onSubmit, onClose }) => {
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-              Maximum Allowed Tests
-            </label>
-            <input
-              type="number"
-              min={0}
-              placeholder="e.g. 100"
-              className="w-full border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 text-sm outline-none transition-all focus:border-orange-300 focus:bg-white focus:ring-4 focus:ring-orange-500/10"
-              value={form.customMaxTests || ""}
-              onChange={(e) =>
-                setForm({ ...form, customMaxTests: e.target.value })
-              }
-            />
-          </div>
+          {/* Conditionally render Maximum Allowed Tests if plan is "custom" */}
+          {form.plan === "custom" && (
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                Maximum Allowed Tests
+              </label>
+              <input
+                type="number"
+                min={0}
+                placeholder="e.g. 100"
+                className="w-full border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 text-sm outline-none transition-all focus:border-orange-300 focus:bg-white focus:ring-4 focus:ring-orange-500/10"
+                value={form.customMaxTests || ""}
+                onChange={(e) =>
+                  setForm({ ...form, customMaxTests: e.target.value })
+                }
+              />
+            </div>
+          )}
         </div>
 
         <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-slate-100">
@@ -210,7 +214,7 @@ const SubscriptionManagement = () => {
       }
     } catch (error) {
       console.error("Error fetching organizations", error);
-      setSubscriptions([]); 
+      setSubscriptions([]);
     } finally {
       setLoading(false);
     }
@@ -239,7 +243,7 @@ const SubscriptionManagement = () => {
   const handleSubmit = async () => {
     if (!form.expireDate)
       return toast.error("Please select an expiration date");
-    
+
     const isRenewal = selectedCompany?.activeSubscriptionId?.isActive;
     let result = null;
 
@@ -247,19 +251,19 @@ const SubscriptionManagement = () => {
       if (isRenewal) {
         // CALL RENEW API
         result = await renewSubscription(
-          selectedCompany._id, 
-          form.expireDate,     
-          Number(form.customMaxTests), 
-          form.plan 
+          selectedCompany._id,
+          form.expireDate,
+          Number(form.customMaxTests),
+          form.plan,
         );
       } else {
         // CALL ACTIVATE API
         result = await activateSubscription({
           companyId: selectedCompany._id,
           plan: form.plan,
-          startDate: new Date().toISOString(), 
+          startDate: new Date().toISOString(),
           endDate: form.expireDate,
-          customMaxTests: Number(form.customMaxTests), 
+          customMaxTests: Number(form.customMaxTests),
         });
       }
 
@@ -278,7 +282,7 @@ const SubscriptionManagement = () => {
     setConfirmOpen(true);
   };
 
-/* ---------------- Expire Subscription ---------------- */
+  /* ---------------- Expire Subscription ---------------- */
   const handleExpireConfirm = async () => {
     if (!companyToExpire) return;
     setExpiring(true);
@@ -290,11 +294,9 @@ const SubscriptionManagement = () => {
       // 1. Close the modal and reset state immediately
       setConfirmOpen(false);
       setCompanyToExpire(null);
-      
+
       // 2. Fetch the updated list of companies dynamically instead of a hard refresh
       await loadSubscriptions();
-    
-
     } catch (err) {
       console.error("Expire confirmation error:", err);
       toast.error("Failed to revoke subscription");
@@ -330,7 +332,7 @@ const SubscriptionManagement = () => {
       {/* HEADER SECTION */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-2">
         <div>
-                  <button
+          <button
             type="button"
             onClick={() => navigate(-1)}
             className="mt-1 mr-2 sm:mt-0 p-2.5 bg-white border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-xl transition-all shadow-sm shrink-0"
@@ -467,25 +469,32 @@ const SubscriptionManagement = () => {
                           <div className="flex justify-between text-xs font-medium">
                             <span className="text-slate-500">Test Load</span>
                             <span className="text-slate-800">
-                              {item.activeSubscriptionId.planDetails?.testsUsed || 0} /{" "}
-                              {item.activeSubscriptionId.planDetails?.maxTestsAllowed || 0}
+                              {item.activeSubscriptionId.planDetails
+                                ?.testsUsed || 0}{" "}
+                              /{" "}
+                              {item.activeSubscriptionId.planDetails
+                                ?.maxTestsAllowed || 0}
                             </span>
                           </div>
                           <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
                             <div
                               className={`h-1.5 rounded-full ${
-                                (item.activeSubscriptionId.planDetails?.testsUsed || 0) /
-                                  (item.activeSubscriptionId.planDetails?.maxTestsAllowed || 1) >
+                                (item.activeSubscriptionId.planDetails
+                                  ?.testsUsed || 0) /
+                                  (item.activeSubscriptionId.planDetails
+                                    ?.maxTestsAllowed || 1) >
                                 0.8
                                   ? "bg-red-400"
                                   : "bg-blue-400"
                               }`}
                               style={{
                                 width: `${Math.min(
-                                  ((item.activeSubscriptionId.planDetails?.testsUsed || 0) /
-                                    (item.activeSubscriptionId.planDetails?.maxTestsAllowed || 1)) *
+                                  ((item.activeSubscriptionId.planDetails
+                                    ?.testsUsed || 0) /
+                                    (item.activeSubscriptionId.planDetails
+                                      ?.maxTestsAllowed || 1)) *
                                     100,
-                                  100
+                                  100,
                                 )}%`,
                               }}
                             ></div>

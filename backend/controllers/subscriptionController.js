@@ -117,6 +117,7 @@ exports.activateSubscription = async (req, res) => {
     // FIXED: Changed to companyId and added plan & custom limits
     const activatedBy = req.user.id;
     const { companyId, startDate, endDate, plan, customMaxTests } = req.body;
+    
 
     // Validate required fields
     if (!companyId || !startDate || !endDate || !plan) {
@@ -132,9 +133,9 @@ exports.activateSubscription = async (req, res) => {
     );
 
     // Prepare plan details based on schema
-    let planDetails = { testsUsed: 0 };
+    let planDetails = { testsUsed: 0};
 
-    // If it's a custom plan, we must set the limit manually because the pre-save hook ignores "custom"
+    // // If it's a custom plan, we must set the limit manually because the pre-save hook ignores "custom"
     if (plan === "custom") {
       if (customMaxTests === undefined) {
         return res
