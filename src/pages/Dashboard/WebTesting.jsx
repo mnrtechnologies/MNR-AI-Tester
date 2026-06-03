@@ -237,10 +237,10 @@ const GLOBAL_CSS = `
   /* Toggle Group */
   .toggle-group {
     display: flex; background: #f3f4f6; border: 1px solid ${C.border};
-    border-radius: 8px; padding: 4px;
+    border-radius: 8px; padding: 4px; flex-wrap: wrap; gap: 4px;
   }
   .toggle-opt {
-    flex: 1; padding: 8px 12px; text-align: center; cursor: pointer;
+    flex: 1; min-width: 120px; padding: 8px 12px; text-align: center; cursor: pointer;
     font-size: 13px; font-weight: 600; transition: all .2s; color: ${C.muted};
     border: none; background: transparent; border-radius: 4px;
   }
@@ -277,15 +277,6 @@ const GLOBAL_CSS = `
     white-space: nowrap; box-shadow: 0 1px 2px rgba(0,0,0,0.05);
   }
   .excel-pill:hover { background: #f9fafb; border-color: #d1d5db; }
-
-  .excel-pill-pending {
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 6px 12px; border-radius: 6px;
-    background: transparent; color: ${C.muted};
-    border: 1px dashed ${C.border};
-    font-size: 12px; font-weight: 600;
-    white-space: nowrap; cursor: not-allowed;
-  }
 
   .spinner {
     width: 16px; height: 16px; border-radius: 50%;
@@ -827,6 +818,18 @@ function PhaseLogin({ onDone, onStatusChange }) {
                 </span>{" "}
                 Feature Testing
               </button>
+              <button
+                className={cx("toggle-opt", mode === "direct" ? "active" : "")}
+                onClick={() => setMode("direct")}
+                disabled={status === "running"}
+              >
+                <span
+                  style={{ display: "block", fontSize: 16, marginBottom: 4 }}
+                >
+                  ⚡
+                </span>{" "}
+                Prompt Test
+              </button>
             </div>
             {mode === "feature" && (
               <div className="fade-up" style={{ marginTop: 16 }}>
@@ -840,6 +843,34 @@ function PhaseLogin({ onDone, onStatusChange }) {
                   onChange={(e) => setGoal(e.target.value)}
                   disabled={status === "running"}
                 />
+              </div>
+            )}
+            {mode === "direct" && (
+              <div
+                className="fade-up"
+                style={{
+                  marginTop: 16,
+                  padding: "12px 14px",
+                  borderRadius: 8,
+                  background: "rgba(99,102,241,.05)",
+                  border: "1px solid rgba(99,102,241,.2)",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: C.accent2,
+                    fontWeight: 600,
+                    marginBottom: 4,
+                  }}
+                >
+                  ⚡ Prompt Test mode
+                </div>
+                <div style={{ fontSize: 12, color: C.muted }}>
+                  After login you'll type a natural-language instruction (e.g.
+                  "add to cart, checkout"). The orchestrator runs it directly —
+                  no Excel generated.
+                </div>
               </div>
             )}
           </div>
@@ -880,7 +911,7 @@ function PhaseLogin({ onDone, onStatusChange }) {
                 padding: 16,
                 borderRadius: 8,
                 background: "rgba(245,158,11,.1)",
-                border: `1px solid rgba(245,158,11,.2)`,
+                border: "1px solid rgba(245,158,11,.2)",
               }}
             >
               <div
@@ -943,7 +974,6 @@ function PhaseChecking({
   onStatusChange,
 }) {
   const [jobId, setJobId] = useState(null);
-
   const [status, setStatus] = useState("starting");
   const [screenshot, setScreenshot] = useState(null);
   const [logs, setLogs] = useState([]);
@@ -954,7 +984,6 @@ function PhaseChecking({
   });
   const [parentSessionId, setParentSessionId] = useState(authSessionId || null);
 
-  // Add this effect right below your state declarations to inform the parent component instantly
   useEffect(() => {
     if (authSessionId) {
       onSessionReady(authSessionId);
@@ -999,12 +1028,7 @@ function PhaseChecking({
       ws.onmessage = (ev) => {
         const msg = JSON.parse(ev.data);
 
-        // 1. Failsafe: Catch parent_session on ANY incoming message
         if (msg.parent_session && !parentSessionId) {
-          console.log(
-            "[WS:checking] setting parentSessionId →",
-            msg.parent_session,
-          );
           setParentSessionId(msg.parent_session);
           onSessionReady(msg.parent_session);
         }
@@ -1157,11 +1181,6 @@ function PhaseChecking({
               <div className="stat-lbl">Total Discovered</div>
             </div>
           </div>
-          {/* <ProgressBar
-            value={progress.completed}
-            max={progress.total || 1}
-            label="Crawl Progress"
-          /> */}
 
           {progress.current && (
             <div
@@ -1383,13 +1402,13 @@ function PhaseSemantic({
             </div>
             <div>
               <div
-                className="stat-val"
                 style={{
                   color: status === "done" ? C.green : C.accent,
                   display: "flex",
                   alignItems: "center",
                   height: "34px",
                 }}
+                className="stat-val"
               >
                 {status === "done" ? (
                   "Complete"
@@ -1698,6 +1717,694 @@ function PhaseFeature({
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// DIRECT PROMPT TEST — Auth → natural-language prompt → realtime execution
+// ════════════════════════════════════════════════════════════════════════════
+function PhaseDirectPrompt({
+  authSessionId,
+  apiKey,
+  anthropicApiKey,
+  onStatusChange,
+}) {
+  const [prompt, setPrompt] = useState("");
+  const [testId, setTestId] = useState(null);
+  const [status, setStatus] = useState("idle");
+  const [logs, setLogs] = useState([]);
+  const [screenshot, setScreenshot] = useState(null);
+  const [summary, setSummary] = useState(null);
+  const [success, setSuccess] = useState(null);
+  const [steps, setSteps] = useState(null);
+  const wsRef = useRef(null);
+
+  useEffect(() => {
+    if (onStatusChange) onStatusChange(status);
+  }, [status, onStatusChange]);
+
+  const pushLog = (msg, color = "white") =>
+    setLogs((p) => [...p, { message: msg, color }]);
+
+  const startRun = async () => {
+    if (!prompt.trim()) return;
+    setStatus("running");
+    setLogs([]);
+    setScreenshot(null);
+    setSummary(null);
+    setSuccess(null);
+    setSteps(null);
+    pushLog(`Starting prompt test — session: ${authSessionId}`, "cyan");
+    pushLog(`Prompt: ${prompt}`, "white");
+
+    let tid;
+    try {
+      const res = await fetch(`${API}/direct/run/${authSessionId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: prompt.trim(),
+          api_key: apiKey || undefined,
+          anthropic_api_key: anthropicApiKey || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (data.detail) {
+        pushLog(`❌ ${data.detail}`, "red");
+        setStatus("error");
+        return;
+      }
+      tid = data.test_id;
+      setTestId(tid);
+      pushLog(`Test ID: ${tid}`, "cyan");
+      pushLog(`Running on: ${data.url}`, "cyan");
+    } catch (e) {
+      pushLog(`❌ Failed to start: ${e}`, "red");
+      setStatus("error");
+      return;
+    }
+
+    const ws = new WebSocket(`${WS}/ws/direct/${tid}`);
+    wsRef.current = ws;
+
+    ws.onmessage = (ev) => {
+      const msg = JSON.parse(ev.data);
+      if (msg.type === "ping") return;
+      if (msg.type === "frame") {
+        setScreenshot(`data:image/png;base64,${msg.image}`);
+        return;
+      }
+      if (msg.type === "log") {
+        pushLog(msg.message, msg.color || "white");
+        return;
+      }
+      if (msg.type === "done") {
+        setStatus(msg.status === "completed" ? "done" : "error");
+        setSuccess(msg.success);
+        setSummary(msg.summary);
+        setSteps(msg.steps);
+        pushLog(
+          msg.success
+            ? "✅ Test completed successfully"
+            : "❌ Test completed with issues",
+          msg.success ? "green" : "red",
+        );
+        ws.close();
+        return;
+      }
+      if (msg.type === "error") {
+        pushLog(`❌ ${msg.message}`, "red");
+        setStatus("error");
+      }
+    };
+
+    ws.onerror = () => {
+      pushLog("WebSocket connection error", "red");
+      setStatus("error");
+    };
+  };
+
+  const reset = () => {
+    wsRef.current?.close();
+    setStatus("idle");
+    setPrompt("");
+    setTestId(null);
+    setLogs([]);
+    setScreenshot(null);
+    setSummary(null);
+    setSuccess(null);
+    setSteps(null);
+  };
+
+  return (
+    <div
+      className="fade-up"
+      style={{ display: "flex", flexDirection: "column", gap: 24 }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+        }}
+      >
+        <div>
+          <div className="phase-header">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+            >
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+            </svg>
+            Prompt Test
+          </div>
+          <div className="phase-title">Direct Prompt Orchestration</div>
+          <div style={{ fontSize: 14, color: C.muted, marginTop: 8 }}>
+            Type what to test — the AI runs it live on the authenticated
+            session. No Excel, no exploration.
+          </div>
+        </div>
+        <span
+          className={cx(
+            "badge",
+            status === "running"
+              ? "badge-running"
+              : status === "done"
+                ? "badge-done"
+                : status === "error"
+                  ? "badge-failed"
+                  : "badge-idle",
+          )}
+        >
+          {status === "running" && (
+            <span className="spinner" style={{ width: 10, height: 10 }} />
+          )}
+          {status === "running" ? "Executing" : status}
+        </span>
+      </div>
+
+      {(status === "idle" || status === "done" || status === "error") && (
+        <div
+          className="card fade-up"
+          style={{ display: "flex", flexDirection: "column", gap: 16 }}
+        >
+          <div>
+            <label className="label">
+              Test Prompt <span style={{ color: C.red }}>*</span>
+            </label>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>
+              Describe what the user should do in plain language.
+            </div>
+            <textarea
+              className="input"
+              rows={4}
+              placeholder={`e.g. Add a product to cart twice, go to checkout, remove one item, apply coupon code SAVE10, then complete the purchase and verify the order confirmation page`}
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              style={{ resize: "vertical", lineHeight: 1.6 }}
+            />
+          </div>
+
+          <div
+            style={{
+              fontSize: 12,
+              color: C.muted,
+              padding: "8px 12px",
+              borderRadius: 6,
+              background: C.surface,
+              border: `1px solid ${C.border}`,
+            }}
+          >
+            <span style={{ color: "#000", fontWeight: 600 }}>Session: </span>
+            <span className="font-mono">{authSessionId}</span>
+            <span style={{ color: C.muted }}>
+              {" "}
+              — browser starts on the post-login home page
+            </span>
+          </div>
+
+          <div style={{ display: "flex", gap: 12 }}>
+            <button
+              className="btn btn-primary"
+              style={{ flex: 1, padding: 12 }}
+              onClick={startRun}
+              disabled={!prompt.trim() || status === "running"}
+            >
+              ⚡ Run Prompt Test
+            </button>
+            {(status === "done" || status === "error") && (
+              <button
+                className="btn"
+                style={{ border: `1px solid ${C.border}` }}
+                onClick={reset}
+              >
+                New Test
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {status === "running" && (
+        <ScreenPanel
+          src={screenshot}
+          scanning={true}
+          label="Live Browser Stream"
+        />
+      )}
+
+      {(status === "done" || status === "error") && summary && (
+        <div
+          className="card fade-up"
+          style={{
+            border: `1px solid ${success ? "rgba(16,185,129,.3)" : "rgba(239,68,68,.3)"}`,
+            background: success
+              ? "rgba(16,185,129,.03)"
+              : "rgba(239,68,68,.03)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              marginBottom: 16,
+            }}
+          >
+            <div style={{ fontSize: 20 }}>{success ? "✅" : "❌"}</div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#000" }}>
+                {success ? "Test Passed" : "Test Completed with Issues"}
+              </div>
+              {steps != null && (
+                <div style={{ fontSize: 12, color: C.muted }}>
+                  {steps} steps executed
+                </div>
+              )}
+            </div>
+          </div>
+          <div
+            style={{
+              fontSize: 13,
+              color: "#374151",
+              lineHeight: 1.7,
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {summary}
+          </div>
+          <div
+            style={{
+              marginTop: 16,
+              display: "flex",
+              justifyContent: "flex-end",
+            }}
+          >
+            <button
+              className="btn"
+              style={{ border: `1px solid ${C.border}`, fontSize: 12 }}
+              onClick={reset}
+            >
+              Run Another Test
+            </button>
+          </div>
+        </div>
+      )}
+
+      {(status === "done" || status === "error") && screenshot && !summary && (
+        <ScreenPanel
+          src={screenshot}
+          scanning={false}
+          label="Final Browser State"
+        />
+      )}
+
+      {(status === "running" || logs.length > 0) && <LogPanel logs={logs} />}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE REVIEW — Human review of Expected Results before Phase 3
+// ════════════════════════════════════════════════════════════════════════════
+function PhaseReview({ defaultParentSessionId = "" }) {
+  const { user } = useSelector((state) => state.profile);
+  const userId = user?._id;
+  const [parentSessionId, setParentSessionId] = useState(
+    defaultParentSessionId,
+  );
+  const [status, setStatus] = useState("idle");
+  const [sheets, setSheets] = useState([]);
+  const [edits, setEdits] = useState({});
+  const [saveMsg, setSaveMsg] = useState(null);
+
+  useEffect(() => {
+    if (defaultParentSessionId && userId) {
+      loadReview(defaultParentSessionId, userId);
+    }
+  }, [defaultParentSessionId, userId]);
+
+  const loadReview = async (pid = parentSessionId, uid = userId) => {
+    if (!pid || !uid || !pid.trim() || !uid.trim()) return;
+    setStatus("loading");
+    setSheets([]);
+    setSaveMsg(null);
+    setEdits({});
+    try {
+      const r = await fetch(
+        `${API}/phase-review/${encodeURIComponent(pid)}?user_id=${encodeURIComponent(uid)}`,
+      );
+      const d = await r.json();
+      if (!r.ok) {
+        setStatus("error");
+        setSaveMsg({ type: "error", text: d.detail || "Failed to load" });
+        return;
+      }
+      setSheets(d.sheets || []);
+      setStatus((d.sheets || []).length > 0 ? "loaded" : "empty");
+    } catch (e) {
+      setStatus("error");
+      setSaveMsg({ type: "error", text: `Load failed: ${e}` });
+    }
+  };
+
+  const handleEdit = (session_id, row_num, value) => {
+    setEdits((prev) => ({ ...prev, [`${session_id}__${row_num}`]: value }));
+  };
+
+  const saveChanges = async () => {
+    const updates = Object.entries(edits).map(([key, expected_result]) => {
+      const [session_id, row_num_str] = key.split("__");
+      return {
+        session_id,
+        row_num: parseInt(row_num_str, 10),
+        expected_result,
+      };
+    });
+    if (updates.length === 0) {
+      setSaveMsg({ type: "error", text: "No changes to save." });
+      return;
+    }
+    setStatus("saving");
+    setSaveMsg(null);
+    try {
+      const r = await fetch(
+        `${API}/phase-review/${encodeURIComponent(parentSessionId)}/save`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id: userId, updates }),
+        },
+      );
+      const d = await r.json();
+      if (!r.ok) {
+        setStatus("loaded");
+        setSaveMsg({ type: "error", text: d.detail || "Save failed" });
+        return;
+      }
+      if (d.errors?.length > 0) {
+        setSaveMsg({
+          type: "error",
+          text: `Saved with errors: ${d.errors.map((e) => e.error).join(", ")}`,
+        });
+        setStatus("loaded");
+      } else {
+        setSaveMsg({
+          type: "success",
+          text: `✅ ${updates.length} change${updates.length !== 1 ? "s" : ""} saved to S3.`,
+        });
+        setEdits({});
+        await loadReview();
+      }
+    } catch (e) {
+      setStatus("loaded");
+      setSaveMsg({ type: "error", text: `Save failed: ${e}` });
+    }
+  };
+
+  const dirtyCount = Object.keys(edits).length;
+
+  return (
+    <div
+      className="fade-up"
+      style={{ display: "flex", flexDirection: "column", gap: 24 }}
+    >
+      <div>
+        <div className="phase-header">Phase Review</div>
+        <div className="phase-title">Review & Edit Expected Results</div>
+        <div style={{ fontSize: 14, color: C.muted, marginTop: 8 }}>
+          Inspect the test stories generated by Phase 2 and correct expected
+          results before running Phase 3 validation.
+        </div>
+      </div>
+
+      <div className="card fade-up" style={{ maxWidth: 600 }}>
+        <label className="label">
+          Parent Session ID <span style={{ color: C.red }}>*</span>
+        </label>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>
+          Enter the session_id from a completed Phase 2 run.
+        </div>
+        <div style={{ display: "flex", gap: 12 }}>
+          <input
+            className="input"
+            placeholder="e.g. 20240326_143022"
+            value={parentSessionId}
+            onChange={(e) => setParentSessionId(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && loadReview()}
+            style={{ flex: 1 }}
+          />
+          <button
+            className="btn btn-primary"
+            onClick={() => loadReview()}
+            disabled={
+              !parentSessionId.trim() || !userId || status === "loading"
+            }
+          >
+            {status === "loading" ? "Loading…" : "Load"}
+          </button>
+        </div>
+      </div>
+
+      {(status === "loaded" || status === "saving") &&
+        sheets.map((sheet) => (
+          <div key={sheet.session_id} className="card fade-up">
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, color: C.text }}>
+                {sheet.page_url}
+              </div>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: C.muted,
+                  fontFamily: "monospace",
+                }}
+              >
+                {sheet.session_id}
+              </div>
+              {sheet.review_updated_at && (
+                <div style={{ fontSize: 11, color: C.green, marginTop: 4 }}>
+                  Last reviewed:{" "}
+                  {new Date(sheet.review_updated_at).toLocaleString()}
+                </div>
+              )}
+              {sheet.error && (
+                <div style={{ fontSize: 12, color: C.red, marginTop: 4 }}>
+                  ⚠ {sheet.error}
+                </div>
+              )}
+            </div>
+
+            {sheet.rows?.length > 0 ? (
+              <div style={{ overflowX: "auto" }}>
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    fontSize: 13,
+                  }}
+                >
+                  <thead>
+                    <tr
+                      style={{
+                        background: C.surface,
+                        borderBottom: `2px solid ${C.border}`,
+                      }}
+                    >
+                      {[
+                        "Feature / Context",
+                        "Test Steps",
+                        "Expected Result",
+                        "Data",
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          style={{
+                            padding: "10px 12px",
+                            textAlign: "left",
+                            fontWeight: 600,
+                            color: C.muted,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sheet.rows.map((row, i) => {
+                      const editKey = `${sheet.session_id}__${row.row_num}`;
+                      const currentValue =
+                        editKey in edits ? edits[editKey] : row.expected_result;
+                      const isDirty =
+                        editKey in edits &&
+                        edits[editKey] !== row.expected_result;
+                      return (
+                        <tr
+                          key={i}
+                          style={{
+                            borderBottom: `1px solid ${C.border}`,
+                            background: isDirty ? "#fffbeb" : "white",
+                          }}
+                        >
+                          <td
+                            style={{
+                              padding: "10px 12px",
+                              verticalAlign: "top",
+                              maxWidth: 200,
+                            }}
+                          >
+                            <div
+                              style={{
+                                fontWeight: 500,
+                                wordBreak: "break-word",
+                              }}
+                            >
+                              {row.feature}
+                            </div>
+                          </td>
+                          <td
+                            style={{
+                              padding: "10px 12px",
+                              verticalAlign: "top",
+                              maxWidth: 280,
+                              color: C.muted,
+                              fontFamily: "monospace",
+                              fontSize: 11,
+                              wordBreak: "break-word",
+                            }}
+                          >
+                            {row.test_steps}
+                          </td>
+                          <td
+                            style={{
+                              padding: "10px 12px",
+                              verticalAlign: "top",
+                              minWidth: 240,
+                            }}
+                          >
+                            <textarea
+                              rows={3}
+                              style={{
+                                width: "100%",
+                                padding: "8px 10px",
+                                border: `1px solid ${isDirty ? C.yellow : C.border}`,
+                                borderRadius: 6,
+                                fontSize: 13,
+                                fontFamily: "inherit",
+                                resize: "vertical",
+                                background: isDirty ? "#fffbeb" : "white",
+                                outline: "none",
+                                cursor: "text",
+                              }}
+                              onFocus={(e) => {
+                                e.target.style.borderColor = C.accent;
+                                e.target.style.boxShadow = `0 0 0 2px ${C.accent}22`;
+                              }}
+                              onBlur={(e) => {
+                                e.target.style.borderColor = isDirty
+                                  ? C.yellow
+                                  : C.border;
+                                e.target.style.boxShadow = "none";
+                              }}
+                              value={currentValue}
+                              onChange={(e) =>
+                                handleEdit(
+                                  sheet.session_id,
+                                  row.row_num,
+                                  e.target.value,
+                                )
+                              }
+                            />
+                          </td>
+                          <td
+                            style={{
+                              padding: "10px 12px",
+                              verticalAlign: "top",
+                              fontSize: 12,
+                              color: C.muted,
+                              maxWidth: 160,
+                              wordBreak: "break-word",
+                            }}
+                          >
+                            {row.data || "—"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div style={{ fontSize: 13, color: C.muted }}>
+                No EXPLORE rows found in this sheet.
+              </div>
+            )}
+          </div>
+        ))}
+
+      {(status === "loaded" || status === "saving") && (
+        <div
+          className="card fade-up"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 16,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 13,
+              color: dirtyCount > 0 ? C.yellow : C.muted,
+              fontWeight: dirtyCount > 0 ? 600 : 400,
+            }}
+          >
+            {dirtyCount > 0
+              ? `${dirtyCount} unsaved change${dirtyCount !== 1 ? "s" : ""}`
+              : "No unsaved changes"}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {saveMsg && (
+              <div
+                style={{
+                  fontSize: 13,
+                  color: saveMsg.type === "success" ? C.green : C.red,
+                  fontWeight: 500,
+                }}
+              >
+                {saveMsg.text}
+              </div>
+            )}
+            <button
+              className="btn btn-primary"
+              onClick={saveChanges}
+              disabled={dirtyCount === 0 || status === "saving"}
+            >
+              {status === "saving" ? "Saving…" : "Save Changes"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {status === "empty" && (
+        <div className="card fade-up" style={{ fontSize: 14, color: C.muted }}>
+          No Excel sheets found for this session. Make sure Phase 2 has
+          completed successfully.
+        </div>
+      )}
+
+      {status === "error" && saveMsg && (
+        <div className="card fade-up" style={{ fontSize: 13, color: C.red }}>
+          {saveMsg.text}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // PHASE 3 — MongoDB-Driven Validation (Manual Trigger)
 // ════════════════════════════════════════════════════════════════════════════
 function PhaseValidationMongoDB({
@@ -1725,13 +2432,11 @@ function PhaseValidationMongoDB({
   const [globalBatchReport, setGlobalBatchReport] = useState(null);
   const wsRef = useRef(null);
 
-  // Derive the active session based on in_progress status
   const activeSessionItem = sessions.find(
     (s) => s.phase3_status === "in_progress",
   );
   const activeSessionId = activeSessionItem?.session_id || null;
 
-  // 1. Cleanup: Ensure WebSocket closes if the component unmounts
   useEffect(() => {
     return () => {
       if (wsRef.current) {
@@ -1747,7 +2452,6 @@ function PhaseValidationMongoDB({
   const pushLog = (msg, color = "white") =>
     setLogs((p) => [...p, { message: msg, color }]);
 
-  // 2. Fallback / Sync Polling via REST API
   useInterval(
     async () => {
       if (!parentSessionId || status !== "running") return;
@@ -1866,7 +2570,6 @@ function PhaseValidationMongoDB({
                 "cyan",
               );
             }
-            
 
             ws.close();
             wsRef.current = null;
@@ -2006,7 +2709,6 @@ function PhaseValidationMongoDB({
             </div>
 
             <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-              {/* Global Batch Report from websocket final message */}
               {globalBatchReport && (
                 <a
                   href={globalBatchReport}
@@ -2246,7 +2948,6 @@ function PhaseValidationMongoDB({
                         </span>
                       </div>
 
-                      {/* INDIVIDUAL SESSION DOWNLOAD BUTTONS */}
                       <div style={{ display: "flex", gap: 8, marginLeft: 12 }}>
                         {s.s3_download_url && (
                           <a
@@ -2352,7 +3053,6 @@ export default function App() {
   const userId = user?._id;
   const [activeSessionId, setActiveSessionId] = useState("");
 
-  // Replaced timer countdown logic with an active boolean flag
   const [isTerminating, setIsTerminating] = useState(false);
   const [phase3SessionId, setPhase3SessionId] = useState("");
 
@@ -2370,7 +3070,6 @@ export default function App() {
     }
   }, [isProcessing]);
 
-  // Browser level refresh/close blocking
   useEffect(() => {
     const handleBeforeUnload = (e) => {
       if (isProcessing) {
@@ -2383,7 +3082,6 @@ export default function App() {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [isProcessing]);
 
-  // Reliable API hit if the user accepts the browser unload popup
   useEffect(() => {
     const handleUnload = () => {
       const idToTerminate =
@@ -2396,42 +3094,36 @@ export default function App() {
     return () => window.removeEventListener("unload", handleUnload);
   }, [isProcessing, activeSessionId, phase, phase3SessionId]);
 
-  // Terminate Logic directly awaiting fetch
   const handleTerminateClick = async () => {
+    // 1. Immediately show the terminating overlay
+    setIsTerminating(true);
+
     const idToTerminate =
       phase === "phase3" ? phase3SessionId : activeSessionId;
 
-    if (!idToTerminate) {
-      console.warn("No active session ID found to terminate.");
-      return;
-    }
-
-    setIsTerminating(true);
-
     try {
-      const res = await fetch(`${API}/terminate/${idToTerminate}`, {
-        method: "POST",
-      });
-      const data = await res.json();
-
-      // Successfully processed by the backend
-      if (data.status === "terminated") {
-        window.location.reload();
+      // 2. If we have an ID, tell the backend to gracefully kill it
+      if (idToTerminate) {
+        await fetch(`${API}/terminate/${idToTerminate}`, {
+          method: "POST",
+        });
       } else {
-        // Fallback reloading if the termination succeeds with a different payload
-        window.location.reload();
+        // 3. If no ID (like during Auth), we just rely on the reload to drop the WS connection
+        console.warn(
+          "No active session ID. Force reloading to terminate connection.",
+        );
       }
     } catch (error) {
       console.error("Termination error:", error);
-      setIsTerminating(false);
-      // Let the user try again
+    } finally {
+      // 4. Always reload the page to reset the UI and drop all connections
+      window.location.reload();
     }
   };
 
   const handleTabClick = (p) => {
     if (p === phase) return;
     if (isProcessing) return;
-    // Block switching visually if processing is ongoing
     setPhase(p);
   };
 
@@ -2494,12 +3186,20 @@ export default function App() {
                   maxWidth: "500px",
                 }}
               >
-                {["login", "phase2", "phase3"].map((p, i) => {
+                {["login", "phase2", "review", "phase3"].map((p, i) => {
                   let isDisabled = false;
                   if (isProcessing) {
                     isDisabled = p !== phase;
                   } else {
-                    if (p === "phase2" && !targetUrl) isDisabled = true;
+                    if (
+                      (p === "phase2" || p === "review" || p === "phase3") &&
+                      !targetUrl
+                    )
+                      isDisabled = true;
+                    if (p === "review" && mode !== "checking")
+                      isDisabled = true;
+                    if ((p === "review" || p === "phase3") && mode === "direct")
+                      isDisabled = true;
                   }
 
                   return (
@@ -2510,7 +3210,14 @@ export default function App() {
                       onClick={() => handleTabClick(p)}
                       disabled={isDisabled}
                     >
-                      {["0. Auth", "1. Discovery", "2. Validation"][i]}
+                      {
+                        [
+                          "0. Auth",
+                          "1. Discovery",
+                          "2. Review",
+                          "3. Validation",
+                        ][i]
+                      }
                     </button>
                   );
                 })}
@@ -2622,6 +3329,7 @@ export default function App() {
                 onStatusChange={setActivePhaseStatus}
               />
             )}
+
             {phase === "phase2" && targetUrl && mode === "feature" && (
               <PhaseFeature
                 targetUrl={targetUrl}
@@ -2630,6 +3338,19 @@ export default function App() {
                 goal={goal}
                 onStatusChange={setActivePhaseStatus}
               />
+            )}
+
+            {phase === "phase2" && mode === "direct" && authSessionId && (
+              <PhaseDirectPrompt
+                authSessionId={authSessionId}
+                apiKey={apiKey}
+                anthropicApiKey={anthropicApiKey}
+                onStatusChange={setActivePhaseStatus}
+              />
+            )}
+
+            {phase === "review" && (
+              <PhaseReview defaultParentSessionId={activeSessionId} />
             )}
 
             {phase === "phase3" && (
