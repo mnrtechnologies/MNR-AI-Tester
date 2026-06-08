@@ -39,12 +39,13 @@ const Login = () => {
       if (
         value &&
         !(
+          value.endsWith("@redwavesol.com") ||
           value.endsWith("@mnrtechnologies.com") ||
           value.endsWith("@adventglobal.com") || value.endsWith("pratikmehakare8@gmail.com") || value.endsWith("pratikmehakare7@gmail.com") 
         )
       ) {
         setEmailError(
-          "Only @mnrtechnologies.com or @adventglobal.com emails are allowed",
+          "This email is not allowed",
         );
       } else {
         setEmailError("");
