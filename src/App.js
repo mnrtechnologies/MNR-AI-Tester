@@ -19,7 +19,7 @@ import { logout } from "./services/operations/authAPIs.js";
 import { useDispatch } from "react-redux";
 import APITesting from "./pages/Dashboard/APITesting.jsx";
 import MobileAppTesting from "./pages/Dashboard/MobileAppTesting.jsx";
-import DBTesting from "./pages/Dashboard/DBTesting.jsx";
+import DBTesting from "./pages/Dashboard/DBTesting";
 import { getUserDetails } from "./services/operations/authAPIs.js";
 import Projects from "./pages/Dashboard/Projects.jsx";
 import SuperAdmin from "./pages/Dashboard/SuperAdmin/SuperAdmin.jsx";
