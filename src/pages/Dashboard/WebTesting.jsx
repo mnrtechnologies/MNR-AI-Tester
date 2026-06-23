@@ -477,14 +477,17 @@ function ExcelDownloadPill({ reports }) {
 // PHASE 1 — Login
 // ════════════════════════════════════════════════════════════════════════════
 function PhaseLogin({ onDone, onStatusChange }) {
+  const [requiresAuth, setRequiresAuth] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
   const [targetUrl, setTargetUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [anthropicApiKey, setAnthropicApiKey] = useState("");
+  
   const { user } = useSelector((state) => state.profile);
   const userId = user?._id;
+  
   const [mode, setMode] = useState("checking");
   const [goal, setGoal] = useState("");
   const [status, setStatus] = useState("idle");
@@ -502,7 +505,8 @@ function PhaseLogin({ onDone, onStatusChange }) {
     setLogs((p) => [...p, { message: msg, color }]);
 
   const connect = () => {
-    if (!email || !targetUrl || (!apiKey && !anthropicApiKey)) return;
+    if ((requiresAuth && !email) || !targetUrl || (!apiKey && !anthropicApiKey)) return;
+    
     setStatus("connecting");
     setLogs([]);
     setScreenshot(null);
@@ -511,15 +515,18 @@ function PhaseLogin({ onDone, onStatusChange }) {
     wsRef.current = ws;
 
     ws.onopen = () => setStatus("running");
+
     ws.onmessage = (ev) => {
       const data = JSON.parse(ev.data);
+
       if (data.type === "connected") {
         pushLog(data.message, "cyan");
         ws.send(
           JSON.stringify({
-            email,
-            password: password || undefined,
-            otp: otp || undefined,
+            requires_auth: requiresAuth,
+            email: requiresAuth ? email : undefined,
+            password: (requiresAuth && password) ? password : undefined,
+            otp: (requiresAuth && otp) ? otp : undefined,
             target_url: targetUrl,
             api_key: apiKey || undefined,
             anthropic_api_key: anthropicApiKey || undefined,
@@ -650,6 +657,27 @@ function PhaseLogin({ onDone, onStatusChange }) {
           className="card"
           style={{ display: "flex", flexDirection: "column", gap: 20 }}
         >
+          {/* Environment Auth Toggle */}
+          <div>
+            <label className="label" style={{ marginBottom: 12 }}>Environment Type</label>
+            <div className="toggle-group">
+              <button 
+                className={cx("toggle-opt", requiresAuth ? "active" : "")} 
+                onClick={() => setRequiresAuth(true)} 
+                disabled={status === "running"}
+              >
+                🔒 Private (Requires Login)
+              </button>
+              <button 
+                className={cx("toggle-opt", !requiresAuth ? "active" : "")} 
+                onClick={() => setRequiresAuth(false)} 
+                disabled={status === "running"}
+              >
+                🌐 Public (No Login)
+              </button>
+            </div>
+          </div>
+
           <div>
             <label className="label">
               Target Environment URL <span style={{ color: C.red }}>*</span>
@@ -662,54 +690,60 @@ function PhaseLogin({ onDone, onStatusChange }) {
               disabled={status === "running"}
             />
           </div>
-          <div>
-            <label className="label">
-              Email Address <span style={{ color: C.red }}>*</span>
-            </label>
-            <input
-              className="input"
-              placeholder="user@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={status === "running"}
-            />
-          </div>
 
-          <div
-            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}
-          >
-            <div>
-              <label className="label">
-                Password{" "}
-                <span style={{ color: C.muted, fontWeight: 400 }}>
-                  (Optional)
-                </span>
-              </label>
-              <input
-                className="input"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={status === "running"}
-              />
+          {/* Conditional Credential Fields */}
+          {requiresAuth && (
+            <div className="fade-up" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <div>
+                <label className="label">
+                  Email Address <span style={{ color: C.red }}>*</span>
+                </label>
+                <input
+                  className="input"
+                  placeholder="user@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={status === "running"}
+                />
+              </div>
+
+              <div
+                style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}
+              >
+                <div>
+                  <label className="label">
+                    Password{" "}
+                    <span style={{ color: C.muted, fontWeight: 400 }}>
+                      (Optional)
+                    </span>
+                  </label>
+                  <input
+                    className="input"
+                    type="password"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={status === "running"}
+                  />
+                </div>
+                <div>
+                  <label className="label">
+                    Static OTP{" "}
+                    <span style={{ color: C.muted, fontWeight: 400 }}>
+                      (Optional)
+                    </span>
+                  </label>
+                  <input
+                    className="input"
+                    placeholder="123456"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value)}
+                    disabled={status === "running"}
+                  />
+                </div>
+              </div>
             </div>
-            <div>
-              <label className="label">
-                Static OTP{" "}
-                <span style={{ color: C.muted, fontWeight: 400 }}>
-                  (Optional)
-                </span>
-              </label>
-              <input
-                className="input"
-                placeholder="123456"
-                value={otp}
-                onChange={(e) => setOtp(e.target.value)}
-                disabled={status === "running"}
-              />
-            </div>
-          </div>
+          )}
 
           <div className="divider" style={{ margin: "4px 0" }} />
 
@@ -880,7 +914,7 @@ function PhaseLogin({ onDone, onStatusChange }) {
             style={{ padding: "12px", marginTop: 8 }}
             onClick={connect}
             disabled={
-              !email ||
+              (requiresAuth && !email) ||
               !userId ||
               !targetUrl ||
               (!apiKey && !anthropicApiKey) ||
