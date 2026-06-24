@@ -560,44 +560,137 @@ exports.getAllUser = async (req, res) => {
 };
 
 // Edit User Details by ID
+// exports.editUser = async (req, res) => {
+//   try {
+//     const { userId } = req.params; // user ID from URL params
+//     const { name, email,phoneno, role,companyId } = req.body; // fields to update
+
+//     if (!name && !email && !role) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "At least one field (name, email, role) is required to update",
+//       });
+//     }
+
+//     // Update user (exclude password updates here)
+//     const updatedUser = await User.findByIdAndUpdate(
+//       userId,
+//       { $set: { name, email,phoneno, role,companyId } },
+//       { new: true, runValidators: true, select: "-password" },
+//     );
+
+    
+
+//     if (!updatedUser) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "User not found",
+//       });
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "User details updated successfully",
+//       user: updatedUser,
+//     });
+//   } catch (error) {
+//     console.error("Error updating user details:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Error updating user details",
+//       error: error.message,
+//     });
+//   }
+// };
+
+// Edit User Details by ID
 exports.editUser = async (req, res) => {
   try {
-    const { userId } = req.params; // user ID from URL params
-    const { name, email, role } = req.body; // fields to update
+    const { userId } = req.params; // user ID from URL params [cite: 24]
+    const { name, email, phoneno, role, companyId } = req.body; // fields to update [cite: 25]
 
-    if (!name && !email && !role) {
+    if (!name && !email && !role && !companyId && !phoneno) {
       return res.status(400).json({
         success: false,
-        message: "At least one field (name, email, role) is required to update",
+        message: "At least one field is required to update",
       });
     }
 
-    // Update user (exclude password updates here)
-    const updatedUser = await User.findByIdAndUpdate(
-      userId,
-      { $set: { name, email, role } },
-      { new: true, runValidators: true, select: "-password" },
-    );
-
-    if (!updatedUser) {
+    // 1. Fetch the existing user first to compare old vs. new values
+    const existingUser = await User.findById(userId);
+    if (!existingUser) {
       return res.status(404).json({
         success: false,
         message: "User not found",
       });
     }
 
+    const oldCompanyId = existingUser.companyId;
+    const oldRole = existingUser.role;
+
+    // Determine the new values (fallback to old if not provided in req.body)
+    const newCompanyId = companyId !== undefined ? companyId : oldCompanyId;
+    const newRole = role || oldRole;
+
+    const companyChanged = String(oldCompanyId) !== String(newCompanyId);
+    const roleChanged = oldRole !== newRole;
+
+    // 2. If the company OR the role has changed, update the Company documents
+    if (companyChanged || roleChanged) {
+      
+      // A. Remove user from the old company's array
+      if (oldCompanyId && oldRole !== "super_admin") {
+        const oldCompany = await Company.findById(oldCompanyId);
+        if (oldCompany) {
+          if (oldRole === "staff") {
+            oldCompany.staff.pull(userId);
+          } else if (oldRole === "company_admin") {
+            oldCompany.admins.pull(userId);
+          }
+          await oldCompany.save();
+        }
+      }
+
+      // B. Add user to the new company's array
+      if (newCompanyId && newRole !== "super_admin") {
+        const newCompany = await Company.findById(newCompanyId);
+        if (!newCompany) {
+          return res.status(404).json({
+            success: false,
+            message: "The new company was not found",
+          });
+        }
+        
+        if (newRole === "staff") {
+          newCompany.staff.push(userId); // Add to staff array [cite: 15]
+        } else if (newRole === "company_admin") {
+          newCompany.admins.push(userId); // Add to admins array [cite: 18]
+        }
+        await newCompany.save();
+      }
+    }
+
+    // 3. Update the User document
+    // Note: Mapped phoneno to mobile to match your User schema
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { $set: { name, email, mobile: phoneno, role: newRole, companyId: newCompanyId } },
+      { new: true, runValidators: true, select: "-password" },
+    );
+
     return res.status(200).json({
       success: true,
       message: "User details updated successfully",
       user: updatedUser,
     });
+
   } catch (error) {
     console.error("Error updating user details:", error);
     return res.status(500).json({
       success: false,
       message: "Error updating user details",
       error: error.message,
-    });
+    }); 
   }
 };
 
