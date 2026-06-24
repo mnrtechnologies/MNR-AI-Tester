@@ -476,7 +476,7 @@ function ExcelDownloadPill({ reports }) {
 // ════════════════════════════════════════════════════════════════════════════
 // PHASE 1 — Login
 // ════════════════════════════════════════════════════════════════════════════
-function PhaseLogin({ onDone, onStatusChange }) {
+function PhaseLogin({ onDone, onStatusChange, onSessionCreated }) {
   const [requiresAuth, setRequiresAuth] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -518,6 +518,10 @@ function PhaseLogin({ onDone, onStatusChange }) {
 
     ws.onmessage = (ev) => {
       const data = JSON.parse(ev.data);
+
+      if (data.session_id && onSessionCreated) {
+        onSessionCreated(data.session_id);
+      }
 
       if (data.type === "connected") {
         pushLog(data.message, "cyan");
@@ -3336,6 +3340,7 @@ export default function App() {
               <PhaseLogin
                 onDone={handleLoginDone}
                 onStatusChange={setActivePhaseStatus}
+                onSessionCreated={setActiveSessionId}
               />
             )}
 

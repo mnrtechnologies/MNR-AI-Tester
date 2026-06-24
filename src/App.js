@@ -305,7 +305,7 @@ function App() {
         }
       />
 
-      {/* Autopilot page */}
+      {/* web testing page */}
       <Route
         path="/web-testing"
         element={
