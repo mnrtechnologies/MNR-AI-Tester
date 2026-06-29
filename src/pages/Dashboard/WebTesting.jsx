@@ -5,6 +5,9 @@ import { useSelector } from "react-redux";
 const API = process.env.REACT_APP_AI_WEB_TESTER_BACKEND_URL;
 const WS = API.replace(/^http/, "ws");
 
+// const API = "http://localhost:8000";
+// const WS = API.replace(/^http/, "ws");
+
 // ── Light Professional Color Palette ─────────────────────────────────────────
 const C = {
   bg: "#ffffff",
@@ -484,10 +487,11 @@ function PhaseLogin({ onDone, onStatusChange, onSessionCreated }) {
   const [targetUrl, setTargetUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [anthropicApiKey, setAnthropicApiKey] = useState("");
-  
+
   const { user } = useSelector((state) => state.profile);
+  // const userId = "68e8de5e3691291828e4ac8e";
   const userId = user?._id;
-  
+
   const [mode, setMode] = useState("checking");
   const [goal, setGoal] = useState("");
   const [status, setStatus] = useState("idle");
@@ -506,7 +510,7 @@ function PhaseLogin({ onDone, onStatusChange, onSessionCreated }) {
 
   const connect = () => {
     if ((requiresAuth && !email) || !targetUrl || (!apiKey && !anthropicApiKey)) return;
-    
+
     setStatus("connecting");
     setLogs([]);
     setScreenshot(null);
@@ -665,16 +669,16 @@ function PhaseLogin({ onDone, onStatusChange, onSessionCreated }) {
           <div>
             <label className="label" style={{ marginBottom: 12 }}>Environment Type</label>
             <div className="toggle-group">
-              <button 
-                className={cx("toggle-opt", requiresAuth ? "active" : "")} 
-                onClick={() => setRequiresAuth(true)} 
+              <button
+                className={cx("toggle-opt", requiresAuth ? "active" : "")}
+                onClick={() => setRequiresAuth(true)}
                 disabled={status === "running"}
               >
                 🔒 Private (Requires Login)
               </button>
-              <button 
-                className={cx("toggle-opt", !requiresAuth ? "active" : "")} 
-                onClick={() => setRequiresAuth(false)} 
+              <button
+                className={cx("toggle-opt", !requiresAuth ? "active" : "")}
+                onClick={() => setRequiresAuth(false)}
                 disabled={status === "running"}
               >
                 🌐 Public (No Login)
@@ -2067,7 +2071,8 @@ function PhaseDirectPrompt({
 // ════════════════════════════════════════════════════════════════════════════
 function PhaseReview({ defaultParentSessionId = "" }) {
   const { user } = useSelector((state) => state.profile);
-  const userId = user?._id;
+ // const userId = "68e8de5e3691291828e4ac8e";
+ const userId = user?._id;
   const [parentSessionId, setParentSessionId] = useState(
     defaultParentSessionId,
   );
@@ -2455,7 +2460,62 @@ function PhaseValidationMongoDB({
   const [anthropicKey, setAnthropicKey] = useState("");
   const [openaiKey, setOpenaiKey] = useState("");
   const { user } = useSelector((state) => state.profile);
+  //const userId = "68e8de5e3691291828e4ac8e";
   const userId = user?._id;
+
+  // Tracks in-flight confirm-downloaded calls so we don't fire duplicates
+  // if the user double-clicks a download link. Keyed by `${session_id}:${file_type}`.
+  const [confirmingDownload, setConfirmingDownload] = useState({});
+
+  // Called right after the user clicks a download link. Tells the backend
+  // that ONE specific file (test_report or final_report) for ONE session_id
+  // has been downloaded, so it can be deleted from S3. The download itself
+  // still happens natively via the <a href> — this just fires alongside it.
+  const confirmDownloaded = async (sessionId, fileType) => {
+    const key = `${sessionId}:${fileType}`;
+    if (confirmingDownload[key]) return; // already in flight, avoid dupes
+
+    setConfirmingDownload((prev) => ({ ...prev, [key]: true }));
+
+    try {
+      const res = await fetch(
+        `${API}/excel/${sessionId}/confirm-downloaded`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ file_type: fileType }),
+        },
+      );
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        console.warn(
+          `confirm-downloaded failed for ${sessionId} (${fileType}):`,
+          body.detail || res.status,
+        );
+        return; // leave the link as-is so the user can try again
+      }
+
+      // Success (or "already_deleted") — clear that file's link locally so
+      // it disappears from the UI without needing a full re-fetch. Only the
+      // one matching session_id + file_type is touched; everything else in
+      // `sessions` is left untouched.
+      const urlField = fileType === "test_report" ? "s3_download_url" : "final_s3_url";
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.session_id === sessionId ? { ...s, [urlField]: null } : s,
+        ),
+      );
+    } catch (err) {
+      console.error(`confirm-downloaded error for ${sessionId} (${fileType}):`, err);
+    } finally {
+      setConfirmingDownload((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
+  };
 
   const [progress, setProgress] = useState({
     pending: 0,
@@ -2992,6 +3052,17 @@ function PhaseValidationMongoDB({
                             href={s.s3_download_url}
                             target="_blank"
                             rel="noopener noreferrer"
+                            onClick={() => {
+                              // Fire-and-forget: backend deletes this file
+                              // from S3 once it confirms the download. Only
+                              // safe once phase3_status is "completed" — the
+                              // backend enforces this regardless, but we
+                              // check client-side too to skip a useless call.
+                              if (s.phase3_status === "completed") {
+                                confirmDownloaded(s.session_id, "test_report");
+                              }
+                            }}
+
                             style={{
                               display: "flex",
                               alignItems: "center",
@@ -3030,6 +3101,14 @@ function PhaseValidationMongoDB({
                             href={s.final_s3_url}
                             target="_blank"
                             rel="noopener noreferrer"
+                            onClick={() => {
+                              // Same as the test_report link above — confirms
+                              // this specific file (final_report) for this
+                              // specific session_id only.
+                              if (s.phase3_status === "completed") {
+                                confirmDownloaded(s.session_id, "final_report");
+                              }
+                            }}
                             style={{
                               display: "flex",
                               alignItems: "center",
@@ -3088,6 +3167,7 @@ export default function App() {
   const [mode, setMode] = useState("checking");
   const [goal, setGoal] = useState("");
   const { user } = useSelector((state) => state.profile);
+  //const userId = "68e8de5e3691291828e4ac8e";
   const userId = user?._id;
   const [activeSessionId, setActiveSessionId] = useState("");
 
@@ -3193,7 +3273,7 @@ export default function App() {
   };
 
   return (
-    <SubscriptionGuard>
+     <SubscriptionGuard>
       <>
         <style dangerouslySetInnerHTML={{ __html: GLOBAL_CSS }} />
         <div style={{ display: "flex", minHeight: "100vh", background: C.bg }}>
