@@ -2,18 +2,37 @@ import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
-import { Building, CreditCard, ShieldCheck, Mail, MapPin, Users, Zap, Clock, ArrowLeft, History } from "lucide-react";
+import { Building, CreditCard, ShieldCheck, Mail, MapPin, Users, Zap, Clock, ArrowLeft, History, Receipt } from "lucide-react";
 
 // IMPORTANT: Adjust these import paths to match your project's folder structure
 import { getCompanyById } from "../../../services/operations/companyAPI";
 import { getSubscriptionById } from "../../../services/operations/subsAPIs";
 import { getCompanyAllStaff } from "../../../services/operations/authAPIs";
 import { getCreditLedger } from "../../../services/operations/creditAPIs";
+import { getPaymentHistory } from "../../../services/operations/paymentAPIs";
+import { formatCharge } from "../../../config/pricing/purchaseQuote";
 import { getTier, formatPrice } from "../../../config/pricing/creditMath";
+
+/**
+ * How each payment state should read to a customer.
+ *
+ * "fulfilment_failed" is deliberately NOT called "failed": the card WAS
+ * charged, so telling the customer it failed would be false and would invite a
+ * second payment. It reads as pending because support resolves it.
+ */
+const PAYMENT_STATUS_LABELS = {
+  paid: { label: "Paid", tone: "bg-emerald-50 text-emerald-600" },
+  failed: { label: "Failed", tone: "bg-rose-50 text-rose-600" },
+  refunded: { label: "Refunded", tone: "bg-slate-100 text-slate-600" },
+  fulfilling: { label: "Processing", tone: "bg-amber-50 text-amber-600" },
+  attempted: { label: "Processing", tone: "bg-amber-50 text-amber-600" },
+  fulfilment_failed: { label: "Being resolved", tone: "bg-amber-50 text-amber-700" },
+};
 
 /** How each ledger movement should read to a customer. */
 const LEDGER_LABELS = {
   grant: { label: "Credits added", tone: "text-emerald-600" },
+  purchase: { label: "Credits purchased", tone: "text-emerald-600" },
   hold: { label: "Reserved for a run", tone: "text-amber-600" },
   commit: { label: "Used by a test run", tone: "text-slate-700" },
   release: { label: "Returned unused", tone: "text-emerald-600" },
@@ -39,6 +58,9 @@ const CompanySubscription = () => {
   const [ledger, setLedger] = useState([]);
   const [ledgerLoading, setLedgerLoading] = useState(true);
 
+  const [payments, setPayments] = useState([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(true);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -47,6 +69,20 @@ const CompanySubscription = () => {
       if (cancelled) return;
       setLedger(result.ok ? result.data.rows : []);
       setLedgerLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setPaymentsLoading(true);
+      const result = await getPaymentHistory({ limit: 25 });
+      if (cancelled) return;
+      setPayments(result.ok ? result.data.rows : []);
+      setPaymentsLoading(false);
     })();
     return () => {
       cancelled = true;
@@ -306,6 +342,93 @@ const CompanySubscription = () => {
           )}
         </motion.div>
       </div>
+
+      {/* PAYMENTS & INVOICES */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.13 }}
+        className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 w-full"
+      >
+        <div className="flex flex-wrap gap-3 justify-between items-center border-b border-slate-100 pb-3 mb-4">
+          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+            <Receipt className="text-orange-500" size={18} /> Payments &amp; Invoices
+          </h3>
+          {user?.role === "company_admin" && (
+            <button
+              onClick={() => navigate("/upgrade-plan")}
+              className="text-sm font-bold text-orange-500 hover:text-orange-600 hover:underline"
+            >
+              Manage plan →
+            </button>
+          )}
+        </div>
+
+        {paymentsLoading ? (
+          <p className="text-sm text-slate-400 italic py-4">Loading payments…</p>
+        ) : payments.length === 0 ? (
+          <p className="text-sm text-slate-400 italic py-4">
+            No payments yet. Purchases made from the plans page appear here.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="text-slate-500 uppercase text-xs font-bold tracking-wider border-b border-slate-100">
+                <tr>
+                  <th className="text-left py-2 pr-4">Date</th>
+                  <th className="text-left py-2 pr-4">Item</th>
+                  <th className="text-left py-2 pr-4">Status</th>
+                  <th className="text-left py-2 pr-4">Payment ID</th>
+                  <th className="text-right py-2">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {payments.map((row) => {
+                  const meta = PAYMENT_STATUS_LABELS[row.status] || {
+                    label: row.status,
+                    tone: "bg-slate-100 text-slate-600",
+                  };
+                  return (
+                    <tr key={row._id} className="border-b border-slate-50 last:border-0">
+                      <td className="py-3 pr-4 text-slate-500 whitespace-nowrap">
+                        {new Date(row.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="py-3 pr-4 font-medium text-slate-700">
+                        {row.description || row.tierKey || "—"}
+                        {row.creditsGranted > 0 && (
+                          <span className="block text-xs text-slate-400 font-normal">
+                            {row.creditsGranted.toLocaleString()} credits
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 pr-4">
+                        <span
+                          className={`text-[10px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full ${meta.tone}`}
+                        >
+                          {meta.label}
+                        </span>
+                      </td>
+                      {/* Monospace: this is the reference a support agent asks for. */}
+                      <td className="py-3 pr-4 text-xs text-slate-400 font-mono">
+                        {row.razorpayPaymentId || "—"}
+                      </td>
+                      {/* Always the currency actually charged — an INR payment
+                          shown in dollars would not match the customer's bank
+                          statement. */}
+                      <td className="py-3 text-right font-bold text-slate-800 whitespace-nowrap">
+                        {formatCharge(row.amountMinor / 100, row.currency)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <p className="text-[11px] text-slate-400 mt-3">
+              Amounts are shown in the currency each payment was charged in.
+            </p>
+          </div>
+        )}
+      </motion.div>
 
       {/* CREDIT HISTORY */}
       <motion.div

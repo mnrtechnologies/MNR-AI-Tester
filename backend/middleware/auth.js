@@ -113,6 +113,52 @@ exports.isSuperAdmin = async (req, res, next) => {
 };
 
 
+/**
+ * Buyers are company admins.
+ *
+ * Deliberately NOT `isAdmin`, which also admits super_admin: a super_admin has
+ * no companyId to bill and provisions plans for free through
+ * POST /api/subscription/activate, so letting them reach checkout would create
+ * an order with nothing to attach it to.
+ *
+ * Attaches req.companyId so handlers do not re-fetch the user.
+ */
+exports.isCompanyAdmin = async (req, res, next) => {
+  try {
+    const userDetails = await User.findById(req.user.id).select("role companyId");
+
+    if (!userDetails) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    if (userDetails.role !== "company_admin") {
+      return res.status(403).json({
+        success: false,
+        code: "NOT_COMPANY_ADMIN",
+        message:
+          "Only a company admin can make purchases. Please ask your organisation's admin.",
+      });
+    }
+
+    if (!userDetails.companyId) {
+      return res.status(403).json({
+        success: false,
+        code: "NO_COMPANY",
+        message: "This account is not linked to a company.",
+      });
+    }
+
+    req.companyId = userDetails.companyId;
+    next();
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to verify Company Admin role",
+      error: error.message,
+    });
+  }
+};
+
 exports.isUser = async (req, res, next) => {
   try {
     const userDetails = await User.findOne({ email: req.user.email });

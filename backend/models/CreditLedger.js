@@ -13,6 +13,7 @@ const mongoose = require("mongoose");
 
 const LEDGER_TYPES = [
   "grant", // allowance granted at activation / renewal
+  "purchase", // credits bought with money (paid plan or top-up)
   "hold", // credits reserved against an in-flight run
   "commit", // reserved credits actually spent
   "release", // reserved credits returned unspent
@@ -28,6 +29,8 @@ const creditLedgerSchema = new mongoose.Schema(
     companyId: { type: mongoose.Schema.Types.ObjectId, ref: "company", required: true, index: true },
     subscriptionId: { type: mongoose.Schema.Types.ObjectId, ref: "Subscription" },
     reservationId: { type: mongoose.Schema.Types.ObjectId, ref: "CreditReservation", default: null },
+    // Set on "purchase" rows, so a ledger line can be traced to its receipt.
+    paymentId: { type: mongoose.Schema.Types.ObjectId, ref: "Payment", default: null },
 
     type: { type: String, enum: LEDGER_TYPES, required: true, index: true },
 

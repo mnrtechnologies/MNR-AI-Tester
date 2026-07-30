@@ -45,7 +45,10 @@
     "server": "node backend/index.js",
     "dev:server": "nodemon --watch backend --ext js,json backend/index.js",
     "test:credits": "react-scripts test --watchAll=false --testPathPattern=credit",
+    "test:payments": "react-scripts test --watchAll=false --testPathPattern=purchase",
     "smoke:credits": "node backend/scripts/smokeTestCredits.js",
+    "smoke:payments": "node backend/scripts/smokeTestPayments.js",
+    "test:paymentflow": "node backend/scripts/testPaymentFlow.js",
     "test:superadmin": "node backend/scripts/testSuperAdminFlow.js",
     "migrate:credits": "node backend/scripts/migrateToCredits.js"
   },

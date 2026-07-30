@@ -58,6 +58,17 @@ export const subscriptionEndpoints = {
   // old path for one release so stale bundles get a clear message.
 };
 
+export const paymentEndpoints = {
+  // The browser sends only WHICH tier/period (or how many credits) — never an
+  // amount. The server re-derives every figure from pricing.data.json.
+  CREATE_ORDER_API: BASE_URL + "/payments/create-order",
+  VERIFY_PAYMENT_API: BASE_URL + "/payments/verify",
+  PAYMENT_HISTORY_API: BASE_URL + "/payments/history",
+  ABANDON_PAYMENT_API: (paymentId) => `${BASE_URL}/payments/${paymentId}/abandon`,
+  // NOTE: /payments/webhook is server-to-server only. It is mounted ahead of
+  // the JSON body parser in backend/index.js and is never called from here.
+};
+
 export const creditEndpoints = {
   // Public tier tables. Internal cost anchors are stripped server-side.
   GET_PRICING_CONFIG_API: BASE_URL + "/credits/pricing",

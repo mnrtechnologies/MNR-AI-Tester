@@ -12,6 +12,9 @@ const credits = require("../services/creditService");
  *   "none"  — balance is replaced by the allowance (unused credits expire)
  *   "carry" — allowance is added to whatever is left
  *
+ * Either way, credits the customer BOUGHT (credits.purchasedBalance) always
+ * survive: they were paid for in cash, not granted as part of a period.
+ *
  * Reserved credits are deliberately untouched: they belong to a run that is
  * still in flight and are settled by the reconciler, not by the calendar.
  */
@@ -49,12 +52,18 @@ async function runResets() {
         let next = addOneMonth(sub.credits.nextResetAt);
         while (next <= new Date()) next = addOneMonth(next);
 
+        // Credits bought with money are not part of the allowance and must
+        // survive a "none" rollover — that branch does `$set balance =
+        // allowance`, which would otherwise delete them silently.
+        const purchased = credits.survivingPurchased(sub);
+
         await credits.grantAllowance(sub._id, allowance, {
           mode: rollover ? "add" : "set",
+          preservePurchased: purchased,
           type: "reset",
           nextResetAt: next,
           actorRole: "system",
-          note: `Billing period reset (${rollover ? "carried over" : "unused credits expired"})`,
+          note: `Billing period reset (${rollover ? "carried over" : "unused allowance expired"}${purchased > 0 ? `, ${purchased} purchased credits kept` : ""})`,
         });
 
         console.log(

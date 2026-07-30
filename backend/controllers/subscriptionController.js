@@ -2,6 +2,7 @@ const Subscription = require("../models/Subscription");
 const Company = require("../models/Company");
 const CreditReservation = require("../models/CreditReservation");
 const credits = require("../services/creditService");
+const purchases = require("../services/purchaseService");
 const cm = require("../../src/config/pricing/creditMath");
 
 /**
@@ -136,57 +137,23 @@ exports.activateSubscription = async (req, res) => {
     // Deactivate any previous subscription for this company.
     await Subscription.updateMany({ companyId, isActive: true }, { isActive: false });
 
-    const now = new Date();
-    const nextResetAt = new Date(now);
-    nextResetAt.setMonth(nextResetAt.getMonth() + 1);
-
-    const subscription = await Subscription.create({
+    // The document shape — credits sub-document, price snapshots, opening
+    // ledger row, Company pointer — lives in purchaseService so this
+    // super-admin path and the paid path in paymentController cannot drift.
+    const subscription = await purchases.createSubscriptionForTier({
       companyId,
-      activatedBy,
-      startDate,
-      endDate,
-      planType,
-      tierKey,
-      // Snapshot the price and the config version so editing
-      // pricing.data.json never silently re-prices an existing customer.
-      pricingVersion: cm.PRICING_VERSION,
-      priceUsdMonthly: priceUsd,
-      fxRateInrPerUsd: cm.FX_INR_PER_USD,
-      concurrentSites: tier.concurrentSites || 1,
-      engine: tier.engine || null,
-      isActive: true,
-      credits: {
-        balance: allowance,
-        reserved: 0,
-        monthlyAllowance: allowance,
-        allowanceGrantedAt: now,
-        nextResetAt,
-        rolloverPolicy: rolloverPolicy === "carry" ? "carry" : "none",
-        overageEnabled: !!overageEnabled,
-        overageRateUsd: tier.extraCreditUsd || null,
-        overageUsedThisPeriod: 0,
-        lifetimeGranted: allowance,
-        lifetimeCommitted: 0,
-      },
-      // @deprecated derived mirror — keeps the pre-credits UI rendering.
-      planDetails: { maxTestsAllowed: allowance, testsUsed: 0 },
-    });
-
-    await credits.writeLedger({
-      companyId: subscription.companyId,
-      subscriptionId: subscription._id,
-      type: "grant",
-      credits: allowance,
-      balanceAfter: allowance,
-      reservedAfter: 0,
       actorUserId: activatedBy,
       actorRole: req.user.role,
+      planType,
+      tierKey,
+      tier,
+      allowance,
+      priceUsd,
+      startDate,
+      endDate,
+      rolloverPolicy,
+      overageEnabled,
       note: `Subscription activated: ${planType}/${tierKey}`,
-    });
-
-    await Company.findByIdAndUpdate(companyId, {
-      subscriptionStatus: "active",
-      activeSubscriptionId: subscription._id,
     });
 
     return res.status(201).json({
@@ -257,9 +224,15 @@ exports.renewSubscription = async (req, res) => {
     const nextResetAt = new Date();
     nextResetAt.setMonth(nextResetAt.getMonth() + 1);
 
+    const rollover = subscription.credits.rolloverPolicy === "carry";
+
     // grantAllowance does the atomic balance write and the ledger row.
     const updated = await credits.grantAllowance(subscription._id, allowance, {
-      mode: subscription.credits.rolloverPolicy === "carry" ? "add" : "set",
+      mode: rollover ? "add" : "set",
+      // Credits the customer BOUGHT are not part of the allowance and must
+      // survive a renewal — "set" would otherwise delete them alongside the
+      // unused allowance. See credits.purchasedBalance on the schema.
+      preservePurchased: rollover ? undefined : credits.survivingPurchased(subscription),
       type: "grant",
       nextResetAt,
       actorUserId: req.user.id,

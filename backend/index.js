@@ -20,6 +20,7 @@ const projectRoute = require("./routes/projectRoutes")
 const subsRoute = require("./routes/subscriptionRoutes")
 const companyRoute = require("./routes/companyRoutes")
 const creditRoute = require("./routes/creditRoutes")
+const paymentRoute = require("./routes/paymentRoutes")
 const creditReconciler = require("./jobs/creditReconciler");
 const allowanceResetJob = require("./jobs/allowanceResetJob");
 
@@ -41,6 +42,23 @@ if (process.env.NODE_ENV === "production") {
 } else {
   app.use(morgan("dev"));
 }
+
+/**
+ * Razorpay webhook — mounted HERE, deliberately, before everything below it.
+ *
+ * Two global middlewares would break it:
+ *
+ *   1. express.json() further down parses and DISCARDS the raw body. The
+ *      webhook signature is an HMAC over the exact bytes Razorpay sent, and
+ *      re-serialising the parsed object produces different bytes (key order,
+ *      whitespace, unicode escaping), so the HMAC could never be reproduced.
+ *   2. The /api limiter below allows 100 requests per 15 minutes. Razorpay
+ *      retries an undelivered webhook for 24 hours; 429ing that retry storm
+ *      looks exactly like an outage while customers sit unfulfilled.
+ *
+ * Do not move this below either of them.
+ */
+app.use("/api/payments/webhook", paymentRoute.webhookRouter);
 
 /**
  * Rate limiting
@@ -261,6 +279,7 @@ app.use("/api/dashboard", dashboardRoute);
 app.use("/api/company",companyRoute)
 app.use("/api/subscription", subsRoute);
 app.use("/api/credits", creditRoute);
+app.use("/api/payments", paymentRoute);
 app.use("/api/projects", projectRoute);
 
 /**

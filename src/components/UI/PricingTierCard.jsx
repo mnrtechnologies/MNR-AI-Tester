@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckCircle2, Zap, Crown, Rocket, PhoneCall, Server } from "lucide-react";
+import { CheckCircle2, Zap, Crown, Rocket, PhoneCall, Server, Loader2 } from "lucide-react";
 import { usdToInr, semiAnnualUsd } from "../../config/pricing/creditMath";
 
 /**
@@ -33,6 +33,10 @@ const PricingTierCard = ({
   isCurrent = false,
   onSelect,
   ctaLabel,
+  // Set while a checkout is in flight. `busy` marks THIS card as the one being
+  // bought; `disabled` greys the rest so a second order cannot be started.
+  busy = false,
+  disabled = false,
 }) => {
   const dark = variant === "dark";
   const isCustom = !!tier.custom;
@@ -177,7 +181,8 @@ const PricingTierCard = ({
       {onSelect && (
         <button
           onClick={() => onSelect(tier)}
-          className={`w-full py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all duration-200 ${
+          disabled={busy || disabled}
+          className={`w-full py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed ${
             tier.highlighted && !unavailable
               ? "bg-orange-500 hover:bg-orange-600 text-white shadow-md shadow-orange-500/20"
               : dark
@@ -185,7 +190,10 @@ const PricingTierCard = ({
                 : "bg-slate-50 hover:bg-slate-100 text-slate-800 border border-slate-200"
           }`}
         >
-          {ctaLabel || (isCustom ? "Contact Sales" : `Get ${tier.name}`)}
+          {busy && (
+            <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+          )}
+          {busy ? "Opening checkout…" : ctaLabel || (isCustom ? "Contact Sales" : `Get ${tier.name}`)}
         </button>
       )}
     </div>

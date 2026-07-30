@@ -93,6 +93,20 @@ async function getActiveSubscription(companyId) {
   return Subscription.findOne({ companyId, isActive: true });
 }
 
+/**
+ * Purchased credits that are still actually present.
+ *
+ * credits.purchasedBalance records how many credits were bought with money, but
+ * spending debits credits.balance without knowing or caring which bucket a
+ * credit came from. So the purchased figure is a CEILING that can drift above
+ * reality once the customer has spent down. min() is the whole correction, and
+ * it also self-heals any staleness left by an older code path.
+ */
+function survivingPurchased(sub) {
+  const c = sub?.credits || {};
+  return Math.max(0, Math.min(c.purchasedBalance || 0, c.balance || 0));
+}
+
 /* ------------------------------------------------------------------ *
  * Balance mutations
  * ------------------------------------------------------------------ */
@@ -287,10 +301,64 @@ async function debitUsageCredits(subscriptionId, credits, meta = {}) {
 }
 
 /**
+ * Credits bought with money, added to the balance.
+ *
+ * Deliberately NOT grantAllowance: that `$set`s credits.monthlyAllowance to its
+ * argument, so topping a Growth plan up by 50 credits would rewrite its
+ * 1,000-credit monthly allowance to 50. It also is not a bare adjustCredits,
+ * because purchased credits must land in their own bucket — otherwise the next
+ * monthly reset (`$set balance = allowance`) deletes credits someone paid for.
+ *
+ * Same conditional-findOneAndUpdate discipline as every other mutation here.
+ */
+async function addPurchasedCredits(subscriptionId, quantity, meta = {}) {
+  if (!(quantity > 0)) return Subscription.findById(subscriptionId);
+
+  const sub = await Subscription.findOneAndUpdate(
+    { _id: subscriptionId },
+    {
+      $inc: {
+        "credits.balance": quantity,
+        "credits.purchasedBalance": quantity,
+        "credits.lifetimeGranted": quantity,
+      },
+    },
+    { returnDocument: "after" }
+  );
+  if (!sub) return null;
+
+  await Subscription.updateOne({ _id: sub._id }, { $set: mirrorSet(sub.credits) });
+
+  await writeLedger({
+    companyId: sub.companyId,
+    subscriptionId: sub._id,
+    paymentId: meta.paymentId || null,
+    type: "purchase",
+    credits: quantity,
+    balanceAfter: sub.credits.balance,
+    reservedAfter: sub.credits.reserved,
+    unitRateUsd: meta.unitRateUsd ?? null,
+    amountUsd: meta.amountUsd ?? null,
+    actorUserId: meta.actorUserId || null,
+    actorRole: meta.actorRole || null,
+    note: meta.note || null,
+  });
+
+  emitCreditUpdate(sub);
+  return sub;
+}
+
+/**
  * Grant a period's allowance. Used at activation, renewal, and monthly reset.
  * `mode` "set" replaces the balance (rolloverPolicy "none"); "add" tops it up.
+ *
+ * `preservePurchased` (a number, "set" mode only) is credits the customer BOUGHT
+ * that must survive the reset. Without it, a "none" rollover wipes them along
+ * with the unused allowance — see credits.purchasedBalance on the schema.
+ * Callers pass survivingPurchased(sub); omitting it leaves the purchased bucket
+ * untouched, which is what every pre-existing caller wants.
  */
-async function grantAllowance(subscriptionId, credits, { mode = "set", type = "grant", note, actorUserId, actorRole, nextResetAt } = {}) {
+async function grantAllowance(subscriptionId, credits, { mode = "set", type = "grant", note, actorUserId, actorRole, nextResetAt, paymentId, preservePurchased } = {}) {
   const update = {
     $inc: { "credits.lifetimeGranted": credits },
     $set: {
@@ -300,8 +368,18 @@ async function grantAllowance(subscriptionId, credits, { mode = "set", type = "g
     },
   };
   if (nextResetAt) update.$set["credits.nextResetAt"] = nextResetAt;
-  if (mode === "set") update.$set["credits.balance"] = credits;
-  else update.$inc["credits.balance"] = credits;
+  if (mode === "set") {
+    const keep =
+      preservePurchased !== undefined && Number(preservePurchased) > 0
+        ? Number(preservePurchased)
+        : 0;
+    update.$set["credits.balance"] = credits + keep;
+    // Only rewrite the bucket when the caller took a position on it, so an
+    // older caller that knows nothing about purchased credits cannot zero them.
+    if (preservePurchased !== undefined) {
+      update.$set["credits.purchasedBalance"] = keep;
+    }
+  } else update.$inc["credits.balance"] = credits;
 
   const sub = await Subscription.findOneAndUpdate(
     { _id: subscriptionId },
@@ -315,6 +393,7 @@ async function grantAllowance(subscriptionId, credits, { mode = "set", type = "g
   await writeLedger({
     companyId: sub.companyId,
     subscriptionId: sub._id,
+    paymentId: paymentId || null,
     type,
     credits,
     balanceAfter: sub.credits.balance,
@@ -696,6 +775,8 @@ module.exports = {
   adjustCredits,
   debitUsageCredits,
   grantAllowance,
+  addPurchasedCredits,
+  survivingPurchased,
   computeEstimate,
   reconcileExplorationHold,
   settleReservation,

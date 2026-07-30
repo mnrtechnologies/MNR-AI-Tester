@@ -92,6 +92,19 @@ const subscriptionSchema = new mongoose.Schema(
       allowanceGrantedAt: { type: Date, default: null },
       nextResetAt: { type: Date, default: null, index: true },
 
+      /**
+       * Credits bought with money on top of the monthly allowance.
+       *
+       * Tracked separately so the monthly reset can expire the ALLOWANCE
+       * without destroying credits the customer paid cash for — a reset does
+       * `$set balance = allowance`, which would otherwise silently delete them.
+       *
+       * This is a CEILING, not a count: consumption debits `balance` only, so
+       * always read it through creditService.survivingPurchased(), which
+       * returns min(purchasedBalance, balance).
+       */
+      purchasedBalance: { type: Number, default: 0, min: 0 },
+
       // "none"  — unused credits expire at reset (default)
       // "carry" — unused credits roll into the next period
       rolloverPolicy: { type: String, enum: ["none", "carry"], default: "none" },
