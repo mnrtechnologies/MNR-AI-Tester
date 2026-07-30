@@ -15,6 +15,7 @@ import ForgotPassword from "./pages/AuthFlow/ForgotPassword.jsx";
 import UpdatePassword from "./pages/AuthFlow/UpdatePassword.jsx";
 
 import socket from "./utils/socket.js";
+import useCreditSocket from "./hooks/useCreditSocket";
 import { logout } from "./services/operations/authAPIs.js";
 import { useDispatch } from "react-redux";
 import APITesting from "./pages/Dashboard/APITesting.jsx";
@@ -162,6 +163,11 @@ function App() {
       socket.off("forceLogout", handleForceLogout);
     };
   }, [dispatch, navigate]);
+
+  // Live credit balance, app-wide. Mounted here (once) so the header, the run
+  // guard and the usage meter never disagree — including when a teammate's run
+  // is what moved the balance.
+  useCreditSocket();
 
   return (
     <Routes>

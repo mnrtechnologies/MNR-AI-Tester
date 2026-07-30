@@ -15,6 +15,7 @@ import {
   Activity,
   Award,
   PlusCircle,
+  Clock,
 } from "lucide-react";
 
 // IMPORTANT: Adjust this import path to match where you saved the API function
@@ -49,24 +50,35 @@ const CompanyAdminDashboard = () => {
     { label: "Total Users", value: stats?.totalUsers ?? "0", icon: <Users size={20} /> },
     { label: "Total Staff", value: stats?.totalStaff ?? "0", icon: <Briefcase size={20} /> },
     { label: "Organization Admins", value: stats?.totalCompanyAdmins ?? "0", icon: <UserCheck size={20} /> },
-    { 
-      label: "License Status", 
-      value: stats?.subscription?.status ? 
-        stats.subscription.status.charAt(0).toUpperCase() + stats.subscription.status.slice(1) : "None", 
-      icon: <CreditCard size={20} /> 
+    {
+      label: "License Status",
+      value: stats?.credits?.status
+        ? stats.credits.status.charAt(0).toUpperCase() + stats.credits.status.slice(1)
+        : "None",
+      icon: <CreditCard size={20} />
     },
-    { 
-      label: "Active Plan", 
-      value: stats?.subscription?.planName ? 
-        stats.subscription.planName.charAt(0).toUpperCase() + stats.subscription.planName.slice(1) : "N/A", 
-      icon: <Award size={20} /> 
+    {
+      label: "Active Plan",
+      value: stats?.credits?.tierName || "N/A",
+      icon: <Award size={20} />
     },
-    { 
-      label: "Tests Used", 
-      value: `${stats?.subscription?.testsUsed ?? 0} / ${stats?.subscription?.maxTestsAllowed ?? 0}`, 
-      icon: <Zap size={20} /> 
+    {
+      label: "Credits Remaining",
+      value: `${(stats?.credits?.balance ?? 0).toLocaleString()} / ${(stats?.credits?.monthlyAllowance ?? 0).toLocaleString()}`,
+      icon: <Zap size={20} />
     },
-    { label: "Active Tests Today", value: stats?.subscription?.activeTestsToday ?? "0", icon: <Activity size={20} /> },
+    {
+      // Held for a run in progress — neither spent nor available. Shown
+      // separately so a run in flight doesn't look like a vanished balance.
+      label: "Credits Reserved",
+      value: (stats?.credits?.reserved ?? 0).toLocaleString(),
+      icon: <Clock size={20} />
+    },
+    {
+      label: "Credits Used Today",
+      value: (stats?.credits?.creditsUsedToday ?? 0).toLocaleString(),
+      icon: <Activity size={20} />
+    },
     { 
       label: "Activate/Renew Sub..", 
       value: "Manage", 

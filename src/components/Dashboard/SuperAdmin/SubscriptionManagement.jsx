@@ -23,10 +23,23 @@ import {
   expireSubscription,
 } from "../../../services/operations/subsAPIs";
 import { getCompanies } from "../../../services/operations/companyAPI";
+import { adjustCredits } from "../../../services/operations/creditAPIs";
+import {
+  listPlanTypes,
+  listTiers,
+  getTier,
+  leadPlanTypeKey,
+  formatPrice,
+} from "../../../config/pricing/creditMath";
+
+const selectClass =
+  "w-full border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 text-sm outline-none transition-all focus:border-orange-300 focus:bg-white focus:ring-4 focus:ring-orange-500/10 cursor-pointer appearance-none";
 
 /* ---------------- Manage Modal ---------------- */
 const ManageModal = ({ selectedCompany, form, setForm, onSubmit, onClose }) => {
   const isRenewal = selectedCompany?.activeSubscriptionId?.isActive;
+  const tiers = listTiers(form.planType);
+  const tier = getTier(form.planType, form.tierKey);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm px-4">
@@ -60,17 +73,67 @@ const ManageModal = ({ selectedCompany, form, setForm, onSubmit, onClose }) => {
         <div className="space-y-5">
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-              Service Plan
+              Plan Type
             </label>
             <select
-              className="w-full border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 text-sm outline-none transition-all focus:border-orange-300 focus:bg-white focus:ring-4 focus:ring-orange-500/10 cursor-pointer appearance-none"
-              value={form.plan}
-              onChange={(e) => setForm({ ...form, plan: e.target.value })}
+              className={selectClass}
+              value={form.planType}
+              onChange={(e) => {
+                const planType = e.target.value;
+                // Tier keys are namespaced per plan type, so switching type
+                // must reset the tier or we'd submit an invalid pair.
+                const first = listTiers(planType)[0];
+                setForm({ ...form, planType, tierKey: first ? first.key : "" });
+              }}
             >
-              <option value="basic">Basic</option>
-              <option value="premium">Premium</option>
-              <option value="custom">Custom</option>
+              {listPlanTypes().map((pt) => (
+                <option key={pt.key} value={pt.key}>
+                  {pt.label}
+                  {pt.lead ? " (recommended)" : ""}
+                </option>
+              ))}
             </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+              Tier
+            </label>
+            <select
+              className={selectClass}
+              value={form.tierKey}
+              onChange={(e) => setForm({ ...form, tierKey: e.target.value })}
+            >
+              {tiers.map((t) => (
+                <option key={t.key} value={t.key} disabled={t.available === false}>
+                  {t.name}
+                  {t.available === false ? " — not available yet" : ""}
+                </option>
+              ))}
+            </select>
+
+            {tier && (
+              <div className="mt-2 text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 leading-relaxed">
+                {tier.custom ? (
+                  <>Custom deal — set the credit allowance below.</>
+                ) : (
+                  <>
+                    <span className="font-bold text-slate-700">
+                      {formatPrice(tier.priceUsdMonthly, "USD")}/mo
+                    </span>{" "}
+                    · {tier.credits.toLocaleString()} credits ·{" "}
+                    {tier.concurrentSites} concurrent ·{" "}
+                    {formatPrice(tier.extraCreditUsd, "USD")}/extra credit
+                    {tier.engineLabel ? ` · ${tier.engineLabel}` : ""}
+                  </>
+                )}
+                {tier.available === false && (
+                  <div className="mt-1 text-amber-600 font-semibold">
+                    {tier.unavailableReason}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div>
@@ -85,24 +148,47 @@ const ManageModal = ({ selectedCompany, form, setForm, onSubmit, onClose }) => {
             />
           </div>
 
-          {/* Conditionally render Maximum Allowed Tests if plan is "custom" */}
-          {form.plan === "custom" && (
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                Maximum Allowed Tests
-              </label>
-              <input
-                type="number"
-                min={0}
-                placeholder="e.g. 100"
-                className="w-full border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 text-sm outline-none transition-all focus:border-orange-300 focus:bg-white focus:ring-4 focus:ring-orange-500/10"
-                value={form.customMaxTests || ""}
-                onChange={(e) =>
-                  setForm({ ...form, customMaxTests: e.target.value })
-                }
-              />
-            </div>
-          )}
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+              Monthly Credits{" "}
+              {tier && !tier.custom && (
+                <span className="text-slate-400 normal-case font-medium">
+                  (optional override)
+                </span>
+              )}
+            </label>
+            <input
+              type="number"
+              min={0}
+              placeholder={
+                tier && !tier.custom ? String(tier.credits) : "e.g. 5000"
+              }
+              className="w-full border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 text-sm outline-none transition-all focus:border-orange-300 focus:bg-white focus:ring-4 focus:ring-orange-500/10"
+              value={form.customCredits}
+              onChange={(e) => setForm({ ...form, customCredits: e.target.value })}
+            />
+            {tier?.custom && (
+              <p className="mt-1 text-[11px] text-slate-400">
+                Required for custom tiers — they carry no published allowance.
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+              Unused Credits
+            </label>
+            <select
+              className={selectClass}
+              value={form.rolloverPolicy}
+              onChange={(e) =>
+                setForm({ ...form, rolloverPolicy: e.target.value })
+              }
+            >
+              <option value="none">Expire at the end of each month</option>
+              <option value="carry">Roll over to the next month</option>
+            </select>
+          </div>
         </div>
 
         <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-slate-100">
@@ -117,6 +203,99 @@ const ManageModal = ({ selectedCompany, form, setForm, onSubmit, onClose }) => {
             className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-bold shadow-md transition-all active:scale-95 w-full flex items-center justify-center gap-2"
           >
             {isRenewal ? "Process Renewal" : "Activate Now"}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+/* --------------- Adjust Credits Modal --------------- */
+const AdjustCreditsModal = ({ company, form, setForm, onSubmit, onClose, loading }) => {
+  const current = company?.activeSubscriptionId?.credits?.balance ?? 0;
+  const delta = Number(form.delta);
+  const preview = Number.isFinite(delta) ? current + delta : current;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm px-4">
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        className="bg-white p-8 rounded-3xl w-full max-w-md shadow-2xl border border-slate-100 relative"
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 bg-slate-50 hover:bg-slate-100 p-2 rounded-full transition-colors"
+        >
+          <X size={20} />
+        </button>
+
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-12 h-12 bg-orange-50 text-orange-600 rounded-xl flex items-center justify-center border border-orange-100">
+            <CreditCard size={24} />
+          </div>
+          <div>
+            <h2 className="text-xl font-black text-slate-800 tracking-tight">
+              Adjust Credits
+            </h2>
+            <p className="text-sm font-medium text-slate-500">{company?.name}</p>
+          </div>
+        </div>
+
+        <div className="space-y-5">
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+              Credits to add or remove
+            </label>
+            <input
+              type="number"
+              placeholder="e.g. 100 to grant, -50 to deduct"
+              className="w-full border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 text-sm outline-none transition-all focus:border-orange-300 focus:bg-white focus:ring-4 focus:ring-orange-500/10"
+              value={form.delta}
+              onChange={(e) => setForm({ ...form, delta: e.target.value })}
+            />
+            <p className="mt-2 text-xs text-slate-500">
+              Balance: <span className="font-bold">{current.toLocaleString()}</span> →{" "}
+              <span
+                className={`font-bold ${preview < 0 ? "text-rose-600" : "text-emerald-600"}`}
+              >
+                {preview.toLocaleString()}
+              </span>
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+              Reason (required)
+            </label>
+            <textarea
+              rows={3}
+              placeholder="e.g. Goodwill refund for run 20260728_1130 — 12 stories timed out"
+              className="w-full border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 text-sm outline-none transition-all focus:border-orange-300 focus:bg-white focus:ring-4 focus:ring-orange-500/10 resize-none"
+              value={form.note}
+              onChange={(e) => setForm({ ...form, note: e.target.value })}
+            />
+            <p className="mt-1 text-[11px] text-slate-400">
+              Recorded permanently in the credit ledger.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-slate-100">
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className="px-5 py-2.5 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl text-sm font-bold transition-colors w-full disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onSubmit}
+            disabled={loading}
+            className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-bold shadow-md transition-all active:scale-95 w-full disabled:opacity-50"
+          >
+            {loading ? "Applying…" : "Apply Adjustment"}
           </button>
         </div>
       </motion.div>
@@ -195,10 +374,18 @@ const SubscriptionManagement = () => {
 
   const [selectedCompany, setSelectedCompany] = useState(null);
   const [form, setForm] = useState({
-    plan: "basic",
+    planType: leadPlanTypeKey(),
+    tierKey: listTiers(leadPlanTypeKey())[0]?.key || "",
     expireDate: "",
-    customMaxTests: "",
+    customCredits: "",
+    rolloverPolicy: "none",
   });
+
+  // Credit adjustment (grant / deduct) for a single company.
+  const [adjustOpen, setAdjustOpen] = useState(false);
+  const [adjustTarget, setAdjustTarget] = useState(null);
+  const [adjustForm, setAdjustForm] = useState({ delta: "", note: "" });
+  const [adjusting, setAdjusting] = useState(false);
 
   /* ---------------- Fetch Real Data ---------------- */
   const loadSubscriptions = async () => {
@@ -229,12 +416,21 @@ const SubscriptionManagement = () => {
     setSelectedCompany(company);
     const sub = company.activeSubscriptionId;
 
+    // An unmigrated subscription has no planType/tierKey, so fall back to the
+    // lead plan rather than submitting an empty pair.
+    const planType =
+      sub?.planType && sub.planType !== "legacy" ? sub.planType : leadPlanTypeKey();
+    const tierKey =
+      getTier(planType, sub?.tierKey)?.key || listTiers(planType)[0]?.key || "";
+
     setForm({
-      plan: sub?.plan || "basic",
+      planType,
+      tierKey,
       expireDate: sub?.endDate
         ? new Date(sub.endDate).toISOString().split("T")[0]
         : "",
-      customMaxTests: sub?.planDetails?.maxTestsAllowed || "",
+      customCredits: sub?.credits?.monthlyAllowance || "",
+      rolloverPolicy: sub?.credits?.rolloverPolicy || "none",
     });
     setModalOpen(true);
   };
@@ -243,27 +439,38 @@ const SubscriptionManagement = () => {
   const handleSubmit = async () => {
     if (!form.expireDate)
       return toast.error("Please select an expiration date");
+    if (!form.tierKey) return toast.error("Please choose a tier");
+
+    const tier = getTier(form.planType, form.tierKey);
+    if (tier?.custom && !form.customCredits) {
+      return toast.error("Custom tiers need an explicit credit allowance");
+    }
 
     const isRenewal = selectedCompany?.activeSubscriptionId?.isActive;
+    const customCredits =
+      form.customCredits === "" ? undefined : Number(form.customCredits);
+
     let result = null;
 
     try {
       if (isRenewal) {
-        // CALL RENEW API
-        result = await renewSubscription(
-          selectedCompany._id,
-          form.expireDate,
-          Number(form.customMaxTests),
-          form.plan,
-        );
+        result = await renewSubscription({
+          companyId: selectedCompany._id,
+          newEndDate: form.expireDate,
+          planType: form.planType,
+          tierKey: form.tierKey,
+          customCredits,
+          rolloverPolicy: form.rolloverPolicy,
+        });
       } else {
-        // CALL ACTIVATE API
         result = await activateSubscription({
           companyId: selectedCompany._id,
-          plan: form.plan,
+          planType: form.planType,
+          tierKey: form.tierKey,
           startDate: new Date().toISOString(),
           endDate: form.expireDate,
-          customMaxTests: Number(form.customMaxTests),
+          customCredits,
+          rolloverPolicy: form.rolloverPolicy,
         });
       }
 
@@ -273,6 +480,34 @@ const SubscriptionManagement = () => {
       }
     } catch (err) {
       console.error("Manage submit error:", err);
+    }
+  };
+
+  /* ---------------- Adjust Credits ---------------- */
+  const handleAdjustSubmit = async () => {
+    const delta = Number(adjustForm.delta);
+    if (!Number.isFinite(delta) || delta === 0) {
+      return toast.error("Enter a non-zero number of credits");
+    }
+    if (!adjustForm.note.trim()) {
+      // Required server-side too — the ledger is only useful if every manual
+      // movement says why it happened.
+      return toast.error("A reason is required so the ledger stays auditable");
+    }
+
+    setAdjusting(true);
+    const result = await adjustCredits({
+      companyId: adjustTarget._id,
+      delta,
+      note: adjustForm.note.trim(),
+    });
+    setAdjusting(false);
+
+    if (result.ok) {
+      setAdjustOpen(false);
+      setAdjustTarget(null);
+      setAdjustForm({ delta: "", note: "" });
+      await loadSubscriptions();
     }
   };
 
@@ -375,7 +610,7 @@ const SubscriptionManagement = () => {
                   <th className="p-5">Organization</th>
                   <th className="p-5">Plan Status</th>
                   <th className="p-5">Billing Cycle</th>
-                  <th className="p-5">Test Usage</th>
+                  <th className="p-5">Credits</th>
                   <th className="p-5 text-right">Controls</th>
                 </tr>
               </thead>
@@ -411,9 +646,25 @@ const SubscriptionManagement = () => {
                           item.activeSubscriptionId?.isActive,
                         )}
                         {item.activeSubscriptionId && (
-                          <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded flex items-center gap-1 mt-1 capitalize">
+                          <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded flex items-center gap-1 mt-1">
                             <CreditCard size={12} className="text-slate-400" />
-                            {item.activeSubscriptionId.plan}
+                            {getTier(
+                              item.activeSubscriptionId.planType,
+                              item.activeSubscriptionId.tierKey,
+                            )?.name ||
+                              item.activeSubscriptionId.legacyPlan ||
+                              "Legacy plan"}
+                          </span>
+                        )}
+                        {item.activeSubscriptionId &&
+                          !item.activeSubscriptionId.pricingVersion && (
+                            <span className="text-[10px] font-bold uppercase text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                              Not migrated
+                            </span>
+                          )}
+                        {item.activeSubscriptionId?.credits?.needsManualReview && (
+                          <span className="text-[10px] font-bold uppercase text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                            Needs review
                           </span>
                         )}
                       </div>
@@ -462,44 +713,68 @@ const SubscriptionManagement = () => {
                       )}
                     </td>
 
-                    {/* API Usage Column */}
+                    {/* Credits Column */}
                     <td className="p-5">
                       {item.activeSubscriptionId ? (
-                        <div className="space-y-2 max-w-[150px]">
-                          <div className="flex justify-between text-xs font-medium">
-                            <span className="text-slate-500">Test Load</span>
-                            <span className="text-slate-800">
-                              {item.activeSubscriptionId.planDetails
-                                ?.testsUsed || 0}{" "}
-                              /{" "}
-                              {item.activeSubscriptionId.planDetails
-                                ?.maxTestsAllowed || 0}
-                            </span>
-                          </div>
-                          <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                            <div
-                              className={`h-1.5 rounded-full ${
-                                (item.activeSubscriptionId.planDetails
-                                  ?.testsUsed || 0) /
-                                  (item.activeSubscriptionId.planDetails
-                                    ?.maxTestsAllowed || 1) >
-                                0.8
-                                  ? "bg-red-400"
-                                  : "bg-blue-400"
-                              }`}
-                              style={{
-                                width: `${Math.min(
-                                  ((item.activeSubscriptionId.planDetails
-                                    ?.testsUsed || 0) /
-                                    (item.activeSubscriptionId.planDetails
-                                      ?.maxTestsAllowed || 1)) *
-                                    100,
-                                  100,
-                                )}%`,
-                              }}
-                            ></div>
-                          </div>
-                        </div>
+                        (() => {
+                          const c = item.activeSubscriptionId.credits || {};
+                          const allowance = c.monthlyAllowance || 0;
+                          const balance = c.balance || 0;
+                          const reserved = c.reserved || 0;
+                          const used = Math.max(0, allowance - balance - reserved);
+                          const usedPct = allowance
+                            ? Math.min((used / allowance) * 100, 100)
+                            : 0;
+                          const reservedPct = allowance
+                            ? Math.min((reserved / allowance) * 100, 100 - usedPct)
+                            : 0;
+
+                          return (
+                            <div className="space-y-2 max-w-[170px]">
+                              <div className="flex justify-between text-xs font-medium">
+                                <span className="text-slate-500">Credits</span>
+                                <span className="text-slate-800 font-bold">
+                                  {balance.toLocaleString()} /{" "}
+                                  {allowance.toLocaleString()}
+                                </span>
+                              </div>
+                              <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden flex">
+                                <div
+                                  className={`h-1.5 ${usedPct > 80 ? "bg-red-400" : "bg-blue-400"}`}
+                                  style={{ width: `${usedPct}%` }}
+                                />
+                                {/* Held credits are neither spent nor available.
+                                    Folding them into either bar generates
+                                    support tickets, so show them separately. */}
+                                {reservedPct > 0 && (
+                                  <div
+                                    className="h-1.5 bg-amber-300"
+                                    style={{ width: `${reservedPct}%` }}
+                                    title={`${reserved} reserved for a run in progress`}
+                                  />
+                                )}
+                              </div>
+                              <div className="flex justify-between text-[10px] text-slate-400">
+                                <span>{used.toLocaleString()} used</span>
+                                {reserved > 0 && (
+                                  <span className="text-amber-600 font-semibold">
+                                    {reserved} held
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => {
+                                  setAdjustTarget(item);
+                                  setAdjustForm({ delta: "", note: "" });
+                                  setAdjustOpen(true);
+                                }}
+                                className="text-[11px] font-bold text-orange-600 hover:text-orange-700 hover:underline"
+                              >
+                                Adjust credits
+                              </button>
+                            </div>
+                          );
+                        })()
                       ) : (
                         <span className="text-xs text-slate-400 flex items-center gap-1">
                           <Activity size={14} /> Unallocated
@@ -552,6 +827,17 @@ const SubscriptionManagement = () => {
             setForm={setForm}
             onSubmit={handleSubmit}
             onClose={() => setModalOpen(false)}
+          />
+        )}
+
+        {adjustOpen && (
+          <AdjustCreditsModal
+            company={adjustTarget}
+            form={adjustForm}
+            setForm={setAdjustForm}
+            onSubmit={handleAdjustSubmit}
+            onClose={() => setAdjustOpen(false)}
+            loading={adjusting}
           />
         )}
 

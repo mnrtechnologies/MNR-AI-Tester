@@ -1,6 +1,18 @@
 import { useState, useEffect, useRef } from "react";
 import SubscriptionGuard from "../../components/UI/SubscriptionGuard";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
+import { Link } from "react-router-dom";
+import {
+  getCreditEstimate,
+  authorizeRun,
+  reserveExploration,
+  settleRun,
+  releaseRun,
+  fetchCreditAccount,
+  creditPreflight,
+} from "../../services/operations/creditAPIs";
+import { PHASE2_MAX_URLS } from "../../config/pricing/creditMath";
+import useLiveUsage from "../../hooks/useLiveUsage";
 
 const API = process.env.REACT_APP_AI_WEB_TESTER_BACKEND_URL;
 const WS = API.replace(/^http/, "ws");
@@ -1015,6 +1027,16 @@ function PhaseChecking({
   onSessionReady,
   onStatusChange,
 }) {
+  const dispatch = useDispatch();
+  const { user } = useSelector((state) => state.profile);
+  const creditAccount = user?.creditAccount;
+  // Managed plans pay for model calls on top of the capacity charge, so they
+  // get a running total of that additional spend.
+  const billsUsage = !!creditAccount?.billsUsage;
+
+  // Exploration is where most model calls happen, so the meter is fed here too.
+  const { live: liveUsage, ingest: ingestLiveUsage } = useLiveUsage();
+
   const [jobId, setJobId] = useState(null);
   const [status, setStatus] = useState("starting");
   const [screenshot, setScreenshot] = useState(null);
@@ -1045,6 +1067,24 @@ function PhaseChecking({
     let cancelled = false;
 
     const start = async () => {
+      // Cheap client-side pre-check so an out-of-credit user is told before we
+      // spin anything up. The authoritative hold happens below, once the
+      // server has assigned a parent session id to key it on.
+      if (
+        creditAccount &&
+        !creditAccount.unlimited &&
+        !creditAccount.overageEnabled &&
+        creditAccount.balance < PHASE2_MAX_URLS
+      ) {
+        pushLog(
+          `❌ Not enough credits. Discovery reserves up to ${PHASE2_MAX_URLS} credits ` +
+            `and you have ${creditAccount.balance}. Unused credits are returned automatically.`,
+          "red",
+        );
+        setStatus("error");
+        return;
+      }
+
       pushLog(`Initializing Checking Pipeline → ${targetUrl}`, "cyan");
       const res = await fetch(`${API}/checking/start`, {
         method: "POST",
@@ -1061,6 +1101,31 @@ function PhaseChecking({
       const data = await res.json();
       if (cancelled) return;
 
+      // Hold the crawler's page ceiling. The real URL count is not knowable
+      // until Phase 1 finishes crawling, so we over-hold and the review screen
+      // reconciles it back down. If the hold fails, stop the run immediately
+      // rather than let it spend against credits that aren't there.
+      const reservation = await reserveExploration(data.session_id);
+      if (cancelled) return;
+      if (!reservation.ok) {
+        pushLog(`❌ ${reservation.message}`, "red");
+        setStatus("error");
+        try {
+          await fetch(`${API}/terminate/${data.session_id}`, { method: "POST" });
+        } catch (_) {
+          /* best effort — the reconciler releases the hold either way */
+        }
+        return;
+      }
+      if (reservation.data?.creditsHeld) {
+        pushLog(
+          `💳 ${reservation.data.creditsHeld} credits held while we discover your pages. ` +
+            `Unused credits are returned automatically.`,
+          "cyan",
+        );
+        dispatch(fetchCreditAccount());
+      }
+
       setJobId(data.session_id);
       pushLog(`Job ID Assigned: ${data.job_id}`, "cyan");
 
@@ -1076,6 +1141,14 @@ function PhaseChecking({
         }
 
         if (msg.type === "ping") return;
+
+        // Meter telemetry. Consumed silently — it feeds the credit readout and
+        // is deliberately kept out of the activity log, which is for the
+        // agent's decisions, not token counts.
+        if (msg.type === "usage" || msg.type === "activity") {
+          ingestLiveUsage(msg);
+          return;
+        }
 
         if (msg.type === "frame") {
           setScreenshot(`data:image/jpeg;base64,${msg.image}`);
@@ -1200,6 +1273,13 @@ function PhaseChecking({
           {status === "running" ? "Crawling" : status}
         </span>
       </div>
+
+      {/* Model-usage charges accruing ON TOP of this run's capacity credits.
+          Exploration is where most model calls happen, so this is the phase
+          where it actually moves. */}
+      {billsUsage && liveUsage.calls > 0 && (
+        <LiveUsageMeter live={liveUsage} account={creditAccount} />
+      )}
 
       <div style={{ width: "100%" }}>
         <ScreenPanel
@@ -2069,7 +2149,11 @@ function PhaseDirectPrompt({
 // ════════════════════════════════════════════════════════════════════════════
 // PHASE REVIEW — Human review of Expected Results before Phase 3
 // ════════════════════════════════════════════════════════════════════════════
-function PhaseReview({ defaultParentSessionId = "" }) {
+function PhaseReview({
+  defaultParentSessionId = "",
+  authorization,
+  onAuthorized,
+}) {
   const { user } = useSelector((state) => state.profile);
  // const userId = "68e8de5e3691291828e4ac8e";
  const userId = user?._id;
@@ -2081,11 +2165,36 @@ function PhaseReview({ defaultParentSessionId = "" }) {
   const [edits, setEdits] = useState({});
   const [saveMsg, setSaveMsg] = useState(null);
 
+  // Credit estimate for this run. Priced entirely server-side from what the
+  // AI engine wrote to Mongo — nothing here is sent to the server as input.
+  const [estimate, setEstimate] = useState(null);
+  const [estimateLoading, setEstimateLoading] = useState(false);
+  const [estimateError, setEstimateError] = useState(null);
+
+  // Every plan is quoted and approved on the capacity charge. Managed plans
+  // additionally pay for the model calls the run makes, so their quote is a
+  // floor rather than a total — the panel says so.
+  const billsUsage = !!user?.creditAccount?.billsUsage;
+
   useEffect(() => {
     if (defaultParentSessionId && userId) {
       loadReview(defaultParentSessionId, userId);
     }
   }, [defaultParentSessionId, userId]);
+
+  const fetchEstimate = async (pid) => {
+    if (!pid) return;
+    setEstimateLoading(true);
+    setEstimateError(null);
+    const result = await getCreditEstimate(pid);
+    setEstimateLoading(false);
+    if (result.ok) {
+      setEstimate(result.data);
+    } else {
+      setEstimate(null);
+      setEstimateError(result.message);
+    }
+  };
 
   const loadReview = async (pid = parentSessionId, uid = userId) => {
     if (!pid || !uid || !pid.trim() || !uid.trim()) return;
@@ -2105,6 +2214,16 @@ function PhaseReview({ defaultParentSessionId = "" }) {
       }
       setSheets(d.sheets || []);
       setStatus((d.sheets || []).length > 0 ? "loaded" : "empty");
+
+      // Price the run once the engine has reported its story counts. This also
+      // reconciles the discovery hold down to the real URL count, returning
+      // whatever was over-held.
+      //
+      // Every plan is quoted. On Managed the quote covers the capacity charge
+      // and model usage is added on top as it runs — see CreditEstimatePanel.
+      if ((d.sheets || []).length > 0) {
+        await fetchEstimate(pid);
+      }
     } catch (e) {
       setStatus("error");
       setSaveMsg({ type: "error", text: `Load failed: ${e}` });
@@ -2208,6 +2327,17 @@ function PhaseReview({ defaultParentSessionId = "" }) {
           </button>
         </div>
       </div>
+
+      {/* Cost first, before the user scrolls through the story tables. */}
+      {(status === "loaded" || status === "saving") && (
+        <CreditEstimatePanel
+          estimate={estimate}
+          loading={estimateLoading}
+          error={estimateError}
+          billsUsage={billsUsage}
+          onRefresh={() => fetchEstimate(parentSessionId)}
+        />
+      )}
 
       {(status === "loaded" || status === "saving") &&
         sheets.map((sheet) => (
@@ -2421,12 +2551,21 @@ function PhaseReview({ defaultParentSessionId = "" }) {
               </div>
             )}
             <button
-              className="btn btn-primary"
+              className="btn"
               onClick={saveChanges}
               disabled={dirtyCount === 0 || status === "saving"}
             >
               {status === "saving" ? "Saving…" : "Save Changes"}
             </button>
+
+            {/* Edit → save → approve, in reading order, in one bar. Every plan
+                approves its capacity charge before Phase 3 runs. */}
+            <RunApprovalGate
+              estimate={estimate}
+              parentSessionId={parentSessionId}
+              authorization={authorization}
+              onAuthorized={onAuthorized}
+            />
           </div>
         </div>
       )}
@@ -2448,20 +2587,618 @@ function PhaseReview({ defaultParentSessionId = "" }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// CREDIT GATE — price the run, then get explicit approval before spending
+//
+// These three components live in this file (rather than components/UI) on
+// purpose: this page uses an inline `C` palette and inline styles, not the
+// Tailwind used elsewhere in the app. A Tailwind component dropped in here
+// would look spliced on.
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Live model-usage meter — Managed plans only.
+ *
+ * This is NOT the price of the run. The run's capacity credits were quoted and
+ * approved on the Review tab; this shows the model usage being charged ON TOP
+ * of them, as it accrues. Fed by the `usage` and `activity` events the engine
+ * pushes over the existing WebSocket.
+ *
+ * The credit figure here is CLIENT-SIDE and optimistic — it converts streamed
+ * token counts at the same published rates the server uses, so the number moves
+ * immediately instead of waiting on the billing pass. The authoritative balance
+ * arrives separately over `credits:update` and overrides it. A brief
+ * disagreement of hundredths of a credit is expected and harmless; showing a
+ * frozen number for 20 seconds is not.
+ */
+function LiveUsageMeter({ live, account }) {
+  const spent = live.credits;
+  const balance = account?.balance;
+
+  return (
+    <div className="card fade-up" style={{ borderLeft: `3px solid ${C.cyan}` }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          gap: 16,
+          flexWrap: "wrap",
+        }}
+      >
+        <div>
+          <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>
+            Model usage this run{" "}
+            <span style={{ opacity: 0.8 }}>(on top of capacity credits)</span>
+          </div>
+          <div style={{ fontSize: 26, fontWeight: 700, color: C.text }}>
+            {spent.toFixed(2)}
+            <span style={{ fontSize: 13, fontWeight: 400, color: C.muted }}>
+              {" "}
+              credits
+            </span>
+          </div>
+        </div>
+
+        {typeof balance === "number" && !account?.unlimited && (
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>
+              Balance remaining
+            </div>
+            <div
+              style={{
+                fontSize: 20,
+                fontWeight: 600,
+                color: balance <= 0 ? C.red : C.text,
+              }}
+            >
+              {balance.toFixed(2)}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {live.action && (
+        <div
+          style={{
+            marginTop: 14,
+            paddingTop: 12,
+            borderTop: `1px solid ${C.border}`,
+            fontSize: 13,
+            color: C.text,
+          }}
+        >
+          <span style={{ color: C.cyan }}>▸</span> {live.action}
+          {live.model && (
+            <span style={{ color: C.muted, fontSize: 12 }}> · {live.model}</span>
+          )}
+        </div>
+      )}
+
+      <div style={{ marginTop: 10, fontSize: 11, color: C.muted }}>
+        {live.calls.toLocaleString()} model call
+        {live.calls === 1 ? "" : "s"} ·{" "}
+        {(live.inputTokens + live.outputTokens).toLocaleString()} tokens
+        {balance <= 0 && (
+          <span style={{ color: C.yellow }}>
+            {" "}
+            · Balance exhausted — this run will finish and the difference will be
+            billed as overage.
+          </span>
+        )}
+      </div>
+
+      <div style={{ marginTop: 8, fontSize: 11, color: C.muted, opacity: 0.75 }}>
+        Live figure — settles to the exact amount when the run completes.
+      </div>
+    </div>
+  );
+}
+
+/** Per-URL cost breakdown, shown before the user scrolls through the stories. */
+function CreditEstimatePanel({ estimate, loading, error, billsUsage, onRefresh }) {
+  if (loading) {
+    return (
+      <div className="card fade-up" style={{ fontSize: 13, color: C.muted }}>
+        Calculating credit cost…
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="card fade-up" style={{ fontSize: 13, color: C.yellow }}>
+        Could not load the credit estimate: {error}
+        {onRefresh && (
+          <button
+            className="btn"
+            style={{ marginLeft: 12 }}
+            onClick={onRefresh}
+          >
+            Retry
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (!estimate) return null;
+
+  const {
+    perUrl = [],
+    totalStories,
+    totalCredits,
+    alreadyHeld,
+    topUpRequired,
+    balance,
+    balanceAfterRun,
+    estimateIncomplete,
+    oversizedUrls = [],
+    enforced,
+  } = estimate;
+
+  return (
+    <div className="card fade-up">
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+          gap: 12,
+          marginBottom: 14,
+        }}
+      >
+        <div style={{ fontWeight: 600, fontSize: 15, color: C.text }}>
+          {billsUsage ? "Capacity cost for this run" : "Credit cost for this run"}
+        </div>
+        <div style={{ fontSize: 12, color: C.muted }}>
+          {perUrl.length} page{perUrl.length !== 1 ? "s" : ""} · {totalStories} test
+          stor{totalStories === 1 ? "y" : "ies"}
+        </div>
+      </div>
+
+      {/* On a Managed plan this quote is a FLOOR, not the total — the model
+          calls are charged on top. Saying so here is what stops the first
+          invoice reading as a bait-and-switch. */}
+      {billsUsage && (
+        <div
+          style={{
+            marginBottom: 14,
+            padding: "8px 12px",
+            borderRadius: 8,
+            background: "rgba(6,182,212,0.06)",
+            border: `1px solid ${C.border}`,
+            fontSize: 12,
+            color: C.muted,
+            lineHeight: 1.5,
+          }}
+        >
+          <span style={{ color: C.text, fontWeight: 600 }}>
+            Plus model usage.
+          </span>{" "}
+          Your plan includes the AI provider cost, so the OpenAI / Claude calls
+          this run makes are charged in addition to the credits below. That part
+          is metered as it runs and shown live.
+        </div>
+      )}
+
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead>
+            <tr style={{ textAlign: "left", color: C.muted, fontSize: 12 }}>
+              <th style={{ padding: "6px 8px", fontWeight: 600 }}>Page</th>
+              <th style={{ padding: "6px 8px", fontWeight: 600, width: 90 }}>Stories</th>
+              <th style={{ padding: "6px 8px", fontWeight: 600, width: 80 }}>Credits</th>
+            </tr>
+          </thead>
+          <tbody>
+            {perUrl.map((line) => (
+              <tr
+                key={line.sessionId || line.pageUrl}
+                style={{ borderTop: `1px solid ${C.border}` }}
+              >
+                <td
+                  style={{
+                    padding: "8px",
+                    color: C.text,
+                    maxWidth: 420,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                  title={line.pageUrl}
+                >
+                  {line.pageUrl || line.sessionId}
+                  {line.oversized && (
+                    <span
+                      style={{
+                        marginLeft: 8,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: C.yellow,
+                      }}
+                    >
+                      NEEDS APPROVAL
+                    </span>
+                  )}
+                  {!line.storyCountKnown && (
+                    <span
+                      style={{ marginLeft: 8, fontSize: 11, color: C.muted }}
+                    >
+                      (estimated)
+                    </span>
+                  )}
+                </td>
+                <td style={{ padding: "8px", color: C.muted }}>{line.storyCount}</td>
+                <td style={{ padding: "8px", color: C.text, fontWeight: 600 }}>
+                  {line.credits}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr style={{ borderTop: `2px solid ${C.border}` }}>
+              <td style={{ padding: "10px 8px", fontWeight: 700, color: C.text }}>
+                Total
+              </td>
+              <td style={{ padding: "10px 8px", fontWeight: 700, color: C.text }}>
+                {totalStories}
+              </td>
+              <td style={{ padding: "10px 8px", fontWeight: 700, color: C.text }}>
+                {totalCredits}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <div
+        style={{
+          marginTop: 14,
+          paddingTop: 14,
+          borderTop: `1px solid ${C.border}`,
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 24,
+          fontSize: 13,
+        }}
+      >
+        <div>
+          <div style={{ color: C.muted, fontSize: 11, textTransform: "uppercase" }}>
+            Already held
+          </div>
+          <div style={{ fontWeight: 700, color: C.text }}>{alreadyHeld}</div>
+        </div>
+        <div>
+          <div style={{ color: C.muted, fontSize: 11, textTransform: "uppercase" }}>
+            Charged now
+          </div>
+          <div style={{ fontWeight: 700, color: C.accent }}>{topUpRequired}</div>
+        </div>
+        <div>
+          <div style={{ color: C.muted, fontSize: 11, textTransform: "uppercase" }}>
+            Balance
+          </div>
+          <div style={{ fontWeight: 700, color: C.text }}>{balance}</div>
+        </div>
+        <div>
+          <div style={{ color: C.muted, fontSize: 11, textTransform: "uppercase" }}>
+            After this run
+          </div>
+          <div
+            style={{
+              fontWeight: 700,
+              color: balanceAfterRun < 0 ? C.red : C.green,
+            }}
+          >
+            {balanceAfterRun}
+          </div>
+        </div>
+      </div>
+
+      {/* Credits already held during discovery are a down payment on the same
+          total, not an extra charge — say so, or "Already held" looks like
+          double billing. */}
+      <div style={{ marginTop: 12, fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
+        Credits held while we discovered your pages count towards this total — you're
+        only charged the difference.
+      </div>
+
+      {estimateIncomplete && (
+        <div style={{ marginTop: 10, fontSize: 12, color: C.yellow }}>
+          Some pages haven't been counted yet, so they're priced at the maximum. Load
+          this review screen again for an exact quote.
+        </div>
+      )}
+
+      {oversizedUrls.length > 0 && (
+        <div style={{ marginTop: 10, fontSize: 12, color: C.yellow }}>
+          {oversizedUrls.length} page{oversizedUrls.length !== 1 ? "s" : ""} produced an
+          unusually large number of test stories and will need your explicit approval.
+        </div>
+      )}
+
+      {enforced === false && (
+        <div style={{ marginTop: 10, fontSize: 12, color: C.muted }}>
+          Credit enforcement is currently disabled — this is an estimate only.
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Blocking modal for HTTP 402. */
+function InsufficientCreditsModal({ detail, onClose }) {
+  if (!detail) return null;
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(15,23,42,0.6)",
+        backdropFilter: "blur(4px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 1000,
+        padding: 16,
+      }}
+    >
+      <div
+        className="card"
+        style={{ maxWidth: 440, width: "100%", textAlign: "center" }}
+      >
+        <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 8 }}>
+          Not enough credits
+        </div>
+        <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.6, marginBottom: 16 }}>
+          {detail.message}
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            gap: 24,
+            fontSize: 13,
+            marginBottom: 20,
+          }}
+        >
+          <div>
+            <div style={{ color: C.muted, fontSize: 11 }}>NEEDED</div>
+            <div style={{ fontWeight: 700, color: C.text }}>{detail.required}</div>
+          </div>
+          <div>
+            <div style={{ color: C.muted, fontSize: 11 }}>AVAILABLE</div>
+            <div style={{ fontWeight: 700, color: C.text }}>{detail.available}</div>
+          </div>
+          <div>
+            <div style={{ color: C.muted, fontSize: 11 }}>SHORT BY</div>
+            <div style={{ fontWeight: 700, color: C.red }}>{detail.shortfall}</div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+          <button className="btn" onClick={onClose}>
+            Close
+          </button>
+          <Link to="/upgrade-plan" className="btn btn-primary">
+            View plans
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Per-URL confirmation for HTTP 409 (a page produced too many stories). */
+function OversizedApprovalModal({ detail, onConfirm, onClose, busy }) {
+  const urls = detail?.oversizedUrls || [];
+  const [acked, setAcked] = useState({});
+  const allAcked = urls.length > 0 && urls.every((u) => acked[u.sessionId]);
+
+  if (!detail) return null;
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(15,23,42,0.6)",
+        backdropFilter: "blur(4px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 1000,
+        padding: 16,
+      }}
+    >
+      <div
+        className="card"
+        style={{ maxWidth: 560, width: "100%", maxHeight: "80vh", overflowY: "auto" }}
+      >
+        <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 8 }}>
+          Confirm large pages
+        </div>
+        <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.6, marginBottom: 16 }}>
+          {detail.message} Approve each one to continue.
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {urls.map((u) => (
+            <label
+              key={u.sessionId}
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 10,
+                padding: 12,
+                border: `1px solid ${C.border}`,
+                borderRadius: 8,
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={!!acked[u.sessionId]}
+                onChange={(e) =>
+                  setAcked((prev) => ({ ...prev, [u.sessionId]: e.target.checked }))
+                }
+                style={{ marginTop: 3 }}
+              />
+              <span style={{ fontSize: 13, color: C.text, minWidth: 0 }}>
+                <span style={{ display: "block", wordBreak: "break-all" }}>
+                  {u.pageUrl || u.sessionId}
+                </span>
+                <span style={{ color: C.muted, fontSize: 12 }}>
+                  I approve running {u.storyCount} test stories for this page (
+                  {u.credits} credits)
+                </span>
+              </span>
+            </label>
+          ))}
+        </div>
+
+        <div
+          style={{
+            marginTop: 18,
+            display: "flex",
+            gap: 10,
+            justifyContent: "flex-end",
+          }}
+        >
+          <button className="btn" onClick={onClose} disabled={busy}>
+            Cancel
+          </button>
+          <button
+            className="btn btn-primary"
+            onClick={onConfirm}
+            disabled={!allAcked || busy}
+          >
+            {busy
+              ? "Authorizing…"
+              : `Approve & charge ${detail.topUpRequired} credits`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The approval action itself.
+ *
+ * NOTE: this is a client-side gate only. The browser talks to the FastAPI
+ * engine directly with no auth, so a determined user can still POST
+ * /phase3/start by hand. The real fix is proxying that call through Express;
+ * until then this stops accidents, not attackers.
+ */
+function RunApprovalGate({ estimate, parentSessionId, authorization, onAuthorized }) {
+  const [busy, setBusy] = useState(false);
+  const [insufficient, setInsufficient] = useState(null);
+  const [oversized, setOversized] = useState(null);
+  const [message, setMessage] = useState(null);
+
+  const authorized =
+    !!authorization && authorization.parentSession === parentSessionId;
+
+  const submit = async (acknowledgedOversized) => {
+    setBusy(true);
+    setMessage(null);
+    const result = await authorizeRun(parentSessionId, { acknowledgedOversized });
+    setBusy(false);
+
+    if (result.ok) {
+      setOversized(null);
+      setInsufficient(null);
+      setMessage(result.message);
+      onAuthorized({ ...result.data, parentSession: parentSessionId });
+      return;
+    }
+
+    if (result.code === "INSUFFICIENT_CREDITS") {
+      setInsufficient(result.data);
+    } else if (result.code === "OVERSIZED_URL_REQUIRES_APPROVAL") {
+      setOversized(result.data);
+    } else {
+      setMessage(result.message);
+    }
+  };
+
+  if (!estimate) return null;
+
+  if (authorized) {
+    return (
+      <div style={{ fontSize: 13, color: C.green, fontWeight: 600 }}>
+        ✓ Run authorized — {authorization.creditsHeld} credit
+        {authorization.creditsHeld === 1 ? "" : "s"} held. Continue to Validation.
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        {message && (
+          <span style={{ fontSize: 13, color: C.red }}>{message}</span>
+        )}
+        <button
+          className="btn btn-primary"
+          onClick={() => submit(false)}
+          disabled={busy || estimate.urlCount === 0}
+          title={
+            estimate.sufficient === false
+              ? "Not enough credits — contact your administrator"
+              : undefined
+          }
+        >
+          {busy
+            ? "Authorizing…"
+            : `Approve & charge ${estimate.topUpRequired} credit${
+                estimate.topUpRequired === 1 ? "" : "s"
+              }`}
+        </button>
+      </div>
+
+      <InsufficientCreditsModal
+        detail={insufficient}
+        onClose={() => setInsufficient(null)}
+      />
+      <OversizedApprovalModal
+        detail={oversized}
+        busy={busy}
+        onClose={() => setOversized(null)}
+        onConfirm={() => submit(true)}
+      />
+    </>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // PHASE 3 — MongoDB-Driven Validation (Manual Trigger)
 // ════════════════════════════════════════════════════════════════════════════
 function PhaseValidationMongoDB({
   onStatusChange,
   parentSessionId,
   setParentSessionId,
+  authorization,
 }) {
   const [status, setStatus] = useState("idle");
   const [sessions, setSessions] = useState([]);
   const [anthropicKey, setAnthropicKey] = useState("");
   const [openaiKey, setOpenaiKey] = useState("");
   const { user } = useSelector((state) => state.profile);
+  const dispatch = useDispatch();
   //const userId = "68e8de5e3691291828e4ac8e";
   const userId = user?._id;
+
+  // Managed plans pay model usage on top of the approved capacity charge, so
+  // they get a running total of that additional spend during the run.
+  const billsUsage = !!user?.creditAccount?.billsUsage;
+  const {
+    live: liveUsage,
+    ingest: ingestLiveUsage,
+    reset: resetLiveUsage,
+  } = useLiveUsage();
 
   // Tracks in-flight confirm-downloaded calls so we don't fire duplicates
   // if the user double-clicks a download link. Keyed by `${session_id}:${file_type}`.
@@ -2579,12 +3316,27 @@ function PhaseValidationMongoDB({
       return;
     }
 
+    // Credit gate. Client-side only: the browser calls the AI engine directly
+    // with no auth, so this stops accidents rather than determined bypass.
+    // Proxying /phase3/start through Express is the real fix.
+    //
+    // Every plan needs its capacity charge approved first.
+    if (!authorization || authorization.parentSession !== parentSessionId) {
+      pushLog(
+        "❌ This run hasn't been authorized. Approve the credit estimate on the Review tab first.",
+        "red",
+      );
+      setStatus("error");
+      return;
+    }
+
     setStatus("running");
     setLogs([]);
     setSessions([]);
     setTaskProgress({ done: 0, total: 0 });
     setGlobalBatchReport(null);
     setScreenshot(null);
+    resetLiveUsage();
 
     pushLog(`🚀 Starting Phase 3 for session: ${parentSessionId}`, "cyan");
 
@@ -2638,6 +3390,13 @@ function PhaseValidationMongoDB({
             pushLog(msg.message, msg.color || "white");
             break;
 
+          // Spend and activity from the engine. Display only — the
+          // authoritative balance arrives separately over credits:update.
+          case "usage":
+          case "activity":
+            ingestLiveUsage(msg);
+            break;
+
           case "task_progress":
             setTaskProgress({ done: msg.tasks_done, total: msg.tasks_total });
             break;
@@ -2660,6 +3419,11 @@ function PhaseValidationMongoDB({
 
             const summary = `(Passed: ${msg.completed || 0}, Failed: ${msg.failed || 0})`;
             pushLog(`🎉 Phase 3 complete ${summary}`, "green");
+
+            // Settle the held credits now rather than making the customer
+            // wait for the reconciler's next sweep. Safe to fire and forget:
+            // settlement is idempotent and re-derives everything server-side.
+            dispatch(settleRun(parentSessionId));
 
             if (msg.message === "Phase 3 complete" && msg.s3_download_url) {
               setGlobalBatchReport(msg.s3_download_url);
@@ -2718,6 +3482,12 @@ function PhaseValidationMongoDB({
         </div>
       </div>
 
+      {/* Model-usage charges accruing on top of this run's approved capacity
+          credits. */}
+      {billsUsage && (status === "running" || liveUsage.calls > 0) && (
+        <LiveUsageMeter live={liveUsage} account={user?.creditAccount} />
+      )}
+
       {status === "idle" && (
         <div className="card fade-up" style={{ maxWidth: 600 }}>
           <div style={{ marginBottom: 20 }}>
@@ -2775,7 +3545,9 @@ function PhaseValidationMongoDB({
               disabled={
                 !parentSessionId.trim() ||
                 !userId ||
-                (!anthropicKey.trim() && !openaiKey.trim())
+                (!anthropicKey.trim() && !openaiKey.trim()) ||
+                !authorization ||
+                authorization.parentSession !== parentSessionId
               }
             >
               Start Phase 3
@@ -2785,6 +3557,22 @@ function PhaseValidationMongoDB({
           {!anthropicKey.trim() && !openaiKey.trim() && (
             <div style={{ marginTop: 12, fontSize: 12, color: C.red }}>
               At least one API key is required to run validation tests.
+            </div>
+          )}
+
+          {parentSessionId.trim() &&
+            (!authorization || authorization.parentSession !== parentSessionId) && (
+              <div style={{ marginTop: 12, fontSize: 12, color: C.yellow }}>
+                Approve the credit estimate for this session on the{" "}
+                <strong>2. Review</strong> tab before starting validation.
+              </div>
+            )}
+
+          {authorization && authorization.parentSession === parentSessionId && (
+            <div style={{ marginTop: 12, fontSize: 12, color: C.green }}>
+              ✓ {authorization.creditsHeld} credit
+              {authorization.creditsHeld === 1 ? "" : "s"} held for this run. Unused
+              credits are returned automatically if it doesn't complete.
             </div>
           )}
         </div>
@@ -3174,6 +3962,19 @@ export default function App() {
   const [isTerminating, setIsTerminating] = useState(false);
   const [phase3SessionId, setPhase3SessionId] = useState("");
 
+  // Credit authorization for the current run. Lifted to the root because
+  // PhaseReview (which obtains it) and PhaseValidationMongoDB (which requires
+  // it) are siblings, not nested.
+  const [runAuthorization, setRunAuthorization] = useState(null);
+  const dispatch = useDispatch();
+
+  // Keep the header balance pill honest across holds and settles.
+  useEffect(() => {
+    dispatch(fetchCreditAccount());
+  }, [dispatch]);
+
+  const creditAccount = user?.creditAccount;
+
   const [excelReports, setExcelReports] = useState([]);
   const [authSessionId, setAuthSessionId] = useState("");
   const isProcessing = ["connecting", "starting", "running"].includes(
@@ -3211,6 +4012,20 @@ export default function App() {
     window.addEventListener("unload", handleUnload);
     return () => window.removeEventListener("unload", handleUnload);
   }, [isProcessing, activeSessionId, phase, phase3SessionId]);
+
+  // Belt and braces: if the user walks away after authorizing but before the
+  // run starts, ask for the credits back immediately rather than waiting for
+  // the reservation to time out. The server-side reconciler is the actual
+  // guarantee — this just makes the common case feel instant.
+  useEffect(() => {
+    const handleUnload = () => {
+      if (runAuthorization && !isProcessing) {
+        dispatch(releaseRun(runAuthorization.parentSession));
+      }
+    };
+    window.addEventListener("unload", handleUnload);
+    return () => window.removeEventListener("unload", handleUnload);
+  }, [runAuthorization, isProcessing, dispatch]);
 
   const handleTerminateClick = async () => {
     // 1. Immediately show the terminating overlay
@@ -3318,6 +4133,10 @@ export default function App() {
                       isDisabled = true;
                     if ((p === "review" || p === "phase3") && mode === "direct")
                       isDisabled = true;
+                    // Validation stays locked until the run's cost has been
+                    // approved on the Review tab.
+                    if (p === "phase3" && mode === "checking" && !runAuthorization)
+                      isDisabled = true;
                   }
 
                   return (
@@ -3343,6 +4162,34 @@ export default function App() {
 
               <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
                 <ExcelDownloadPill reports={excelReports} />
+
+                {creditAccount && !creditAccount.unlimited && (
+                  <div
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: creditAccount.balance <= 0 ? C.red : C.text,
+                      background: C.surface,
+                      border: `1px solid ${C.border}`,
+                      borderRadius: 999,
+                      padding: "6px 12px",
+                      whiteSpace: "nowrap",
+                    }}
+                    title={
+                      creditAccount.reserved > 0
+                        ? `${creditAccount.reserved} credit(s) reserved for a run in progress`
+                        : "Available credits"
+                    }
+                  >
+                    {creditAccount.balance} credits
+                    {creditAccount.reserved > 0 && (
+                      <span style={{ color: C.yellow, fontWeight: 600 }}>
+                        {" "}
+                        · {creditAccount.reserved} held
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 <div
                   style={{
@@ -3469,7 +4316,17 @@ export default function App() {
             )}
 
             {phase === "review" && (
-              <PhaseReview defaultParentSessionId={activeSessionId} />
+              <PhaseReview
+                defaultParentSessionId={activeSessionId}
+                authorization={runAuthorization}
+                onAuthorized={(auth) => {
+                  setRunAuthorization(auth);
+                  // Phase 3 reads its own session id; seed it so the user
+                  // doesn't have to retype what they just approved.
+                  if (auth?.parentSession) setPhase3SessionId(auth.parentSession);
+                  dispatch(fetchCreditAccount());
+                }}
+              />
             )}
 
             {phase === "phase3" && (
@@ -3479,6 +4336,7 @@ export default function App() {
                 onStatusChange={setActivePhaseStatus}
                 parentSessionId={phase3SessionId}
                 setParentSessionId={setPhase3SessionId}
+                authorization={runAuthorization}
               />
             )}
           </div>

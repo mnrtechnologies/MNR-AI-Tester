@@ -8,7 +8,10 @@ const rateLimit = require("express-rate-limit");
 const http = require("http");
 const jwt = require("jsonwebtoken");
 const { Server } = require("socket.io");
-require("dotenv").config();
+// Resolve .env against THIS file, not the working directory. dotenv defaults
+// to process.cwd(), so starting the server from the repo root (npm run server)
+// would silently miss backend/.env and leave MONGODB_URL undefined.
+require("dotenv").config({ path: require("path").join(__dirname, ".env") });
 
 const db = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
@@ -16,6 +19,9 @@ const dashboardRoute = require("./routes/dashboardRoute")
 const projectRoute = require("./routes/projectRoutes")
 const subsRoute = require("./routes/subscriptionRoutes")
 const companyRoute = require("./routes/companyRoutes")
+const creditRoute = require("./routes/creditRoutes")
+const creditReconciler = require("./jobs/creditReconciler");
+const allowanceResetJob = require("./jobs/allowanceResetJob");
 
 const { errorHandler, notFound } = require("./middleware/errorMiddleware");
 
@@ -63,15 +69,37 @@ const allowedOrigins = [
   "https://mnr-at.com",
   "https://www.mnr-at.com",
   "https://mnr-ai-tester.onrender.com",
+  // Extra origins for a given deployment, comma-separated.
+  ...(process.env.CORS_ORIGINS || "")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean),
 ];
+
+/**
+ * Create React App silently falls back to 3001, 3002, … whenever its preferred
+ * port is taken, which used to block every API call with an opaque CORS error.
+ * Match localhost on any port so a shifting dev port is never the problem.
+ * Loopback origins can only come from software already running on the user's
+ * own machine, so this grants nothing a remote attacker could use.
+ */
+const LOOPBACK = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+$/;
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true; // curl, server-to-server, same-origin
+  if (allowedOrigins.includes(origin)) return true;
+  return LOOPBACK.test(origin);
+}
 
 app.use(
   cors({
     origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (isAllowedOrigin(origin)) {
         callback(null, true);
       } else {
-        callback(new Error("Not allowed by CORS"));
+        // Say which origin was refused — the bare "Not allowed by CORS" gave
+        // no clue what to add to the allowlist.
+        callback(new Error(`Not allowed by CORS: ${origin}`));
       }
     },
     credentials: true,
@@ -87,6 +115,21 @@ app.use(
 db.dbconnect();
 
 /**
+ * Credit background jobs.
+ *
+ * creditReconciler is not optional bookkeeping: it is the only thing that
+ * returns credits held for a run whose browser closed or whose Celery worker
+ * died. Without it those credits are lost to the customer permanently.
+ *
+ * Set CREDIT_JOBS_ENABLED=false on every instance but one when running more
+ * than one Node process against the same database — the jobs are safe to
+ * overlap (all mutations are conditional) but there is no point paying for
+ * the duplicate scans.
+ */
+creditReconciler.start();
+allowanceResetJob.start();
+
+/**
  * ----------------------------------------------------
  * 4️⃣ Socket.IO Setup (Secure JWT Auth)
  * ----------------------------------------------------
@@ -96,7 +139,12 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
+    // Same rule as the HTTP layer — otherwise the app authenticates fine but
+    // the realtime socket silently fails to connect on a fallback dev port.
+    origin: (origin, callback) =>
+      isAllowedOrigin(origin)
+        ? callback(null, true)
+        : callback(new Error(`Not allowed by CORS: ${origin}`)),
     credentials: true,
   },
 });
@@ -151,7 +199,7 @@ io.use((socket, next) => {
  * ----------------------------------------------------
  */
 
-io.on("connection", (socket) => {
+io.on("connection", async (socket) => {
   const userId = socket.userId;
 
   console.log(`Socket connected: ${socket.id} | User: ${userId}`);
@@ -169,6 +217,25 @@ io.on("connection", (socket) => {
    */
 
   global.userSockets[userId] = socket.id;
+
+  /**
+   * Join a room for the user's company so credit changes reach everyone on
+   * that plan. Credits are company-scoped: a run one teammate starts spends
+   * the same balance everyone else is looking at, so a per-user push would
+   * leave the others reading a stale number and over-committing.
+   */
+  try {
+    const User = require("./models/User");
+    const u = await User.findById(userId).select("companyId").lean();
+    if (u?.companyId) {
+      socket.companyId = String(u.companyId);
+      socket.join(`company:${socket.companyId}`);
+    }
+  } catch (err) {
+    // A socket that fails to join its room still works for everything else;
+    // the client falls back to polling for its balance.
+    console.error("Socket company room join failed:", err.message);
+  }
 
   /**
    * Cleanup mapping on disconnect
@@ -193,6 +260,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/dashboard", dashboardRoute);
 app.use("/api/company",companyRoute)
 app.use("/api/subscription", subsRoute);
+app.use("/api/credits", creditRoute);
 app.use("/api/projects", projectRoute);
 
 /**

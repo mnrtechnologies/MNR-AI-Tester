@@ -10,6 +10,7 @@ import { motion } from "framer-motion";
 import { getCompanyById } from "../../../services/operations/companyAPI";
 import { getSubscriptionById } from "../../../services/operations/subsAPIs"; 
 import { getUserById } from "../../../services/operations/authAPIs";
+import { getTier } from "../../../config/pricing/creditMath";
 
 const CompanyDetails = () => {
   const { id } = useParams();
@@ -131,9 +132,32 @@ const CompanyDetails = () => {
     );
   };
 
-  const usageCount = subscription?.planDetails?.testsUsed || subscription?.apiCallsToday || 0;
-  const usageLimit = subscription?.planDetails?.maxTestsAllowed || subscription?.apiLimitPerDay || 1;
-  const usagePercent = Math.min((usageCount / usageLimit) * 100, 100);
+  // Credit figures, falling back to the legacy test quota for subscriptions
+  // that predate the migration. (The old `apiCallsToday`/`apiLimitPerDay`
+  // fallbacks were removed — no model has ever had those fields.)
+  const creditAllowance =
+    subscription?.credits?.monthlyAllowance ??
+    subscription?.planDetails?.maxTestsAllowed ??
+    0;
+  const creditBalance =
+    subscription?.credits?.balance ??
+    Math.max(
+      0,
+      (subscription?.planDetails?.maxTestsAllowed || 0) -
+        (subscription?.planDetails?.testsUsed || 0)
+    );
+  const creditReserved = subscription?.credits?.reserved || 0;
+  const creditsUsed = Math.max(0, creditAllowance - creditBalance - creditReserved);
+  const usagePercent = creditAllowance
+    ? Math.min((creditsUsed / creditAllowance) * 100, 100)
+    : 0;
+  const reservedPercent = creditAllowance
+    ? Math.min((creditReserved / creditAllowance) * 100, 100 - usagePercent)
+    : 0;
+  const tierName =
+    getTier(subscription?.planType, subscription?.tierKey)?.name ||
+    subscription?.legacyPlan ||
+    "Legacy plan";
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 pb-12 pt-6 px-4 sm:px-6 lg:px-8 font-sans">
@@ -190,8 +214,8 @@ const CompanyDetails = () => {
             <div className="space-y-5 text-sm text-slate-300 flex-grow flex flex-col justify-center relative z-10">
               <div className="flex justify-between items-center bg-white/5 p-3 rounded-xl">
                 <span className="font-medium">Active Plan</span>
-                <span className="font-bold text-white bg-orange-500/20 text-orange-400 border border-orange-500/30 px-3 py-1 rounded-md capitalize tracking-wide">
-                  {subscription.plan}
+                <span className="font-bold text-white bg-orange-500/20 text-orange-400 border border-orange-500/30 px-3 py-1 rounded-md tracking-wide">
+                  {tierName}
                 </span>
               </div>
               <div className="flex justify-between items-center px-2">
@@ -212,17 +236,32 @@ const CompanyDetails = () => {
               <div className="pt-5 mt-2 border-t border-white/10 space-y-3">
                 <div className="flex justify-between items-center px-1">
                   <span className="flex items-center gap-2 font-medium text-white">
-                    <Zap size={16} className="text-orange-400"/> Test Load Usage
+                    <Zap size={16} className="text-orange-400"/> Credits Available
                   </span>
                   <span className="font-mono text-white bg-white/10 px-2 py-0.5 rounded text-xs">
-                    {usageCount} / {usageLimit}
+                    {creditBalance.toLocaleString()} / {creditAllowance.toLocaleString()}
                   </span>
                 </div>
-                <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden border border-slate-700">
-                  <div 
-                    className={`h-2 rounded-full transition-all duration-1000 ${usagePercent > 80 ? 'bg-red-500' : 'bg-gradient-to-r from-orange-400 to-orange-500'}`} 
+                <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden border border-slate-700 flex">
+                  <div
+                    className={`h-2 transition-all duration-1000 ${usagePercent > 80 ? 'bg-red-500' : 'bg-gradient-to-r from-orange-400 to-orange-500'}`}
                     style={{ width: `${usagePercent}%` }}
                   ></div>
+                  {reservedPercent > 0 && (
+                    <div
+                      className="h-2 bg-amber-300 transition-all duration-1000"
+                      style={{ width: `${reservedPercent}%` }}
+                      title={`${creditReserved} credits reserved for a run in progress`}
+                    ></div>
+                  )}
+                </div>
+                <div className="flex justify-between text-xs text-slate-400 px-1">
+                  <span>{creditsUsed.toLocaleString()} used this period</span>
+                  {creditReserved > 0 && (
+                    <span className="text-amber-300 font-semibold">
+                      {creditReserved} reserved
+                    </span>
+                  )}
                 </div>
               </div>
             </div>

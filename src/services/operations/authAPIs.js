@@ -61,9 +61,22 @@ export function login(email, password, navigate) {
       socket.connect();
       navigate("/dashboard");
     } catch (error) {
-      //console.log("SIGNin API ERROR............", error);
-      toast.error(error.response.data.message);
-      navigate("/signup");
+      // A network failure (server down, CORS refusal, DNS) has no `response`
+      // at all, so reaching straight for error.response.data threw its own
+      // TypeError and buried the real cause.
+      const message = error?.response?.data?.message;
+      const isNetworkError = !error?.response;
+
+      toast.error(
+        message ||
+          (isNetworkError
+            ? "Cannot reach the server. Check that the API is running and REACT_APP_AUTH_URL is correct."
+            : "Sign in failed. Please try again.")
+      );
+
+      // Stay on the login page. Bouncing to /signup hid the error and led
+      // nowhere useful — accounts here are created by an administrator.
+      console.error("Login failed:", error);
     }
     dispatch(setLoading(false));
     toast.dismiss(toastId);

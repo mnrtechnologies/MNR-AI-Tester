@@ -1,0 +1,242 @@
+{
+  "version": "1.0.0",
+  "calibration": {
+    "source": "modelled-not-measured",
+    "lastReviewed": "2026-07-28",
+    "note": "The `formula` block is modelled, not measured: EXPLORATION_CALLS and CALLS_PER_STORY come from the engine's loop ceilings (semantic_tester.py max_iter, orchestrator.py max_steps), not from token logs. It meters BYOK plans, where a credit represents CAPACITY rather than cost, so an approximation is acceptable. Managed plans do not use it — they bill from `modelRates` against tokens the engine actually reported."
+  },
+
+  "meters": {
+    "byok": "capacity",
+    "managed": "usage",
+    "note": "Which meter each plan family bills on. BYOK customers pay their model provider directly, so charging them per token would bill twice for the same call; their credits meter our server capacity via `formula`. On Managed plans we pay the provider, so credits pass that cost through via `modelRates`."
+  },
+
+  "formula": {
+    "EXPLORATION_CALLS": 62,
+    "CALLS_PER_STORY": 50,
+    "CALLS_PER_CREDIT": 162,
+    "MAX_STORIES_PER_URL": 20,
+    "PHASE2_MAX_URLS": 10
+  },
+
+  "usdPerCredit": 0.5,
+
+  "modelRates": {
+    "_note": "USD per 1,000,000 tokens. Anthropic rates are from the published price list. OpenAI rates are UNVERIFIED — confirm against openai.com/api/pricing before enabling Managed billing, because gpt-4.1-mini is the default engine for Managed Starter and Growth.",
+    "_cacheMultipliers": {
+      "read": 0.1,
+      "write": 1.25,
+      "note": "Cache reads bill at ~0.1x the input rate; 5-minute-TTL cache writes at 1.25x. The engine does not use prompt caching yet, so these are zero in practice — see the caching lever in the pricing doc."
+    },
+    "models": {
+      "claude-sonnet-4-6": { "inputUsdPerMTok": 3.0, "outputUsdPerMTok": 15.0, "verified": true },
+      "claude-sonnet-5": { "inputUsdPerMTok": 3.0, "outputUsdPerMTok": 15.0, "verified": true },
+      "claude-haiku-4-5": { "inputUsdPerMTok": 1.0, "outputUsdPerMTok": 5.0, "verified": true },
+      "claude-opus-5": { "inputUsdPerMTok": 5.0, "outputUsdPerMTok": 25.0, "verified": true },
+      "claude-opus-4-8": { "inputUsdPerMTok": 5.0, "outputUsdPerMTok": 25.0, "verified": true },
+      "gpt-4.1-mini-2025-04-14": { "inputUsdPerMTok": 0.4, "outputUsdPerMTok": 1.6, "verified": false }
+    }
+  },
+
+  "fx": {
+    "inrPerUsd": 88,
+    "disclaimer": "Indicative INR conversion. USD is the contractual currency."
+  },
+
+  "semiAnnualDiscountPct": 10,
+  "legacyTestToCreditFactor": 1.0,
+  "lowCreditWarnPct": 15,
+  "reservationTtl": {
+    "minMinutes": 90,
+    "minutesPerStory": 6
+  },
+
+  "planTypes": {
+    "byok": {
+      "key": "byok",
+      "label": "Bring Your Own Key",
+      "shortLabel": "Own Key",
+      "lead": true,
+      "blurb": "You plug in your own OpenAI or Anthropic key and your provider bills you directly. Credits are a fair-use meter on our capacity.",
+      "tiers": [
+        {
+          "key": "starter",
+          "name": "Starter",
+          "priceUsdMonthly": 199,
+          "credits": 250,
+          "concurrentSites": 1,
+          "extraCreditUsd": 1.0,
+          "engine": null,
+          "highlighted": false,
+          "custom": false,
+          "features": [
+            "250 credits / month",
+            "1 site tested at a time",
+            "Use your own OpenAI or Anthropic key",
+            "$1.00 per extra credit",
+            "Email support"
+          ]
+        },
+        {
+          "key": "growth",
+          "name": "Growth",
+          "priceUsdMonthly": 499,
+          "credits": 1000,
+          "concurrentSites": 2,
+          "extraCreditUsd": 0.75,
+          "engine": null,
+          "highlighted": true,
+          "custom": false,
+          "features": [
+            "1,000 credits / month",
+            "2 sites tested at a time",
+            "Use your own OpenAI or Anthropic key",
+            "$0.75 per extra credit",
+            "CI/CD pipeline integrations",
+            "Priority email support"
+          ]
+        },
+        {
+          "key": "scale",
+          "name": "Scale",
+          "priceUsdMonthly": 1299,
+          "credits": 3500,
+          "concurrentSites": 3,
+          "extraCreditUsd": 0.5,
+          "engine": null,
+          "highlighted": false,
+          "custom": false,
+          "features": [
+            "3,500 credits / month",
+            "3 sites tested at a time",
+            "Use your own OpenAI or Anthropic key",
+            "$0.50 per extra credit",
+            "CI/CD pipeline integrations",
+            "Dedicated account manager"
+          ]
+        },
+        {
+          "key": "self_hosted",
+          "name": "Self-Hosted",
+          "priceUsdMonthly": null,
+          "credits": null,
+          "concurrentSites": null,
+          "extraCreditUsd": null,
+          "engine": null,
+          "highlighted": false,
+          "custom": true,
+          "features": [
+            "On-premise deployment",
+            "Unlimited concurrency on your hardware",
+            "Custom tool integrations",
+            "Dedicated infrastructure",
+            "Dedicated account manager"
+          ]
+        }
+      ]
+    },
+
+    "managed": {
+      "key": "managed",
+      "label": "Managed AI",
+      "shortLabel": "Managed",
+      "lead": false,
+      "blurb": "We supply the AI keys and carry the token cost. No provider accounts to manage.",
+      "tiers": [
+        {
+          "key": "managed_starter",
+          "name": "Managed Starter",
+          "priceUsdMonthly": 299,
+          "credits": 200,
+          "concurrentSites": 1,
+          "extraCreditUsd": 1.5,
+          "engine": "gpt-4.1-mini",
+          "engineLabel": "GPT-4.1-mini",
+          "highlighted": false,
+          "custom": false,
+          "features": [
+            "200 credits / month",
+            "1 site tested at a time",
+            "AI keys included — nothing to configure",
+            "$1.50 per extra credit",
+            "Email support"
+          ]
+        },
+        {
+          "key": "managed_growth",
+          "name": "Managed Growth",
+          "priceUsdMonthly": 999,
+          "credits": 800,
+          "concurrentSites": 2,
+          "extraCreditUsd": 1.25,
+          "engine": "gpt-4.1-mini",
+          "engineLabel": "GPT-4.1-mini",
+          "highlighted": true,
+          "custom": false,
+          "features": [
+            "800 credits / month",
+            "2 sites tested at a time",
+            "AI keys included — nothing to configure",
+            "$1.25 per extra credit",
+            "CI/CD pipeline integrations",
+            "Priority email support"
+          ]
+        },
+        {
+          "key": "managed_pro",
+          "name": "Managed Pro",
+          "priceUsdMonthly": 1899,
+          "credits": 320,
+          "concurrentSites": 3,
+          "extraCreditUsd": 5.93,
+          "engine": "hybrid-haiku-sonnet",
+          "engineLabel": "Hybrid Claude (Haiku + Sonnet)",
+          "highlighted": false,
+          "custom": false,
+          "available": false,
+          "unavailableReason": "Hybrid Haiku+Sonnet routing is not implemented in the AI engine yet. Do not sell this tier until model routing ships — margins invert on the unoptimised Sonnet path.",
+          "features": [
+            "320 credits / month on the premium engine",
+            "3 sites tested at a time",
+            "Highest reliability on complex applications",
+            "$5.93 per extra credit",
+            "CI/CD pipeline integrations",
+            "Dedicated account manager"
+          ]
+        },
+        {
+          "key": "enterprise",
+          "name": "Enterprise",
+          "priceUsdMonthly": null,
+          "credits": null,
+          "concurrentSites": null,
+          "extraCreditUsd": 4.13,
+          "engine": "routed",
+          "engineLabel": "Routed / Opus",
+          "highlighted": false,
+          "custom": true,
+          "features": [
+            "Custom credit allowance",
+            "Custom concurrency",
+            "Model routing tuned to your workload",
+            "SSO, audit logs and custom SLAs",
+            "Dedicated account manager"
+          ]
+        }
+      ]
+    }
+  },
+
+  "internal": {
+    "_comment": "SUPER-ADMIN ONLY. Never include this object in a company_admin or staff payload.",
+    "costPerCreditCheapUsd": 0.31,
+    "costPerCreditPremiumUsd": 1.56,
+    "costPerCreditCheapUnoptimisedUsd": 0.5,
+    "costPerCreditPremiumUnoptimisedUsd": 2.46,
+    "infraMonthlyUsd": 157,
+    "creditsPerServerMonth": 11000,
+    "optimisationsShipped": false,
+    "_optimisationNote": "The optimised cost anchors assume prompt caching, a 40-entry element-map cap, and Haiku routing for classification calls. None of that is implemented. While optimisationsShipped is false, modelled costs are ~60% higher than the optimised figures."
+  }
+}

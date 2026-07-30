@@ -6,6 +6,7 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import SubscriptionGuard from '../../components/UI/SubscriptionGuard';
 
 const API_URL    = process.env.REACT_APP_AI_MOBILE_TESTER_BACKEND_URL;
 const UPLOAD_URL = process.env.REACT_APP_AI_MOBILE_UPLOAD_URL;
@@ -494,6 +495,7 @@ export default function MobileTestingDashboard() {
     phase === 'failed' ? '#f43f5e' : '#f97316';
 
   return (
+    <SubscriptionGuard featureName="Mobile App Testing">
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans">
       <style dangerouslySetInnerHTML={{ __html: `
         .hide-scroll::-webkit-scrollbar { display: none; }
@@ -1000,5 +1002,6 @@ export default function MobileTestingDashboard() {
 
       </div>
     </div>
+    </SubscriptionGuard>
   );
 }

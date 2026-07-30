@@ -2,12 +2,27 @@ import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
-import { Building, CreditCard, ShieldCheck, Mail, MapPin, Users, Zap, Clock, ArrowLeft } from "lucide-react";
+import { Building, CreditCard, ShieldCheck, Mail, MapPin, Users, Zap, Clock, ArrowLeft, History } from "lucide-react";
 
 // IMPORTANT: Adjust these import paths to match your project's folder structure
 import { getCompanyById } from "../../../services/operations/companyAPI";
 import { getSubscriptionById } from "../../../services/operations/subsAPIs";
-import { getCompanyAllStaff } from "../../../services/operations/authAPIs"; 
+import { getCompanyAllStaff } from "../../../services/operations/authAPIs";
+import { getCreditLedger } from "../../../services/operations/creditAPIs";
+import { getTier, formatPrice } from "../../../config/pricing/creditMath";
+
+/** How each ledger movement should read to a customer. */
+const LEDGER_LABELS = {
+  grant: { label: "Credits added", tone: "text-emerald-600" },
+  hold: { label: "Reserved for a run", tone: "text-amber-600" },
+  commit: { label: "Used by a test run", tone: "text-slate-700" },
+  release: { label: "Returned unused", tone: "text-emerald-600" },
+  overage: { label: "Extra credits", tone: "text-orange-600" },
+  adjust: { label: "Manual adjustment", tone: "text-slate-700" },
+  reset: { label: "Monthly reset", tone: "text-emerald-600" },
+  migration: { label: "Converted from previous plan", tone: "text-slate-500" },
+  expire: { label: "Subscription expired", tone: "text-rose-600" },
+};
 
 const CompanySubscription = () => {
   const { user } = useSelector((state) => state.profile);
@@ -20,6 +35,23 @@ const CompanySubscription = () => {
   const [userNames, setUserNames] = useState({ admins: [], employees: [] });
   const [showAll, setShowAll] = useState({ admins: false, employees: false });
   const [isLoading, setIsLoading] = useState(true);
+
+  const [ledger, setLedger] = useState([]);
+  const [ledgerLoading, setLedgerLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLedgerLoading(true);
+      const result = await getCreditLedger({ limit: 25 });
+      if (cancelled) return;
+      setLedger(result.ok ? result.data.rows : []);
+      setLedgerLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const fetchOrganizationData = async () => {
@@ -109,10 +141,29 @@ const CompanySubscription = () => {
     );
   };
 
-  const testsUsed = subscription?.planDetails?.testsUsed || 0;
-  const maxTestsAllowed = subscription?.planDetails?.maxTestsAllowed;
-  const usagePercentage = maxTestsAllowed ? Math.min((testsUsed / maxTestsAllowed) * 100, 100) : 0;
+  // Credit figures. Falls back to the legacy test quota so an unmigrated
+  // company still sees real numbers rather than zeroes.
+  const credits = subscription?.credits;
+  const allowance =
+    credits?.monthlyAllowance ?? subscription?.planDetails?.maxTestsAllowed ?? 0;
+  const balance =
+    credits?.balance ??
+    Math.max(
+      0,
+      (subscription?.planDetails?.maxTestsAllowed || 0) -
+        (subscription?.planDetails?.testsUsed || 0)
+    );
+  const reserved = credits?.reserved || 0;
+  const creditsUsed = Math.max(0, allowance - balance - reserved);
+
+  const usagePercentage = allowance ? Math.min((creditsUsed / allowance) * 100, 100) : 0;
+  const reservedPercentage = allowance
+    ? Math.min((reserved / allowance) * 100, 100 - usagePercentage)
+    : 0;
   const isNearingLimit = usagePercentage > 90;
+
+  const tier = getTier(subscription?.planType, subscription?.tierKey);
+  const tierName = tier?.name || subscription?.legacyPlan || "Legacy plan";
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-12 pt-6 px-4 sm:px-6 lg:px-8 font-sans">
@@ -170,9 +221,21 @@ const CompanySubscription = () => {
           (
             <div className="space-y-4 text-sm text-slate-300 flex-grow flex flex-col justify-center">
               <div className="flex justify-between items-center">
-                <span>Plan Type</span>
-                <span className="font-bold text-white bg-white/10 px-2 py-0.5 rounded">{subscription.plan || "Standard"}</span>
+                <span>Plan</span>
+                <span className="font-bold text-white bg-white/10 px-2 py-0.5 rounded">{tierName}</span>
               </div>
+              {subscription.engine && (
+                <div className="flex justify-between items-center">
+                  <span>AI Engine</span>
+                  <span className="text-white">{tier?.engineLabel || subscription.engine}</span>
+                </div>
+              )}
+              {subscription.concurrentSites > 0 && (
+                <div className="flex justify-between items-center">
+                  <span>Concurrent Sites</span>
+                  <span className="text-white">{subscription.concurrentSites}</span>
+                </div>
+              )}
               <div className="flex justify-between items-center">
                 <span>Billing Status</span>
                 <span className={subscription.isActive ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
@@ -187,18 +250,54 @@ const CompanySubscription = () => {
                 </div>
               )}
               
-              {maxTestsAllowed !== undefined ? (
+              {allowance > 0 ? (
                 <div className="pt-4 mt-2 border-t border-white/10 space-y-3">
                   <div className="flex justify-between items-center">
-                    <span className="flex items-center gap-1.5"><Zap size={14} className="text-orange-400"/> API Usage</span>
-                    <span className="font-mono text-white">{testsUsed} / {maxTestsAllowed}</span>
+                    <span className="flex items-center gap-1.5">
+                      <Zap size={14} className="text-orange-400" /> Credits Available
+                    </span>
+                    <span className="font-mono text-white">
+                      {balance.toLocaleString()} / {allowance.toLocaleString()}
+                    </span>
                   </div>
-                  <div className="w-full bg-slate-700 rounded-full h-1.5 overflow-hidden">
-                    <div 
-                      className={`h-1.5 rounded-full transition-all duration-500 ${isNearingLimit ? 'bg-red-500' : 'bg-orange-500'}`} 
+
+                  <div className="w-full bg-slate-700 rounded-full h-1.5 overflow-hidden flex">
+                    <div
+                      className={`h-1.5 transition-all duration-500 ${isNearingLimit ? "bg-red-500" : "bg-orange-500"}`}
                       style={{ width: `${usagePercentage}%` }}
                     ></div>
+                    {/* Held for a run in progress — spent from the customer's
+                        point of view only once it settles. */}
+                    {reservedPercentage > 0 && (
+                      <div
+                        className="h-1.5 bg-amber-300 transition-all duration-500"
+                        style={{ width: `${reservedPercentage}%` }}
+                        title={`${reserved} credits reserved for a run in progress`}
+                      ></div>
+                    )}
                   </div>
+
+                  <div className="flex justify-between items-center text-xs text-slate-400">
+                    <span>{creditsUsed.toLocaleString()} used this period</span>
+                    {reserved > 0 && (
+                      <span className="text-amber-300 font-semibold">
+                        {reserved} reserved
+                      </span>
+                    )}
+                  </div>
+
+                  {credits?.nextResetAt && (
+                    <div className="flex justify-between items-center text-xs text-slate-400">
+                      <span>Resets</span>
+                      <span>{new Date(credits.nextResetAt).toLocaleDateString()}</span>
+                    </div>
+                  )}
+                  {credits?.overageRateUsd != null && (
+                    <div className="flex justify-between items-center text-xs text-slate-400">
+                      <span>Extra credits</span>
+                      <span>{formatPrice(credits.overageRateUsd, "USD")} each</span>
+                    </div>
+                  )}
                 </div>
               ) : null}
             </div>
@@ -207,6 +306,81 @@ const CompanySubscription = () => {
           )}
         </motion.div>
       </div>
+
+      {/* CREDIT HISTORY */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15 }}
+        className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 w-full"
+      >
+        <h3 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-3 mb-4 flex items-center gap-2">
+          <History className="text-orange-500" size={18} /> Credit History
+        </h3>
+
+        {ledgerLoading ? (
+          <p className="text-sm text-slate-400 italic py-4">Loading credit history…</p>
+        ) : ledger.length === 0 ? (
+          <p className="text-sm text-slate-400 italic py-4">
+            No credit activity yet. Movements appear here as soon as you run a test.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="text-slate-500 uppercase text-xs font-bold tracking-wider border-b border-slate-100">
+                <tr>
+                  <th className="text-left py-2 pr-4">Date</th>
+                  <th className="text-left py-2 pr-4">Activity</th>
+                  <th className="text-left py-2 pr-4">Run</th>
+                  <th className="text-right py-2 pr-4">Credits</th>
+                  <th className="text-right py-2">Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ledger.map((row) => {
+                  const meta = LEDGER_LABELS[row.type] || {
+                    label: row.type,
+                    tone: "text-slate-700",
+                  };
+                  return (
+                    <tr key={row._id} className="border-b border-slate-50 last:border-0">
+                      <td className="py-3 pr-4 text-slate-500 whitespace-nowrap">
+                        {new Date(row.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className={`py-3 pr-4 font-medium ${meta.tone}`}>
+                        {meta.label}
+                        {row.note && (
+                          <span className="block text-xs text-slate-400 font-normal">
+                            {row.note}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 pr-4 text-xs text-slate-400 font-mono">
+                        {row.parentSession || "—"}
+                      </td>
+                      <td
+                        className={`py-3 pr-4 text-right font-bold whitespace-nowrap ${
+                          row.credits > 0
+                            ? "text-emerald-600"
+                            : row.credits < 0
+                              ? "text-slate-800"
+                              : "text-slate-400"
+                        }`}
+                      >
+                        {row.credits > 0 ? "+" : ""}
+                        {row.credits}
+                      </td>
+                      <td className="py-3 text-right text-slate-500 whitespace-nowrap">
+                        {row.balanceAfter != null ? row.balanceAfter : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </motion.div>
 
       {/* BOTTOM SECTION: Users Info */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 w-full">

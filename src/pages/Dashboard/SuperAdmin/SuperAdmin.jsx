@@ -14,6 +14,8 @@ import {
   Activity,
   Crown,
   ArrowLeft,
+  Clock,
+  DollarSign,
 } from "lucide-react";
 
 // IMPORTANT: Adjust this import path to point to where you exported getDashboardStats
@@ -84,14 +86,24 @@ const SuperAdmin = () => {
       icon: <AlertCircle size={20} />,
     },
     {
-      label: "Tests Used",
-      value: `${stats?.totalTestsUsed ?? 0} / ${stats?.totalMaxTestsAllowed ?? 0}`,
+      label: "Credits Available",
+      value: `${(stats?.totalCreditsAvailable ?? 0).toLocaleString()} / ${(stats?.totalCreditAllowance ?? 0).toLocaleString()}`,
       icon: <Zap size={20} />,
     },
     {
-      label: "Active Tests Today",
-      value: stats?.activeTestsToday ?? "0",
+      label: "Credits Used Today",
+      value: (stats?.creditsUsedToday ?? 0).toLocaleString(),
       icon: <Activity size={20} />,
+    },
+    {
+      label: "Credits Reserved",
+      value: (stats?.totalCreditsReserved ?? 0).toLocaleString(),
+      icon: <Clock size={20} />,
+    },
+    {
+      label: "MRR (USD)",
+      value: `$${(stats?.mrrUsd ?? 0).toLocaleString()}`,
+      icon: <DollarSign size={20} />,
     },
   ];
 

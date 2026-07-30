@@ -1,14 +1,11 @@
-// Make sure to import your endpoints and the slice action at the top of your file:
 import { apiConnector } from "../apiConnector";
 import { toast } from "react-hot-toast";
 import { subscriptionEndpoints } from "../api";
-import { incrementUsageCount } from "../../slices/profileSlice";
 const {
   ACTIVATE_SUBSCRIPTION_API,
   RENEW_SUBSCRIPTION_API,
   EXPIRE_SUBSCRIPTION_API,
   GET_SUBSCRIPTION_BY_ID_API,
-  INCREMENT_TEST_USAGE_API,
 } = subscriptionEndpoints;
 
 // GET SUBSCRIPTION BY ID
@@ -68,22 +65,18 @@ export const activateSubscription = async (data) => {
 // ---------------------------------------------------------------------
 // RENEW SUBSCRIPTION (Super Admin Only)
 // ---------------------------------------------------------------------
-export const renewSubscription = async (
-  companyId,
-  newEndDate,
-  newCustomMaxTests,
-  newPlan 
-) => {
+export const renewSubscription = async (payload) => {
   const token = JSON.parse(localStorage.getItem("token"));
   try {
+    // payload: { companyId, newEndDate, planType, tierKey, customCredits?,
+    //            customPriceUsd?, rolloverPolicy? }
     const response = await apiConnector(
       "PUT",
       RENEW_SUBSCRIPTION_API,
-      // Pass the plan to the backend
-      { companyId, newEndDate, newCustomMaxTests, plan: newPlan }, 
+      payload,
       { Authorization: `Bearer ${token}` },
     );
-    
+
     if (response.data.success) {
       toast.success("Subscription renewed successfully");
       return response.data.subscription;
@@ -126,45 +119,8 @@ export const expireSubscription = async (companyId) => {
   }
 };
 
-//increase api usage
-export function incrementTestUsage() {
-  return async (dispatch) => {
-    try {
-      // Grab the token from localStorage just like you do in getUserDetails
-      const token = JSON.parse(localStorage.getItem("token"));
-
-      // Make the POST request to your standalone increment API
-      const response = await apiConnector(
-        "POST",
-        INCREMENT_TEST_USAGE_API,
-        {},
-        {
-          Authorization: `Bearer ${token}`,
-        },
-      );
-
-      if (!response.data.success) {
-        throw new Error(response.data.message);
-      }
-
-      // The backend returns the updated testsUsed count.
-      // Dispatch this to Redux so the UI (and SubscriptionGuard) updates instantly!
-      const newTestsUsed = response.data.data.testsUsed;
-      dispatch(incrementUsageCount(newTestsUsed));
-
-      // Return true so your component knows it succeeded
-      return true;
-    } catch (error) {
-      // console.log("INCREMENT_TEST_USAGE API ERROR............", error);
-
-      // If the API throws a 429 Limit Reached or 403 Expired error, show it to the user
-      toast.error(
-        error?.response?.data?.message ||
-          error?.message ||
-          "Failed to record test usage",
-      );
-
-      return false;
-    }
-  };
-}
+// The `incrementTestUsage` thunk that used to live here has been removed.
+// It called POST /subscription/usage/increment (now 410 Gone) and dispatched
+// `incrementUsageCount`, which wrote to a Redux field the backend never sent —
+// so it was doubly dead. Metering now goes through
+// src/services/operations/creditAPIs.js.

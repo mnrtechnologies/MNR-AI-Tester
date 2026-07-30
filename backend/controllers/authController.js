@@ -7,6 +7,7 @@ const crypto = require("crypto");
 const axios = require("axios");
 const Company = require("../models/Company");
 const Subscription = require("../models/Subscription");
+const credits = require("../services/creditService");
 const mongoose = require("mongoose");
 require("dotenv").config();
 
@@ -73,6 +74,7 @@ exports.login = async (req, res) => {
       const userResponse = user.toObject();
       userResponse.password = undefined;
       userResponse.activeSubscription = null;
+      userResponse.creditAccount = null;
 
       // STEP 3 — FETCH AND ATTACH ACTIVE SUBSCRIPTION
       if (userResponse.companyId) {
@@ -84,7 +86,7 @@ exports.login = async (req, res) => {
         if (currentSub && currentSub.endDate) {
           const today = new Date();
           const diff = currentSub.endDate - today;
-          
+
           const remainingDays = Math.max(
             Math.ceil(diff / (1000 * 60 * 60 * 24)),
             0
@@ -96,8 +98,17 @@ exports.login = async (req, res) => {
             currentSub.isActive = false;
           }
 
-          await currentSub.save();
+          // Targeted update rather than save() — see the note in
+          // getUserDetails. A full-document save here can clobber a
+          // concurrent credit hold.
+          await Subscription.updateOne(
+            { _id: currentSub._id },
+            { $set: { remainingDays, isActive: currentSub.isActive } }
+          );
+
+          // @deprecated activeSubscription — read creditAccount instead.
           userResponse.activeSubscription = currentSub;
+          userResponse.creditAccount = credits.getAccountSnapshot(currentSub);
         }
       }
 
@@ -197,6 +208,7 @@ exports.getUserDetails = async (req, res) => {
 
     // Initialize the subscription as null by default
     user.activeSubscription = null;
+    user.creditAccount = null;
 
     // 1. Check if the user is linked to a company
     if (user.companyId) {
@@ -223,11 +235,22 @@ exports.getUserDetails = async (req, res) => {
           currentSub.isActive = false;
         }
 
-        // Save updated fields back to the Subscription database
-        await currentSub.save();
-        
+        // Persist ONLY these two fields with a targeted update.
+        //
+        // This used to be `currentSub.save()`, which writes the whole document
+        // from a snapshot taken at findOne time. Every authenticated request
+        // hits this path, so a save racing a credit $inc would silently roll
+        // the balance back to its pre-hold value — a real double-spend.
+        await Subscription.updateOne(
+          { _id: currentSub._id },
+          { $set: { remainingDays, isActive: currentSub.isActive } }
+        );
+
         // Attach the subscription data to the user object for the frontend
+        // @deprecated activeSubscription — kept for one release so a cached
+        // client bundle keeps working; read creditAccount instead.
         user.activeSubscription = currentSub;
+        user.creditAccount = credits.getAccountSnapshot(currentSub);
       }
     }
 

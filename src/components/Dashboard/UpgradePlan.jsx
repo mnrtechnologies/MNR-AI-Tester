@@ -1,275 +1,237 @@
 import React, { useState } from "react";
+import { useSelector } from "react-redux";
 import toast from "react-hot-toast";
+import { PhoneCall, X, Copy, TrendingDown, Info, Wallet } from "lucide-react";
+import PricingTierCard from "../UI/PricingTierCard";
 import {
-  CheckCircle2,
-  Rocket,
-  Zap,
-  Crown,
-  PhoneCall,
-  ArrowRight,
-  TrendingDown,
-  X,
-  Copy,
-} from "lucide-react";
+  listTiers,
+  listPlanTypes,
+  leadPlanTypeKey,
+  PRICING,
+  FX_INR_PER_USD,
+} from "../../config/pricing/creditMath";
+
+/**
+ * In-app pricing / upgrade page (route: /upgrade-plan).
+ *
+ * Shares PricingTierCard with the public marketing section so the two grids
+ * cannot drift, and reads every figure from pricing.data.json.
+ *
+ * Self-serve purchase is deliberately out of scope — all CTAs open the
+ * contact-sales modal, as before. (`razorpay` is already a dependency if that
+ * ever changes.)
+ */
 
 const UpgradePlan = () => {
-  const [isAnnual, setIsAnnual] = useState(false);
+  const { user } = useSelector((state) => state.profile);
+  const account = user?.creditAccount;
+
+  const [billing, setBilling] = useState("monthly");
   const [currency, setCurrency] = useState("INR");
+  const [planType, setPlanType] = useState(
+    account && account.planType && account.planType !== "legacy"
+      ? account.planType
+      : leadPlanTypeKey()
+  );
   const [showModal, setShowModal] = useState(false);
+
+  const planTypes = listPlanTypes();
+  const tiers = listTiers(planType);
+  const activePlan = PRICING.planTypes[planType];
 
   const handleCopyEmail = () => {
     navigator.clipboard.writeText("sales@mnrtechnologies.com");
     toast.success("Email copied to clipboard!");
   };
 
-  const plans = [
-    {
-      name: "Platform Demo",
-      icon: <Rocket size={24} />,
-      desc: "Schedule a live walkthrough to see our automation capabilities in action.",
-      isDemo: true,
-      features: [
-        "Live Platform Walkthrough",
-        "Custom Architecture Review",
-        "ROI & Scaling Consultation",
-        "Dedicated Q&A Session",
-      ],
-      buttonText: "Book Demo",
-      highlighted: false,
-    },
-    {
-      name: "Basic",
-      icon: <Zap size={24} />,
-      monthlyPrice: { INR: 2499, USD: 25 },
-      semiAnnualPrice: { INR: 13499, USD: 135 },
-      duration: "/ month",
-      desc: "For small teams starting their automation journey.",
-      features: [
-        "10 Web Testing / month",
-        "Email Support",
-        "CI/CD Pipeline Integrations",
-      ],
-      buttonText: "Get Basic",
-      highlighted: false,
-    },
-    {
-      name: "Premium",
-      icon: <Crown size={24} />,
-      monthlyPrice: { INR: 7999, USD: 85 },
-      semiAnnualPrice: { INR: 43199, USD: 459 },
-      duration: "/ month",
-      desc: "Advanced features for growing QA and engineering teams.",
-      features: [
-        "100 Web Testing / month",
-        "Email Support",
-        "CI/CD Pipeline Integrations",
-      ],
-      buttonText: "Upgrade to Premium",
-      highlighted: true,
-    },
-    {
-      name: "Custom",
-      icon: <PhoneCall size={24} />,
-      monthlyPrice: { INR: "Custom", USD: "Custom" },
-      semiAnnualPrice: { INR: "Custom", USD: "Custom" },
-      duration: "",
-      desc: "Tailored infrastructure for massive scale and security.",
-      features: [
-        "On-Premise Deployment",
-        "Custom Tool Integrations",
-        "Dedicated Infrastructure",
-        "Dedicated Account Manager",
-      ],
-      buttonText: "Contact Sales",
-      highlighted: false,
-      isCustom: true,
-    },
-  ];
-
-  // Simply show the modal for all plans
-  const handleAction = () => {
-    setShowModal(true);
-  };
+  const isCurrentTier = (tier) =>
+    !!account && account.planType === planType && account.tierKey === tier.key;
 
   return (
-    <div className="max-w-[90rem] mx-auto space-y-12 pb-16 pt-8 px-4 sm:px-6 relative">
-      {/* HEADER SECTION */}
-      <div className="text-center max-w-2xl mx-auto space-y-6">
-        <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight">
-          Supercharge Your{" "}
-          <span className="text-orange-500">Testing Matrix</span>
-        </h1>
-        <p className="text-slate-500 text-lg leading-relaxed">
-          Start with a personalized demo, or choose a plan that perfectly fits your engineering scale.
-        </p>
-
-        {/* TOGGLES SECTION */}
-        <div className="flex flex-col items-center justify-center gap-5 mt-8">
-          <div className="flex bg-slate-100 p-1 rounded-xl">
-            <button
-              onClick={() => setCurrency("INR")}
-              className={`px-6 py-2 text-sm font-bold rounded-lg transition-all duration-200 ${
-                currency === "INR"
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              INR (₹)
-            </button>
-            <button
-              onClick={() => setCurrency("USD")}
-              className={`px-6 py-2 text-sm font-bold rounded-lg transition-all duration-200 ${
-                currency === "USD"
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              USD ($)
-            </button>
+    <div className="max-w-[90rem] mx-auto space-y-10 pb-16 pt-8 px-4 sm:px-6 relative">
+      {/* Current plan banner */}
+      {account && (
+        <div className="max-w-3xl mx-auto bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-11 h-11 rounded-xl bg-orange-50 text-orange-500 flex items-center justify-center shrink-0">
+              <Wallet size={20} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Your current plan
+              </p>
+              <p className="font-black text-slate-900 truncate">
+                {account.tierName}
+                {account.legacy && (
+                  <span className="ml-2 text-[10px] font-bold uppercase text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                    Legacy
+                  </span>
+                )}
+              </p>
+            </div>
           </div>
 
-          <div className="flex items-center justify-center gap-4">
-            <span
-              className={`text-sm font-bold ${!isAnnual ? "text-slate-900" : "text-slate-400"}`}
-            >
-              Monthly
-            </span>
-            <button
-              onClick={() => setIsAnnual(!isAnnual)}
-              className="w-14 h-7 bg-slate-200 rounded-full p-1 relative transition-colors duration-200"
-            >
-              <div
-                className={`w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${isAnnual ? "translate-x-7" : "translate-x-0"}`}
-              ></div>
-            </button>
-            <div className="flex items-center gap-2">
-              <span
-                className={`text-sm font-bold ${isAnnual ? "text-slate-900" : "text-slate-400"}`}
-              >
-                6 Months
-              </span>
-              <span className="bg-emerald-100 text-emerald-600 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter">
-                Save ~10%
-              </span>
+          <div className="flex items-center gap-6 text-sm">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Available
+              </p>
+              <p className="font-black text-slate-900">
+                {account.unlimited ? "Unlimited" : account.balance.toLocaleString()}
+                {!account.unlimited && (
+                  <span className="text-slate-400 font-medium">
+                    {" "}
+                    / {account.monthlyAllowance.toLocaleString()}
+                  </span>
+                )}
+              </p>
             </div>
+            {account.reserved > 0 && (
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  Reserved
+                </p>
+                <p className="font-black text-amber-600">{account.reserved}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="text-center max-w-2xl mx-auto space-y-5">
+        <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight">
+          Scale Your <span className="text-orange-500">Testing Capacity</span>
+        </h1>
+        <p className="text-slate-500 text-lg leading-relaxed">
+          One credit tests one page with up to two scenarios. You approve the exact
+          cost before anything expensive runs.
+        </p>
+
+        {/* Toggles */}
+        <div className="flex flex-col items-center justify-center gap-4 pt-2">
+          <div className="inline-flex bg-slate-100 p-1 rounded-xl">
+            {planTypes.map((pt) => (
+              <button
+                key={pt.key}
+                onClick={() => setPlanType(pt.key)}
+                className={`px-5 py-2 text-sm font-bold rounded-lg transition-all duration-200 flex items-center gap-2 ${
+                  planType === pt.key
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                {pt.label}
+                {pt.lead && (
+                  <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-600">
+                    Best value
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-5">
+            <div className="flex bg-slate-100 p-1 rounded-xl">
+              {["INR", "USD"].map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCurrency(c)}
+                  className={`px-5 py-1.5 text-sm font-bold rounded-lg transition-all duration-200 ${
+                    currency === c
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  {c === "INR" ? "INR (₹)" : "USD ($)"}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-3">
+              <span
+                className={`text-sm font-bold ${billing === "monthly" ? "text-slate-900" : "text-slate-400"}`}
+              >
+                Monthly
+              </span>
+              <button
+                onClick={() =>
+                  setBilling(billing === "monthly" ? "semiAnnual" : "monthly")
+                }
+                className="w-14 h-7 bg-slate-200 rounded-full p-1 relative transition-colors duration-200"
+                aria-label="Toggle billing period"
+              >
+                <div
+                  className={`w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${
+                    billing === "semiAnnual" ? "translate-x-7" : "translate-x-0"
+                  }`}
+                />
+              </button>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`text-sm font-bold ${billing === "semiAnnual" ? "text-slate-900" : "text-slate-400"}`}
+                >
+                  6 Months
+                </span>
+                <span className="bg-emerald-100 text-emerald-600 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter flex items-center gap-1">
+                  <TrendingDown size={11} />
+                  Save {PRICING.semiAnnualDiscountPct}%
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {activePlan?.blurb && (
+          <p className="text-sm text-slate-500 max-w-xl mx-auto">{activePlan.blurb}</p>
+        )}
+      </div>
+
+      {/* Tier grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
+        {tiers.map((tier) => (
+          <PricingTierCard
+            key={tier.key}
+            tier={tier}
+            currency={currency}
+            billing={billing}
+            variant="light"
+            isCurrent={isCurrentTier(tier)}
+            onSelect={() => setShowModal(true)}
+            ctaLabel={isCurrentTier(tier) ? "Your plan" : undefined}
+          />
+        ))}
+      </div>
+
+      {/* How credits work */}
+      <div className="max-w-3xl mx-auto bg-slate-50 border border-slate-200 rounded-2xl p-6">
+        <div className="flex items-start gap-3">
+          <Info size={18} className="text-orange-500 shrink-0 mt-0.5" />
+          <div className="space-y-2 text-sm text-slate-600 leading-relaxed">
+            <p className="font-bold text-slate-900">How credits are counted</p>
+            <p>
+              Testing a page runs an exploration pass plus one execution pass per
+              scenario it finds. A page with 1–3 scenarios costs 1 credit, 4–5 costs 2,
+              and around 20 scenarios costs 7. You see the exact number for every page
+              on the review screen and approve it before the expensive phase starts.
+            </p>
+            <p>
+              Any page producing more than {PRICING.formula.MAX_STORIES_PER_URL}{" "}
+              scenarios always pauses for explicit confirmation, so a run can never
+              quietly become expensive.
+            </p>
+            {currency === "INR" && (
+              <p className="text-xs text-slate-400 pt-1">
+                INR figures are indicative at $1 = ₹{FX_INR_PER_USD}. Contracts are
+                billed in USD.
+              </p>
+            )}
           </div>
         </div>
       </div>
 
-      {/* PRICING CARDS GRID */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
-        {plans.map((plan, idx) => {
-          let displayPrice = "";
-          let durationText = "";
-          const currencySymbol = currency === "INR" ? "₹" : "$";
-
-          if (plan.isDemo) {
-            displayPrice = "Free";
-          } else if (plan.isCustom) {
-            displayPrice = "Custom";
-          } else {
-            const currentPrice = isAnnual ? plan.semiAnnualPrice[currency] : plan.monthlyPrice[currency];
-            displayPrice = `${currencySymbol}${currentPrice.toLocaleString()}`;
-            durationText = isAnnual ? "/ 6 mo" : plan.duration;
-          }
-
-          return (
-            <div
-              key={idx}
-              className={`relative flex flex-col bg-white rounded-3xl p-6 transition-all duration-300 group overflow-hidden
-                ${
-                  plan.highlighted
-                    ? "border-2 border-orange-500 shadow-xl shadow-orange-500/10 scale-100 lg:scale-105 z-10"
-                    : "border border-slate-200 shadow-sm hover:shadow-md hover:border-orange-200"
-                }
-              `}
-            >
-              <div
-                className={`absolute top-0 right-0 w-20 h-20 rounded-bl-full -z-10 transition-transform duration-500 group-hover:scale-150
-                ${plan.highlighted ? "bg-orange-100/50" : "bg-slate-50"}
-              `}
-              ></div>
-
-              {plan.highlighted && (
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 bg-orange-500 text-white px-3 py-1 rounded-b-lg text-xs font-bold uppercase tracking-wide shadow-sm">
-                  Most Popular
-                </div>
-              )}
-
-              <div
-                className={`w-12 h-12 rounded-full flex items-center justify-center mb-6 shadow-sm border
-                ${plan.highlighted ? "bg-orange-500 text-white border-orange-600 mt-2" : "bg-white text-orange-500 border-slate-100"}
-              `}
-              >
-                {plan.icon}
-              </div>
-
-              <h3 className="text-xl font-bold text-slate-900 mb-2">
-                {plan.name}
-              </h3>
-              <p className="text-sm text-slate-500 leading-relaxed min-h-[40px] mb-6">
-                {plan.desc}
-              </p>
-
-              <div className="mb-6 min-h-[50px] flex flex-col justify-center">
-                <div className="flex items-baseline gap-1">
-                  <span className="text-3xl font-black text-slate-900 tracking-tight">
-                    {displayPrice}
-                  </span>
-                  {durationText && (
-                    <span className="text-slate-500 text-xs font-medium">
-                      {durationText}
-                    </span>
-                  )}
-                </div>
-                {isAnnual && !plan.isCustom && !plan.isDemo && plan.monthlyPrice[currency] > 0 && (
-                  <div className="text-[10px] text-emerald-600 font-bold mt-1 flex items-center gap-1">
-                    <TrendingDown size={12} />
-                    Total {currencySymbol}
-                    {plan.semiAnnualPrice[currency].toLocaleString()} billed half-yearly
-                  </div>
-                )}
-              </div>
-
-              <hr className="border-slate-100 mb-6" />
-
-              <ul className="space-y-4 mb-8 flex-1">
-                {plan.features.map((feature, fIdx) => (
-                  <li
-                    key={fIdx}
-                    className="flex items-start gap-3 text-sm text-slate-700 font-medium leading-tight"
-                  >
-                    <CheckCircle2
-                      size={16}
-                      className="text-emerald-500 shrink-0 mt-0.5"
-                    />
-                    <span>{feature}</span>
-                  </li>
-                ))}
-              </ul>
-
-              {plan.buttonText && (
-                <button
-                  onClick={() => handleAction()}
-                  className={`w-full py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all duration-200
-                  ${
-                    plan.highlighted
-                      ? "bg-orange-500 hover:bg-orange-600 text-white shadow-md shadow-orange-500/20"
-                      : "bg-slate-50 hover:bg-slate-100 text-slate-800 border border-slate-200"
-                  }
-                `}
-                >
-                  {plan.buttonText}
-                  <ArrowRight size={16} />
-                </button>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      <p className="text-center text-sm text-gray-500 mt-8">
-        Need a more specific testing arrangement?{" "}
+      <p className="text-center text-sm text-gray-500">
+        Need a different arrangement?{" "}
         <button
           onClick={() => setShowModal(true)}
           className="text-orange-500 font-bold cursor-pointer hover:underline"
@@ -278,9 +240,9 @@ const UpgradePlan = () => {
         </button>
       </p>
 
-      {/* CONTACT/DEMO MODAL OVERLAY */}
+      {/* Contact modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl p-8 w-full max-w-md text-center relative shadow-2xl">
             <button
               className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 hover:bg-slate-100 p-2 rounded-full transition-colors"
@@ -297,7 +259,9 @@ const UpgradePlan = () => {
               Get in Touch
             </h3>
             <p className="text-slate-500 text-sm leading-relaxed mb-6">
-              To schedule your personalized platform walkthrough or discuss a custom plan, please reach out to our sales team directly at the email address below. We typically respond within a few hours.
+              To change your plan, add credits, or discuss a custom arrangement, please
+              reach out to our sales team at the address below. We typically respond
+              within a few hours.
             </p>
 
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-2 flex items-center justify-between mt-2">

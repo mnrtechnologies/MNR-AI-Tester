@@ -1,74 +1,25 @@
-const User = require("../models/User");
 const Subscription = require("../models/Subscription");
 const Company = require("../models/Company");
+const CreditReservation = require("../models/CreditReservation");
+const credits = require("../services/creditService");
+const cm = require("../../src/config/pricing/creditMath");
 
+/**
+ * DEPRECATED — POST /api/subscription/usage/increment
+ *
+ * The flat "+1 test" meter this endpoint implemented has been replaced by the
+ * credit model (POST /api/credits/authorize-run then /settle). It is kept for
+ * one release, returning 410, so a browser still running a cached bundle gets
+ * a clear message instead of a 404. Delete it after the next release.
+ */
 exports.incrementTestUsage = async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const user = await User.findById(userId);
-
-    if (!user || !user.companyId) {
-      return res.status(404).json({
-        success: false,
-        error: "User or associated company not found.",
-      });
-    }
-
-    const currentSub = await Subscription.findOne({
-      companyId: user.companyId,
-      isActive: true,
-    });
-
-    if (!currentSub) {
-      return res.status(404).json({
-        success: false,
-        error: "No active subscription found.",
-      });
-    }
-
-    const now = new Date();
-    if (currentSub.endDate < now) {
-      currentSub.isActive = false;
-      await currentSub.save();
-      return res.status(403).json({
-        success: false,
-        error: "Subscription has expired.",
-      });
-    }
-
-    const maxLimit = currentSub.planDetails?.maxTestsAllowed || 0;
-    const testsUsed = currentSub.planDetails?.testsUsed || 0;
-
-    if (maxLimit !== -1 && testsUsed >= maxLimit) {
-      return res.status(429).json({
-        success: false,
-        error: "Limit reached",
-        message: "Test limit exhausted for the current plan.",
-      });
-    }
-
-    if (maxLimit !== -1) {
-      currentSub.planDetails.testsUsed += 1;
-    }
-
-    currentSub.planDetails.lastTestDate = new Date();
-
-    await currentSub.save();
-
-    return res.status(200).json({
-      success: true,
-      message: "Test usage recorded successfully.",
-      data: {
-        testsUsed: currentSub.planDetails.testsUsed,
-        maxTestsAllowed: currentSub.planDetails.maxTestsAllowed,
-      },
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      error: "Internal server error.",
-    });
-  }
+  return res.status(410).json({
+    success: false,
+    code: "ENDPOINT_REMOVED",
+    error: "ENDPOINT_REMOVED",
+    message:
+      "Per-test usage counting has been replaced by credits. Reload the app to pick up the new version.",
+  });
 };
 
 // GET SUBSCRIPTION BY ID (FULL DETAILS)
@@ -84,13 +35,13 @@ exports.getSubscriptionById = async (req, res) => {
 
     const subscription = await Subscription.findById(subscriptionId)
       .populate({
-        path: "companyId", // FIXED: lowercase 'c' to match schema
-        model: "company", // FIXED: matches module.exports = mongoose.model("company")
+        path: "companyId",
+        model: "company",
         select: "-__v",
       })
       .populate({
         path: "activatedBy",
-        model: "user", // Match the ref name in your schema
+        model: "user",
         select: "-password -__v -token",
       });
 
@@ -104,6 +55,7 @@ exports.getSubscriptionById = async (req, res) => {
       success: true,
       message: "Subscription fetched successfully",
       subscription,
+      creditAccount: credits.getAccountSnapshot(subscription),
     });
   } catch (error) {
     console.error("Get Subscription By ID Error:", error);
@@ -111,65 +63,137 @@ exports.getSubscriptionById = async (req, res) => {
   }
 };
 
+/**
+ * Resolve a requested tier into the values we snapshot onto the subscription.
+ * Returns { error } for anything the pricing config does not recognise, so an
+ * unknown tier can never quietly create a zero-credit subscription.
+ */
+function resolveTier({ planType, tierKey, customCredits, customPriceUsd }) {
+  const tier = cm.getTier(planType, tierKey);
+  if (!tier) {
+    return {
+      error: `Unknown plan/tier "${planType}/${tierKey}". Valid tiers for ${planType}: ${
+        cm.allTierKeys(planType).join(", ") || "(unknown plan type)"
+      }`,
+    };
+  }
+
+  let allowance = tier.credits;
+  let priceUsd = tier.priceUsdMonthly;
+
+  if (tier.custom) {
+    // self_hosted / enterprise carry no published figures — they must be
+    // supplied per deal rather than defaulted to zero.
+    if (customCredits === undefined || customCredits === null || Number(customCredits) < 0) {
+      return { error: `customCredits is required for the "${tier.name}" tier` };
+    }
+    allowance = Number(customCredits);
+    priceUsd = customPriceUsd !== undefined && customPriceUsd !== null ? Number(customPriceUsd) : null;
+  } else if (customCredits !== undefined && customCredits !== null && Number(customCredits) >= 0) {
+    // Allow a super admin to override a published allowance for a one-off deal.
+    allowance = Number(customCredits);
+  }
+
+  return { tier, allowance, priceUsd };
+}
+
 // ACTIVATE SUBSCRIPTION (Super Admin Only)
 exports.activateSubscription = async (req, res) => {
   try {
-    // FIXED: Changed to companyId and added plan & custom limits
     const activatedBy = req.user.id;
-    const { companyId, startDate, endDate, plan, customMaxTests } = req.body;
-    
+    const {
+      companyId,
+      startDate,
+      endDate,
+      planType,
+      tierKey,
+      customCredits,
+      customPriceUsd,
+      rolloverPolicy,
+      overageEnabled,
+    } = req.body;
 
-    // Validate required fields
-    if (!companyId || !startDate || !endDate || !plan) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Missing required fields" });
+    if (!companyId || !startDate || !endDate || !planType || !tierKey) {
+      return res.status(400).json({
+        success: false,
+        message: "companyId, startDate, endDate, planType and tierKey are required",
+      });
     }
 
-    // Deactivate old subscription if exists
-    await Subscription.updateMany(
-      { companyId: companyId, isActive: true }, // FIXED: lowercase 'c'
-      { isActive: false },
-    );
+    const resolved = resolveTier({ planType, tierKey, customCredits, customPriceUsd });
+    if (resolved.error) {
+      return res.status(400).json({ success: false, message: resolved.error });
+    }
+    const { tier, allowance, priceUsd } = resolved;
 
-    // Prepare plan details based on schema
-    let planDetails = { testsUsed: 0};
-
-    // // If it's a custom plan, we must set the limit manually because the pre-save hook ignores "custom"
-    if (plan === "custom") {
-      if (customMaxTests === undefined) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "customMaxTests is required for custom plans",
-          });
-      }
-      planDetails.maxTestsAllowed = customMaxTests;
+    if (tier.available === false) {
+      return res.status(400).json({
+        success: false,
+        message: `The "${tier.name}" tier is not available for sale yet. ${tier.unavailableReason || ""}`.trim(),
+      });
     }
 
-    // Create new subscription
+    // Deactivate any previous subscription for this company.
+    await Subscription.updateMany({ companyId, isActive: true }, { isActive: false });
+
+    const now = new Date();
+    const nextResetAt = new Date(now);
+    nextResetAt.setMonth(nextResetAt.getMonth() + 1);
+
     const subscription = await Subscription.create({
-      companyId, // FIXED
+      companyId,
       activatedBy,
       startDate,
       endDate,
-      plan, // FIXED: Dynamic instead of hardcoded "premium"
-      planDetails, // FIXED: Matches schema instead of API limits
+      planType,
+      tierKey,
+      // Snapshot the price and the config version so editing
+      // pricing.data.json never silently re-prices an existing customer.
+      pricingVersion: cm.PRICING_VERSION,
+      priceUsdMonthly: priceUsd,
+      fxRateInrPerUsd: cm.FX_INR_PER_USD,
+      concurrentSites: tier.concurrentSites || 1,
+      engine: tier.engine || null,
       isActive: true,
+      credits: {
+        balance: allowance,
+        reserved: 0,
+        monthlyAllowance: allowance,
+        allowanceGrantedAt: now,
+        nextResetAt,
+        rolloverPolicy: rolloverPolicy === "carry" ? "carry" : "none",
+        overageEnabled: !!overageEnabled,
+        overageRateUsd: tier.extraCreditUsd || null,
+        overageUsedThisPeriod: 0,
+        lifetimeGranted: allowance,
+        lifetimeCommitted: 0,
+      },
+      // @deprecated derived mirror — keeps the pre-credits UI rendering.
+      planDetails: { maxTestsAllowed: allowance, testsUsed: 0 },
     });
 
-    // Update Company info
+    await credits.writeLedger({
+      companyId: subscription.companyId,
+      subscriptionId: subscription._id,
+      type: "grant",
+      credits: allowance,
+      balanceAfter: allowance,
+      reservedAfter: 0,
+      actorUserId: activatedBy,
+      actorRole: req.user.role,
+      note: `Subscription activated: ${planType}/${tierKey}`,
+    });
+
     await Company.findByIdAndUpdate(companyId, {
-      // FIXED
       subscriptionStatus: "active",
       activeSubscriptionId: subscription._id,
     });
 
     return res.status(201).json({
       success: true,
-      message: "Subscription activated successfully",
+      message: `Subscription activated on ${tier.name} with ${allowance} credits`,
       subscription,
+      creditAccount: credits.getAccountSnapshot(subscription),
     });
   } catch (error) {
     console.error("Activate Subscription Error:", error);
@@ -180,40 +204,79 @@ exports.activateSubscription = async (req, res) => {
 // RENEW SUBSCRIPTION (Super Admin Only)
 exports.renewSubscription = async (req, res) => {
   try {
-    // Extract 'plan' from req.body as well
-    const { companyId, newEndDate, newCustomMaxTests, plan } = req.body;
+    const {
+      companyId,
+      newEndDate,
+      planType,
+      tierKey,
+      customCredits,
+      customPriceUsd,
+      rolloverPolicy,
+    } = req.body;
 
-    const subscription = await Subscription.findOne({
-      companyId: companyId,
-      isActive: true,
-    });
-
+    const subscription = await Subscription.findOne({ companyId, isActive: true });
     if (!subscription) {
       return res
         .status(400)
         .json({ success: false, message: "No active subscription found." });
     }
 
-    // Update the end date
-    subscription.endDate = newEndDate;
+    const nextPlanType = planType || subscription.planType;
+    const nextTierKey = tierKey || subscription.tierKey;
 
-    // Update the plan if the frontend provided a new one
-    if (plan) {
-      subscription.plan = plan;
+    const resolved = resolveTier({
+      planType: nextPlanType,
+      tierKey: nextTierKey,
+      customCredits,
+      customPriceUsd,
+    });
+    if (resolved.error) {
+      return res.status(400).json({ success: false, message: resolved.error });
     }
+    const { tier, allowance, priceUsd } = resolved;
 
-    // Unconditionally update the max tests if a value was provided,
-    // removing the old (subscription.plan === "custom") restriction.
-    if (newCustomMaxTests !== undefined) {
-      subscription.planDetails.maxTestsAllowed = newCustomMaxTests;
+    if (newEndDate) subscription.endDate = newEndDate;
+    subscription.planType = nextPlanType;
+    subscription.tierKey = nextTierKey;
+    subscription.legacyPlan = null;
+    // Re-snapshot: a renewal is a new agreement at today's prices.
+    subscription.pricingVersion = cm.PRICING_VERSION;
+    subscription.priceUsdMonthly = priceUsd;
+    subscription.fxRateInrPerUsd = cm.FX_INR_PER_USD;
+    subscription.concurrentSites = tier.concurrentSites || 1;
+    subscription.engine = tier.engine || null;
+    subscription.isActive = true;
+    if (rolloverPolicy) {
+      subscription.credits.rolloverPolicy = rolloverPolicy === "carry" ? "carry" : "none";
     }
+    subscription.credits.overageRateUsd = tier.extraCreditUsd || null;
+    subscription.credits.needsManualReview = false;
 
     await subscription.save();
 
+    const nextResetAt = new Date();
+    nextResetAt.setMonth(nextResetAt.getMonth() + 1);
+
+    // grantAllowance does the atomic balance write and the ledger row.
+    const updated = await credits.grantAllowance(subscription._id, allowance, {
+      mode: subscription.credits.rolloverPolicy === "carry" ? "add" : "set",
+      type: "grant",
+      nextResetAt,
+      actorUserId: req.user.id,
+      actorRole: req.user.role,
+      note: `Subscription renewed on ${nextPlanType}/${nextTierKey}`,
+    });
+
+    await Company.findByIdAndUpdate(companyId, {
+      subscriptionStatus: "active",
+      activeSubscriptionId: subscription._id,
+    });
+
     return res.status(200).json({
       success: true,
-      message: "Subscription renewed successfully",
-      subscription,
+      message: `Subscription renewed on ${tier.name} with ${allowance} credits`,
+      subscription: updated || subscription,
+      creditAccount: credits.getAccountSnapshot(updated || subscription),
     });
   } catch (error) {
     console.error("Renew Subscription Error:", error);
@@ -221,67 +284,60 @@ exports.renewSubscription = async (req, res) => {
   }
 };
 
-// EXPIRE SUBSCRIPTION (Super Admin Only)
-// exports.expireSubscription = async (req, res) => {
-//   try {
-//     const { companyId } = req.body; // FIXED: Changed to companyId
-
-//     // Find active subscription
-//     const subscription = await Subscription.findOne({
-//       companyId: companyId, // FIXED
-//       isActive: true,
-//     });
-
-//     if (!subscription) {
-//       return res
-//         .status(404)
-//         .json({
-//           success: false,
-//           message: "No active subscription found for this Company.",
-//         });
-//     }
-
-//     // Mark subscription expired (SOFT DELETE - Keeps History)
-//     subscription.isActive = false;
-//     subscription.endDate = new Date(); // Optional: truncates the end date to now
-//     await subscription.save();
-
-//     // Remove active subscription from Company
-//     await Company.findByIdAndUpdate(companyId, {
-//       // FIXED
-//       subscriptionStatus: "expired",
-//       activeSubscriptionId: null,
-//     });
-
-//     // NOTE: I removed the `findByIdAndDelete` here.
-//     // Usually, you want to keep billing/subscription history.
-//     // Setting `isActive: false` is enough to "expire" it.
-
-//     return res.status(200).json({
-//       success: true,
-//       message: "Subscription expired successfully", // Updated message
-//     });
-//   } catch (error) {
-//     console.error("Expire Subscription Error:", error);
-//     return res.status(500).json({ success: false, message: "Server Error" });
-//   }
-// };
-
+/**
+ * EXPIRE SUBSCRIPTION (Super Admin Only)
+ *
+ * This used to findOneAndDelete. That is unacceptable once credits exist:
+ * deleting the subscription destroys the record of a balance the customer paid
+ * for, along with every ledger row's parent. It is now a soft expiry.
+ *
+ * The remaining balance is deliberately LEFT INTACT so a renewal restores it.
+ * Forfeiting credits is an explicit super-admin decision via
+ * POST /api/credits/adjust with a negative delta — never a side effect.
+ */
 exports.expireSubscription = async (req, res) => {
   try {
     const { companyId } = req.body;
+    if (!companyId) {
+      return res.status(400).json({ success: false, message: "companyId is required" });
+    }
 
-    const subscription = await Subscription.findOneAndDelete({
-      companyId: companyId,
-      isActive: true,
-    });
-
+    const subscription = await Subscription.findOne({ companyId, isActive: true });
     if (!subscription) {
       return res.status(404).json({
         success: false,
         message: "No active subscription found for this Company.",
       });
     }
+
+    // Return anything held for runs that will now never complete.
+    const heldReservations = await CreditReservation.find({
+      subscriptionId: subscription._id,
+      status: "held",
+    }).select("_id");
+
+    for (const r of heldReservations) {
+      await credits.settleReservation(r._id, { force: true });
+    }
+
+    const fresh = await Subscription.findById(subscription._id);
+
+    fresh.isActive = false;
+    fresh.endDate = new Date();
+    fresh.remainingDays = 0;
+    await fresh.save();
+
+    await credits.writeLedger({
+      companyId: fresh.companyId,
+      subscriptionId: fresh._id,
+      type: "expire",
+      credits: 0,
+      balanceAfter: fresh.credits.balance,
+      reservedAfter: fresh.credits.reserved,
+      actorUserId: req.user.id,
+      actorRole: req.user.role,
+      note: `Subscription expired with ${fresh.credits.balance} credits preserved (${heldReservations.length} reservation(s) settled)`,
+    });
 
     await Company.findByIdAndUpdate(companyId, {
       subscriptionStatus: "expired",
@@ -290,12 +346,14 @@ exports.expireSubscription = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Subscription deleted successfully",
+      message: `Subscription expired. ${fresh.credits.balance} credits preserved for renewal.`,
+      data: {
+        preservedCredits: fresh.credits.balance,
+        reservationsSettled: heldReservations.length,
+      },
     });
   } catch (error) {
-    return res.status(500).json({ 
-      success: false, 
-      message: "Server Error" 
-    });
+    console.error("Expire Subscription Error:", error);
+    return res.status(500).json({ success: false, message: "Server Error" });
   }
 };

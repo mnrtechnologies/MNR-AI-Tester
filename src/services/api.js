@@ -53,6 +53,31 @@ export const subscriptionEndpoints = {
   RENEW_SUBSCRIPTION_API: BASE_URL + "/subscription/renew",
   EXPIRE_SUBSCRIPTION_API: BASE_URL + "/subscription/expire",
   GET_SUBSCRIPTION_BY_ID_API: BASE_URL + "/subscription/get-subscription-by-id",
+  // INCREMENT_TEST_USAGE_API removed — the flat per-test meter has been
+  // replaced by credits (see creditEndpoints). The server returns 410 on the
+  // old path for one release so stale bundles get a clear message.
+};
 
-  INCREMENT_TEST_USAGE_API: `${BASE_URL}/subscription/usage/increment`,
+export const creditEndpoints = {
+  // Public tier tables. Internal cost anchors are stripped server-side.
+  GET_PRICING_CONFIG_API: BASE_URL + "/credits/pricing",
+
+  GET_CREDIT_ACCOUNT_API: BASE_URL + "/credits/account",
+  GET_CREDIT_ESTIMATE_API: BASE_URL + "/credits/estimate",
+  GET_CREDIT_LEDGER_API: BASE_URL + "/credits/ledger",
+  // Itemised model spend for one run (Managed meter).
+  GET_RUN_USAGE_API: BASE_URL + "/credits/usage",
+  // Start-of-run balance check. Applies to both meters.
+  CREDIT_PREFLIGHT_API: BASE_URL + "/credits/preflight",
+
+  // Metering. authorize-run answers 200 / 402 (no funds) / 409 (oversized URL).
+  RESERVE_EXPLORATION_API: BASE_URL + "/credits/reserve-exploration",
+  AUTHORIZE_RUN_API: BASE_URL + "/credits/authorize-run",
+  SETTLE_RUN_API: BASE_URL + "/credits/settle",
+  RELEASE_RUN_API: BASE_URL + "/credits/release",
+
+  // Super admin
+  GRANT_CREDITS_API: BASE_URL + "/credits/grant",
+  ADJUST_CREDITS_API: BASE_URL + "/credits/adjust",
+  ADMIN_CREDIT_OVERVIEW_API: BASE_URL + "/credits/admin/overview",
 };

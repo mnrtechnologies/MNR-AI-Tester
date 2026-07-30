@@ -1,63 +1,73 @@
 const User = require("../models/User");
 const Company = require("../models/Company");
 const Subscription = require("../models/Subscription");
+const CreditLedger = require("../models/CreditLedger");
+const credits = require("../services/creditService");
+
+function startOfToday() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
 
 exports.getSuperAdminDashboardStats = async (req, res) => {
   try {
-    // Total Companies 
-    const totalCompanies = await Company.countDocuments();
+    const [
+      totalCompanies,
+      totalUsers,
+      totalStaff,
+      totalCompanyAdmins,
+      totalSuperAdmins,
+      activeSubscriptions,
+      expiredPlans,
+    ] = await Promise.all([
+      Company.countDocuments(),
+      User.countDocuments(),
+      User.countDocuments({ role: "staff" }),
+      User.countDocuments({ role: "company_admin" }),
+      User.countDocuments({ role: "super_admin" }),
+      Subscription.countDocuments({ isActive: true }),
+      Subscription.countDocuments({ isActive: false }),
+    ]);
 
-    // Total Users
-    const totalUsers = await User.countDocuments();
-
-    // Total Staff 
-    const totalStaff = await User.countDocuments({ role: "staff" });
-    
-    const totalCompanyAdmins = await User.countDocuments({ role: "company_admin" });
-
-    const totalSuperAdmins = await User.countDocuments({ role: "super_admin" });
-
-    // Active Subscriptions
-    const activeSubscriptions = await Subscription.countDocuments({ isActive: true });
-
-    // Expired Subscriptions
-    const expiredPlans = await Subscription.countDocuments({ isActive: false });
-
-    // ⭐ TOTAL TESTS ALLOWED & USED (Replacing API limits)
-    // We fetch all subscriptions to aggregate the totals from the planDetails object
-    const allSubscriptions = await Subscription.find({});
-    
-    const totalMaxTestsAllowed = allSubscriptions.reduce(
-      (sum, sub) => {
-        if (sub.planDetails && sub.planDetails.maxTestsAllowed) {
-          return sum + sub.planDetails.maxTestsAllowed;
-        }
-        return sum;
+    // This was `Subscription.find({})` followed by two reduce() passes, which
+    // pulled every subscription document into memory just to add up two
+    // numbers. One $group does it in the database.
+    const [totals] = await Subscription.aggregate([
+      {
+        $group: {
+          _id: null,
+          totalAllowance: { $sum: "$credits.monthlyAllowance" },
+          totalBalance: { $sum: "$credits.balance" },
+          totalReserved: { $sum: "$credits.reserved" },
+          totalCommitted: { $sum: "$credits.lifetimeCommitted" },
+        },
       },
-      0
-    );
+    ]);
 
-    const totalTestsUsed = allSubscriptions.reduce(
-      (sum, sub) => {
-        if (sub.planDetails && sub.planDetails.testsUsed) {
-          return sum + sub.planDetails.testsUsed;
-        }
-        return sum;
-      },
-      0
-    );
+    const [mrr] = await Subscription.aggregate([
+      { $match: { isActive: true } },
+      { $group: { _id: null, mrrUsd: { $sum: { $ifNull: ["$priceUsdMonthly", 0] } } } },
+    ]);
 
-    // Optional: Find how many subscriptions were active TODAY
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const activeTestsToday = allSubscriptions.filter(sub => 
-      sub.planDetails && 
-      sub.planDetails.lastTestDate && 
-      new Date(sub.planDetails.lastTestDate) >= today
-    ).length;
+    const t = totals || {
+      totalAllowance: 0,
+      totalBalance: 0,
+      totalReserved: 0,
+      totalCommitted: 0,
+    };
 
-    // SEND RESPONSE
+    // Actual credits spent today, from the ledger. The old `activeTestsToday`
+    // counted *subscriptions with a recent lastTestDate*, not tests — it could
+    // never exceed the number of companies.
+    const [todayCommits] = await CreditLedger.aggregate([
+      { $match: { type: "commit", createdAt: { $gte: startOfToday() } } },
+      { $group: { _id: null, credits: { $sum: { $abs: "$credits" } } } },
+    ]);
+    const creditsUsedToday = todayCommits ? todayCommits.credits : 0;
+
+    const creditsUsed = Math.max(0, t.totalAllowance - t.totalBalance - t.totalReserved);
+
     res.status(200).json({
       success: true,
       data: {
@@ -68,12 +78,22 @@ exports.getSuperAdminDashboardStats = async (req, res) => {
         totalSuperAdmins,
         activeSubscriptions,
         expiredPlans,
-        totalTestsUsed,
-        totalMaxTestsAllowed,
-        activeTestsToday
-      }
-    });
 
+        // Credit view
+        totalCreditAllowance: t.totalAllowance,
+        totalCreditsAvailable: t.totalBalance,
+        totalCreditsReserved: t.totalReserved,
+        totalCreditsCommitted: t.totalCommitted,
+        creditsUsedToday,
+        mrrUsd: mrr ? mrr.mrrUsd : 0,
+
+        // @deprecated aliases so the pre-credits tiles keep rendering during
+        // rollout. Remove once no client reads them.
+        totalMaxTestsAllowed: t.totalAllowance,
+        totalTestsUsed: creditsUsed,
+        activeTestsToday: creditsUsedToday,
+      },
+    });
   } catch (error) {
     console.error("Dashboard Stats Error:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
@@ -82,7 +102,6 @@ exports.getSuperAdminDashboardStats = async (req, res) => {
 
 exports.getCompanyAdminDashboardStats = async (req, res) => {
   try {
-    // 1. Get logged-in user to find their associated company
     const userDetails = await User.findById(req.user.id);
 
     if (!userDetails || !userDetails.companyId) {
@@ -92,9 +111,9 @@ exports.getCompanyAdminDashboardStats = async (req, res) => {
       });
     }
 
-    // 2. Fetch the company AND populate the active subscription in one single query
-    const company = await Company.findById(userDetails.companyId)
-      .populate("activeSubscriptionId");
+    const company = await Company.findById(userDetails.companyId).populate(
+      "activeSubscriptionId"
+    );
 
     if (!company) {
       return res.status(404).json({
@@ -103,38 +122,35 @@ exports.getCompanyAdminDashboardStats = async (req, res) => {
       });
     }
 
-    // 3. Fast Counts: Use the arrays directly from your schema
     const totalStaff = company.staff ? company.staff.length : 0;
     const totalCompanyAdmins = company.admins ? company.admins.length : 0;
     const totalUsers = totalStaff + totalCompanyAdmins;
 
-    // 4. Extract Subscription Stats
-    let planName = "N/A";
-    let testsUsed = 0;
-    let maxTestsAllowed = 0;
-    let activeTestsToday = 0;
+    const sub = company.activeSubscriptionId;
+    // getAccountSnapshot falls back to the legacy test quota when the
+    // subscription has not been migrated yet, so this never renders blank.
+    const account = credits.getAccountSnapshot(sub);
 
-    // Because we used .populate(), company.activeSubscriptionId is now the full subscription document
-    if (company.activeSubscriptionId) {
-      const sub = company.activeSubscriptionId;
-      planName = sub.plan || "Standard";
-
-      // Extract plan details for the widget
-      if (sub.planDetails) {
-        testsUsed = sub.planDetails.testsUsed || 0;
-        maxTestsAllowed = sub.planDetails.maxTestsAllowed || 0;
-
-        // Check if a test was run today
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        if (sub.planDetails.lastTestDate && new Date(sub.planDetails.lastTestDate) >= today) {
-          activeTestsToday = 1; 
-        }
-      }
+    let creditsUsedToday = 0;
+    if (sub) {
+      const [today] = await CreditLedger.aggregate([
+        {
+          $match: {
+            companyId: company._id,
+            type: "commit",
+            createdAt: { $gte: startOfToday() },
+          },
+        },
+        { $group: { _id: null, credits: { $sum: { $abs: "$credits" } } } },
+      ]);
+      creditsUsedToday = today ? today.credits : 0;
     }
 
-    // 5. Send Response
+    const allowance = account ? account.monthlyAllowance : 0;
+    const balance = account ? account.balance : 0;
+    const reserved = account ? account.reserved : 0;
+    const used = Math.max(0, allowance - balance - reserved);
+
     res.status(200).json({
       success: true,
       data: {
@@ -142,20 +158,35 @@ exports.getCompanyAdminDashboardStats = async (req, res) => {
         totalUsers,
         totalStaff,
         totalCompanyAdmins,
-        subscription: {
-          // Pulling directly from your schema's built-in enum
-          status: company.subscriptionStatus, 
-          planName: planName,
-          testsUsed,
-          maxTestsAllowed,
-          activeTestsToday
-        }
-      }
-    });
 
+        credits: {
+          status: company.subscriptionStatus,
+          planType: account ? account.planType : null,
+          tierName: account ? account.tierName : "N/A",
+          engine: account ? account.engine : null,
+          balance,
+          reserved,
+          used,
+          monthlyAllowance: allowance,
+          creditsUsedToday,
+          nextResetAt: account ? account.nextResetAt : null,
+          overageUsedThisPeriod: account ? account.overageUsedThisPeriod : 0,
+          concurrentSites: account ? account.concurrentSites : 1,
+          legacy: account ? account.legacy : false,
+        },
+
+        // @deprecated alias block — remove once no client reads it.
+        subscription: {
+          status: company.subscriptionStatus,
+          planName: account ? account.tierName : "N/A",
+          testsUsed: used,
+          maxTestsAllowed: allowance,
+          activeTestsToday: creditsUsedToday,
+        },
+      },
+    });
   } catch (error) {
     console.error("Company Admin Dashboard Stats Error:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 };
-

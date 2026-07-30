@@ -41,7 +41,13 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "server": "node backend/index.js",
+    "dev:server": "nodemon --watch backend --ext js,json backend/index.js",
+    "test:credits": "react-scripts test --watchAll=false --testPathPattern=credit",
+    "smoke:credits": "node backend/scripts/smokeTestCredits.js",
+    "test:superadmin": "node backend/scripts/testSuperAdminFlow.js",
+    "migrate:credits": "node backend/scripts/migrateToCredits.js"
   },
   "eslintConfig": {
     "extends": [
@@ -62,6 +68,7 @@
     ]
   },
   "devDependencies": {
+    "mongodb-memory-server": "^11.2.0",
     "tailwindcss": "^3.4.19"
   }
 }

@@ -20,18 +20,50 @@ const profileSlice = createSlice({
       state.selectedMode = value.payload
     },
 
-    // update usage without fetching the whole profile again
-    incrementUsageCount: (state, action) => {
-      if (state.user && state.user.subscription && state.user.subscription.length > 0) {
-        // Get the latest subscription
-        const latestSubIndex = state.user.subscription.length - 1;
-        
-        // Update the testsUsed value with the payload from the backend
-        state.user.subscription[latestSubIndex].planDetails.testsUsed = action.payload;
-      }}
+    /**
+     * Replace the whole credit account — after login, getUserDetails, or any
+     * credit call that returns a fresh snapshot.
+     *
+     * (This replaces `incrementUsageCount`, which wrote to
+     * `state.user.subscription[…]` — an array the backend has never sent. It
+     * was a permanent no-op, so the usage meter never updated live.)
+     */
+    setCreditAccount(state, action) {
+      if (state.user) state.user.creditAccount = action.payload;
+    },
+
+    /**
+     * Patch just the balance/reserved numbers, so the header pill and the
+     * guard react immediately after a hold or a settle without refetching
+     * the entire profile.
+     */
+    applyCreditDelta(state, action) {
+      if (!state.user || !state.user.creditAccount) return;
+      const { balance, reserved } = action.payload || {};
+      if (typeof balance === "number") state.user.creditAccount.balance = balance;
+      if (typeof reserved === "number") state.user.creditAccount.reserved = reserved;
+    },
+
+    /**
+     * Provider rates for the live spend meter. Sent only to Managed plans,
+     * because only they are billed on tokens — a capacity-plan customer never
+     * receives these and the meter stays inert.
+     */
+    setCreditRates(state, action) {
+      if (!state.user) return;
+      state.user.creditModelRates = action.payload?.modelRates || null;
+      state.user.usdPerCredit = action.payload?.usdPerCredit || null;
+    },
   },
 })
 
-export const { setUser, setLoading, setSelectedMode, incrementUsageCount  } = profileSlice.actions
+export const {
+  setUser,
+  setLoading,
+  setSelectedMode,
+  setCreditAccount,
+  applyCreditDelta,
+  setCreditRates,
+} = profileSlice.actions
 
 export default profileSlice.reducer
