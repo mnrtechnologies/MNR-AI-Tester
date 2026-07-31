@@ -31,7 +31,22 @@
  * approval gate. Any other reading double-bills the customer.
  */
 
-const PRICING = require("./pricing.data.json");
+const RAW_PRICING = require("./pricing.data.json");
+
+// 1. Determine the dynamic exchange rate from env, falling back to the JSON file
+const FX_INR_PER_USD = Number(
+  process.env.REACT_APP_FX_INR_PER_USD 
+);
+
+// 2. Clone and mutate the PRICING object so the rest of the file 
+// and external consumers use the injected live rate consistently.
+const PRICING = {
+  ...RAW_PRICING,
+  fx: {
+    ...RAW_PRICING.fx,
+    inrPerUsd: FX_INR_PER_USD,
+  },
+};
 
 const F = PRICING.formula;
 
@@ -80,7 +95,7 @@ function normaliseStories(stories) {
  *
  * @param {Array<{sessionId?, pageUrl?, storyCount?}>} sheets
  * @returns {{lines: Array, totalStories: number, totalCredits: number,
- *            urlCount: number, oversizedUrls: Array, estimateIncomplete: boolean}}
+ *             urlCount: number, oversizedUrls: Array, estimateIncomplete: boolean}}
  *
  * A sheet whose storyCount is null/undefined has never been through Phase
  * Review, so we have no authoritative count for it. We price it at the
