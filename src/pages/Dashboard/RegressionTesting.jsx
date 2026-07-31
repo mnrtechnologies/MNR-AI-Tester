@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import {
   LayoutDashboard,
   Link as LinkIcon,
@@ -20,6 +20,14 @@ import {
   RefreshCw,
 } from "lucide-react";
 import SubscriptionGuard from "../../components/UI/SubscriptionGuard";
+
+// --- NEW CREDIT IMPORTS ---
+import {
+  fetchCreditAccount,
+  authorizeRun,
+  settleRun,
+  releaseRun,
+} from "../../services/operations/creditAPIs";
 
 // Global API configuration from environment variables
 const API = process.env.REACT_APP_AI_REGRESSION_TESTER_BACKEND_URL;
@@ -657,6 +665,8 @@ const PerformanceDashboard = () => {
   // Redux Setup
   const { user } = useSelector((state) => state.profile);
   const userId = user?._id;
+  const creditAccount = user?.creditAccount; // --- NEW CREDIT STATE ---
+  const dispatch = useDispatch();            // --- NEW DISPATCH ---
 
   // Global & Navigation State
   const [apiBase, setApiBase] = useState(API);
@@ -694,6 +704,11 @@ const PerformanceDashboard = () => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("api")) setApiBase(params.get("api"));
   }, []);
+
+  // --- NEW: FETCH CREDIT BALANCE ON MOUNT ---
+  useEffect(() => {
+    dispatch(fetchCreditAccount());
+  }, [dispatch]);
 
   // Scroll chat to bottom
   useEffect(() => {
@@ -804,15 +819,48 @@ const PerformanceDashboard = () => {
     }
   };
 
+  // --- MODIFIED: ADDED FULL CREDIT LIFECYCLE FOR HEAVY ML JOB ---
   const handleRunPipeline = async () => {
     if (!activeProject) {
       addToast("Select a project first", "error");
       return;
     }
+
+    // 1. PREFLIGHT: Check client balance before sending any request
+    const BASE_PIPELINE_COST = 5; // Example minimum required to start
+    if (
+      creditAccount &&
+      !creditAccount.unlimited &&
+      !creditAccount.overageEnabled &&
+      creditAccount.balance < BASE_PIPELINE_COST
+    ) {
+      addToast(
+        `Not enough credits. ML Pipeline requires ${BASE_PIPELINE_COST} credits, but you only have ${creditAccount.balance}.`,
+        "error"
+      );
+      return;
+    }
+
     setIsRunningPipeline(true);
     setPipelineResult(null);
 
+    const sessionId = `${activeProject.project_id}_${Date.now()}`;
+
     try {
+      // 2. HOLD: Reserve credits dynamically via backend before execution
+      const authRes = await authorizeRun(sessionId, { acknowledgedOversized: false });
+      
+      // Stop and alert if the backend refuses the hold
+      if (!authRes.ok) {
+        addToast(authRes.message || "Failed to reserve credits.", "error");
+        setIsRunningPipeline(false);
+        return;
+      }
+      
+      // Update header UI to show the hold
+      dispatch(fetchCreditAccount());
+
+      // 3. EXECUTE: Run the heavy AI job
       const data = await apiCall(
         "POST",
         `/api/ml/${activeProject.project_id}/run`,
@@ -826,19 +874,42 @@ const PerformanceDashboard = () => {
         resultsArray[resultsArray.length - 1]?.message ||
         "Pipeline execution finished";
       addToast(lastMsg, "success");
+
+      // 4a. SETTLE: Tell backend the job succeeded so it finalizes the charge
+      await settleRun(sessionId);
+      dispatch(fetchCreditAccount());
+
     } catch (e) {
       addToast("Error: " + e.message, "error");
+      
+      // 4b. RELEASE: Job failed, refund the held credits immediately
+      await releaseRun(sessionId);
+      dispatch(fetchCreditAccount());
     } finally {
       setIsRunningPipeline(false);
     }
   };
 
+  // --- MODIFIED: ADDED PREFLIGHT CHECK FOR AI CHAT ---
   const handleSendChat = async (e) => {
     e.preventDefault();
     if (!activeProject) {
       addToast("Select a project first", "error");
       return;
     }
+
+    // Preflight Check: AI Chat requires a minimum balance
+    const MIN_CHAT_COST = 1; 
+    if (
+      creditAccount &&
+      !creditAccount.unlimited &&
+      !creditAccount.overageEnabled &&
+      creditAccount.balance < MIN_CHAT_COST
+    ) {
+      addToast(`Not enough credits to use the AI Assistant.`, "error");
+      return;
+    }
+
     const question = chatInput.trim();
     if (!question) return;
 
@@ -865,6 +936,9 @@ const PerformanceDashboard = () => {
             : null,
         },
       ]);
+      
+      // Update balance if the chat deducts credits directly on the backend
+      dispatch(fetchCreditAccount());
     } catch (e) {
       setChatMessages((prev) => [
         ...prev,
@@ -955,6 +1029,32 @@ const PerformanceDashboard = () => {
                   {item.label}
                 </button>
               ))}
+
+              {/* --- NEW: REAL-TIME HEADER BALANCE DISPLAY --- */}
+              {creditAccount && !creditAccount.unlimited && (
+                <div
+                  className="ml-4 flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-xl shadow-sm text-sm font-bold text-slate-700 whitespace-nowrap"
+                  title={
+                    creditAccount.reserved > 0
+                      ? `${creditAccount.reserved} credits held for ongoing tasks`
+                      : "Available credits"
+                  }
+                >
+                  Credits:{" "}
+                  <span
+                    className={
+                      creditAccount.balance <= 0 ? "text-red-500" : "text-emerald-600"
+                    }
+                  >
+                    {creditAccount.balance}
+                  </span>
+                  {creditAccount.reserved > 0 && (
+                    <span className="text-xs text-orange-500 font-semibold ml-1">
+                      ({creditAccount.reserved} reserved)
+                    </span>
+                  )}
+                </div>
+              )}
             </nav>
           </div>
         </header>

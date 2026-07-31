@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useSelector, useDispatch } from "react-redux";
 import {
   Globe,
   ShieldCheck,
@@ -9,12 +10,26 @@ import {
   Mail,
   Lock,
   Smartphone,
+  Wallet
 } from "lucide-react";
 import SubscriptionGuard from "../../components/UI/SubscriptionGuard";
+
+// --- NEW CREDIT IMPORTS ---
+import {
+  fetchCreditAccount,
+  authorizeRun,
+  settleRun,
+  releaseRun,
+} from "../../services/operations/creditAPIs";
 
 const API = process.env.REACT_APP_AI_API_TESTER_BACKEND_URL;
 
 const APITesting = () => {
+  // --- REDUX & CREDIT STATE ---
+  const { user } = useSelector((state) => state.profile);
+  const creditAccount = user?.creditAccount;
+  const dispatch = useDispatch();
+
   const [isTesting, setIsTesting] = useState(false);
   const [response, setResponse] = useState(null);
   const [error, setError] = useState(null);
@@ -28,6 +43,11 @@ const APITesting = () => {
     openai_key: "",
   });
 
+  // Fetch credit balance on component mount
+  useEffect(() => {
+    dispatch(fetchCreditAccount());
+  }, [dispatch]);
+
   const handleChange = (e) => {
     setFormData({
       ...formData,
@@ -37,11 +57,35 @@ const APITesting = () => {
 
   const handleTestUsage = async (e) => {
     e.preventDefault();
+    
+    // --- 1. PREFLIGHT CHECK ---
+    const BASE_COST = 1; // Base cost to queue a scan
+    if (
+      creditAccount &&
+      !creditAccount.unlimited &&
+      !creditAccount.overageEnabled &&
+      creditAccount.balance < BASE_COST
+    ) {
+      setError(`Not enough credits. An API Scan requires ${BASE_COST} credit(s), but you only have ${creditAccount.balance}.`);
+      return;
+    }
+
     setIsTesting(true);
     setResponse(null);
     setError(null);
     
+    // Generate a unique billing ID for this specific run
+    const runBillingId = `api_scan_${Date.now()}`;
+    
     try {
+      // --- 2. HOLD CREDITS ---
+      const authRes = await authorizeRun(runBillingId, { acknowledgedOversized: false });
+      if (!authRes.ok) {
+        throw new Error(authRes.message || "Failed to reserve credits for this scan.");
+      }
+      dispatch(fetchCreditAccount()); // Update UI to show reserved amount
+
+      // --- 3. EXECUTE ORIGINAL LOGIC ---
       const res = await fetch(`${API}/api/runs/start`, {
         method: "POST",
         headers: {
@@ -60,8 +104,18 @@ const APITesting = () => {
       }
 
       setResponse(data);
+
+      // --- 4a. SETTLE CREDITS (SUCCESS) ---
+      await settleRun(runBillingId);
+      dispatch(fetchCreditAccount());
+
     } catch (err) {
       setError(err.message);
+      
+      // --- 4b. RELEASE CREDITS (FAILURE) ---
+      // If anything fails (our hold, or the actual scan request), refund the user
+      await releaseRun(runBillingId);
+      dispatch(fetchCreditAccount());
     } finally {
       setIsTesting(false);
     }
@@ -76,8 +130,23 @@ const APITesting = () => {
   return (
     <SubscriptionGuard>
       <div className="max-w-5xl mx-auto space-y-8 pb-12 pt-6 px-4">
+        
         {/* HERO SECTION */}
         <div className="bg-gradient-to-br from-white to-orange-50/30 rounded-3xl p-8 md:p-10 border border-orange-100 shadow-sm relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8">
+          
+          {/* --- NEW HEADER CREDIT DISPLAY --- */}
+          {creditAccount && !creditAccount.unlimited && (
+            <div className="absolute top-6 right-6 flex items-center gap-2 bg-white border border-slate-200 px-3 py-1.5 rounded-full shadow-sm z-20">
+              <Wallet size={14} className="text-slate-400" />
+              <span className="text-xs font-bold text-slate-700 tracking-wide">
+                Credits:{" "}
+                <span className={creditAccount.balance <= 0 ? "text-red-500" : "text-emerald-600"}>
+                  {creditAccount.balance}
+                </span>
+              </span>
+            </div>
+          )}
+
           <div className="z-10 max-w-xl">
             <div className="inline-flex items-center gap-2 bg-orange-100 text-orange-600 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-6">
               <ShieldCheck size={14} />
@@ -312,10 +381,11 @@ const APITesting = () => {
                 </p>
                 <button
                   type="submit"
-                  className="flex items-center gap-2 px-8 py-3 rounded-xl font-bold text-white transition-all shadow-sm bg-orange-500 hover:bg-orange-600 active:scale-95"
+                  disabled={isTesting}
+                  className="flex items-center gap-2 px-8 py-3 rounded-xl font-bold text-white transition-all shadow-sm bg-orange-500 hover:bg-orange-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Send className="w-5 h-5" />
-                  Start Security Scan
+                  {isTesting ? "Processing..." : "Start Security Scan"}
                 </button>
               </div>
             </form>

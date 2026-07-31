@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
 import {
   Smartphone, Terminal, CheckCircle2, XCircle, Play, Activity,
   Loader2, Box, LayoutDashboard, ListChecks, StopCircle, Download,
@@ -7,6 +8,14 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import SubscriptionGuard from '../../components/UI/SubscriptionGuard';
+
+// --- NEW CREDIT IMPORTS ---
+import {
+  fetchCreditAccount,
+  authorizeRun,
+  settleRun,
+  releaseRun,
+} from '../../services/operations/creditAPIs';
 
 const API_URL    = process.env.REACT_APP_AI_MOBILE_TESTER_BACKEND_URL;
 const UPLOAD_URL = process.env.REACT_APP_AI_MOBILE_UPLOAD_URL;
@@ -24,6 +33,11 @@ const getAuthHeader = () => {
 };
 
 export default function MobileTestingDashboard() {
+  // --- REDUX & CREDIT STATE ---
+  const { user } = useSelector((state) => state.profile);
+  const creditAccount = user?.creditAccount;
+  const dispatch = useDispatch();
+
   const [activeTab, setActiveTab]             = useState('logs');
   const [formData, setFormData]               = useState({ email: '', password: '', maxActions: 200 });
   const [apkFile, setApkFile]                 = useState(null);
@@ -51,6 +65,14 @@ export default function MobileTestingDashboard() {
   const autoRestartCallbackRef = useRef(null);
   const logsEndRef            = useRef(null);
   const fileInputRef          = useRef(null);
+  
+  // --- BILLING REF: Tracks current test run for WS events ---
+  const billingIdRef          = useRef(null);
+
+  // Fetch credit balance on mount
+  useEffect(() => {
+    dispatch(fetchCreditAccount());
+  }, [dispatch]);
 
   // auto-scroll logs
   useEffect(() => {
@@ -155,6 +177,11 @@ export default function MobileTestingDashboard() {
               setLoadingState(null);
               addLog('🎉 Session complete — report is ready for download.');
               toast.success('Testing complete! Download your report.');
+              
+              // --- SETTLE CREDITS ON SUCCESS ---
+              if (billingIdRef.current) {
+                settleRun(billingIdRef.current).then(() => dispatch(fetchCreditAccount()));
+              }
               break;
             case 'SESSION_FAILED':
               shouldReconnectRef.current = false;
@@ -162,6 +189,11 @@ export default function MobileTestingDashboard() {
               setLoadingState(null);
               addLog(`💥 Session failed: ${payload.error}`);
               toast.error(`Session failed: ${payload.error}`);
+              
+              // --- RELEASE CREDITS ON FAILURE ---
+              if (billingIdRef.current) {
+                releaseRun(billingIdRef.current).then(() => dispatch(fetchCreditAccount()));
+              }
               break;
             default:
               break;
@@ -192,7 +224,7 @@ export default function MobileTestingDashboard() {
       clearTimeout(reconnectTimer);
       wsRef.current?.close();
     };
-  }, [sessionId, addLog]);
+  }, [sessionId, addLog, dispatch]);
 
   // Status polling — fallback sync when WS lags
   useEffect(() => {
@@ -265,6 +297,7 @@ export default function MobileTestingDashboard() {
     setWsConnected(false);
     setActiveTab('logs');
     silentReconnectRef.current = 0;
+    billingIdRef.current = null;
   };
 
   // Auto-restart: skips re-upload, goes straight to POST /sessions with existing serverApkPath
@@ -272,11 +305,27 @@ export default function MobileTestingDashboard() {
     const apkPath = uploadedApkInfo?.serverApkPath;
     if (!apkPath) return;
 
+    // --- PREFLIGHT FOR AUTO-RESTART ---
+    const BASE_COST = 5;
+    if (creditAccount && !creditAccount.unlimited && !creditAccount.overageEnabled && creditAccount.balance < BASE_COST) {
+      addLog(`💥 Restart failed: Insufficient credits. Needs ${BASE_COST}.`);
+      return;
+    }
+
+    // Generate new billing ID
+    const restartBillingId = `mob_restart_${Date.now()}`;
+    billingIdRef.current = restartBillingId;
+
     silentReconnectRef.current = 0;
     addLog('↺ Stream dead — restarting session (no re-upload)…');
     setLoadingState('starting');
 
     try {
+      // --- HOLD CREDITS ---
+      const authRes = await authorizeRun(restartBillingId, { acknowledgedOversized: false });
+      if (!authRes.ok) throw new Error(authRes.message || "Failed to reserve credits.");
+      dispatch(fetchCreditAccount());
+
       const appPackage  = uploadedApkInfo?.appPackage;
       const appActivity = uploadedApkInfo?.appActivity;
       const sessionBody = { apkPath, appPackage, appActivity, maxActions: formData.maxActions };
@@ -299,11 +348,17 @@ export default function MobileTestingDashboard() {
       setLoadingState('running');
       addLog(`✓ Session restarted — ID: ${newId}`);
     } catch (err) {
+      // --- RELEASE CREDITS ON FAILURE ---
+      if (billingIdRef.current) {
+        await releaseRun(billingIdRef.current);
+        dispatch(fetchCreditAccount());
+      }
+      
       addLog(`💥 Auto-restart failed: ${err.message}`);
       setLoadingState(null);
       toast.error('Auto-restart failed — please relaunch manually.');
     }
-  }, [uploadedApkInfo, formData, addLog]);
+  }, [uploadedApkInfo, formData, addLog, creditAccount, dispatch]);
 
   // Keep ref current so the WS watchdog (closure) can always call the latest version
   autoRestartCallbackRef.current = autoRestart;
@@ -318,6 +373,18 @@ export default function MobileTestingDashboard() {
     e.preventDefault();
     if (!apkFile) { toast.error('Please select an APK file.'); return; }
 
+    // --- 1. PREFLIGHT CHECK ---
+    const BASE_COST = 5; // Standard cost configuration for a run
+    if (
+      creditAccount &&
+      !creditAccount.unlimited &&
+      !creditAccount.overageEnabled &&
+      creditAccount.balance < BASE_COST
+    ) {
+      toast.error(`Not enough credits. Mobile app testing requires ${BASE_COST} credits, but you only have ${creditAccount.balance}.`);
+      return;
+    }
+
     setLogs([]);
     setAssertions([]);
     setStats({ screens: 0, passed: 0, failed: 0 });
@@ -325,8 +392,22 @@ export default function MobileTestingDashboard() {
     setUploadedApkInfo(null);
     setPhase('starting');
     setActiveTab('logs');
+    
+    // Create a local billing identifier for this run
+    const sessionBillingId = `mob_${Date.now()}`;
+    billingIdRef.current = sessionBillingId;
 
     try {
+      // --- 2. HOLD CREDITS (Before expensive upload) ---
+      setLoadingState('starting');
+      addLog('💳 Reserving credits for test run…');
+      const authRes = await authorizeRun(sessionBillingId, { acknowledgedOversized: false });
+      
+      if (!authRes.ok) {
+        throw new Error(authRes.message || "Failed to reserve credits.");
+      }
+      dispatch(fetchCreditAccount());
+
       // Step 1: Upload APK
       setLoadingState('uploading');
       addLog('⬆ Uploading APK to server…');
@@ -379,6 +460,13 @@ export default function MobileTestingDashboard() {
       toast.success('Agent launched! Monitoring live stream…');
 
     } catch (err) {
+      // --- 3. RELEASE CREDITS ON FAILURE ---
+      if (billingIdRef.current) {
+        await releaseRun(billingIdRef.current);
+        dispatch(fetchCreditAccount());
+        billingIdRef.current = null;
+      }
+      
       addLog(`💥 ${err.message}`);
       toast.error(err.message);
       setPhase('failed');
@@ -408,6 +496,12 @@ export default function MobileTestingDashboard() {
       addLog(`💥 Network error: ${err.message}`);
       toast.error('Network error while stopping session');
     } finally {
+      // --- RELEASE CREDITS ON MANUAL STOP ---
+      if (billingIdRef.current) {
+        await releaseRun(billingIdRef.current);
+        dispatch(fetchCreditAccount());
+      }
+      
       shouldReconnectRef.current = false;
       setPhase('failed');
       setLoadingState(null);
@@ -562,6 +656,23 @@ export default function MobileTestingDashboard() {
             </div>
 
             <div className="flex flex-col items-start md:items-end gap-2 shrink-0">
+              
+              {/* --- NEW HEADER CREDIT DISPLAY --- */}
+              {creditAccount && !creditAccount.unlimited && (
+                <div 
+                  className="flex items-center gap-1.5 bg-white border border-slate-200 px-3 py-1.5 rounded-full text-xs font-bold text-slate-700 mb-1 shadow-sm"
+                  title={creditAccount.reserved > 0 ? `${creditAccount.reserved} credits reserved for a running test` : "Available Balance"}
+                >
+                  Credits: 
+                  <span className={creditAccount.balance <= 0 ? "text-rose-500" : "text-emerald-600"}>
+                    {creditAccount.balance}
+                  </span>
+                  {creditAccount.reserved > 0 && (
+                    <span className="text-orange-500 ml-1">({creditAccount.reserved} reserved)</span>
+                  )}
+                </div>
+              )}
+
               <div className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider border ${statusConfig.pill}`}>
                 <div className={`w-2 h-2 rounded-full ${statusConfig.dot}`} />
                 {statusConfig.label}

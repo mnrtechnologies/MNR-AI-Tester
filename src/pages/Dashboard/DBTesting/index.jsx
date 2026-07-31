@@ -1,10 +1,15 @@
-import React, { useState } from 'react';
-import { Activity, Sparkles, BarChart3, Key, Shield } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
+import { Activity, Sparkles, BarChart3, Key, Shield, Wallet } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 import AssessmentTab from './tabs/AssessmentTab';
 import AnalysisTab from './tabs/AnalysisTab';
 import CredentialsTab from './tabs/CredentialsTab';
 import ApiKeysTab from './tabs/ApiKeysTab';
+import SubscriptionGuard from '../../../components/UI/SubscriptionGuard';
+
+// --- NEW CREDIT IMPORTS ---
+import { fetchCreditAccount } from '../../../services/operations/creditAPIs';
 
 const TABS = [
   { id: 'assessment',  icon: Sparkles,  label: 'Full Assessment' },
@@ -16,8 +21,18 @@ const TABS = [
 export default function DBTesting() {
   const [tab, setTab] = useState('assessment');
 
+  // --- REDUX & CREDIT STATE ---
+  const { user } = useSelector((state) => state.profile);
+  const creditAccount = user?.creditAccount;
+  const dispatch = useDispatch();
+
+  useEffect(() => {
+    dispatch(fetchCreditAccount());
+  }, [dispatch]);
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans">
+    <SubscriptionGuard>
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans relative">
       <style dangerouslySetInnerHTML={{ __html: `
         .hide-scroll::-webkit-scrollbar { display: none; }
         .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
@@ -31,7 +46,23 @@ export default function DBTesting() {
 
       <Toaster position="top-right" />
 
-      <div className="max-w-5xl mx-auto space-y-5 pb-12 pt-4 px-4">
+      {/* --- NEW HEADER CREDIT DISPLAY --- */}
+      {creditAccount && !creditAccount.unlimited && (
+        <div className="absolute top-4 right-4 sm:top-6 sm:right-auto sm:left-[calc(50%+300px)] flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-full shadow-sm z-20">
+          <Wallet size={14} className="text-slate-400" />
+          <span className="text-xs font-bold text-slate-700 tracking-wide">
+            Credits:{" "}
+            <span className={creditAccount.balance <= 0 ? "text-rose-500" : "text-emerald-600"}>
+              {creditAccount.balance}
+            </span>
+            {creditAccount.reserved > 0 && (
+              <span className="text-orange-500 ml-1 font-semibold">({creditAccount.reserved} reserved)</span>
+            )}
+          </span>
+        </div>
+      )}
+
+      <div className="max-w-5xl mx-auto space-y-5 pb-12 pt-4 px-4 mt-12 sm:mt-0">
 
         {/* Header + Tab bar */}
         <div className="bg-white rounded-3xl px-8 pt-7 pb-0 shadow-xl border border-slate-200">
@@ -66,5 +97,6 @@ export default function DBTesting() {
 
       </div>
     </div>
+    </SubscriptionGuard>
   );
 }

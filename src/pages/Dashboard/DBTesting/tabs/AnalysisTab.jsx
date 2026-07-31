@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
 import { motion } from 'framer-motion';
 import {
   BarChart3, Eye, EyeOff, Zap, Loader2, StopCircle,
@@ -10,6 +11,9 @@ import { stCfg } from '../constants';
 import StatusPill from '../components/StatusPill';
 import ShimmerBar from '../components/ShimmerBar';
 import AnalysisReportPanel from '../components/AnalysisReportPanel';
+
+// --- NEW CREDIT IMPORTS ---
+import { fetchCreditAccount, authorizeRun, settleRun, releaseRun } from '../../../../services/operations/creditAPIs';
 
 export default function AnalysisTab() {
   const [connStr, setConnStr]               = useState('');
@@ -24,6 +28,12 @@ export default function AnalysisTab() {
   const pollRef     = useRef(null);
   const startRef    = useRef(null);
   const pollFailRef = useRef(0);
+  const billingIdRef = useRef(null); // Tracks billing ID for current run
+
+  // --- REDUX & CREDIT STATE ---
+  const { user } = useSelector((state) => state.profile);
+  const creditAccount = user?.creditAccount;
+  const dispatch = useDispatch();
 
   // ─── Polling ─────────────────────────────────────────────────────────────
 
@@ -48,8 +58,24 @@ export default function AnalysisTab() {
       if (['completed', 'failed', 'cancelled'].includes(data.status)) {
         stopPoll();
         loadJobs();
-        if (data.status === 'completed') toast.success('DB analysis complete!');
-        if (data.status === 'failed')    toast.error(data.error || 'Analysis failed');
+        
+        if (data.status === 'completed') {
+          toast.success('DB analysis complete!');
+          // --- SETTLE CREDITS ON SUCCESS ---
+          if (billingIdRef.current) {
+            await settleRun(billingIdRef.current);
+            dispatch(fetchCreditAccount());
+          }
+        }
+        
+        if (data.status === 'failed' || data.status === 'cancelled') {
+          if (data.status === 'failed') toast.error(data.error || 'Analysis failed');
+          // --- RELEASE CREDITS ON FAILURE/CANCEL ---
+          if (billingIdRef.current) {
+            await releaseRun(billingIdRef.current);
+            dispatch(fetchCreditAccount());
+          }
+        }
       }
     } catch {
       pollFailRef.current += 1;
@@ -58,7 +84,7 @@ export default function AnalysisTab() {
         toast.error('Lost connection — check your network and refresh.');
       }
     }
-  }, [stopPoll, loadJobs]);
+  }, [stopPoll, loadJobs, dispatch]);
 
   const startPoll = useCallback((id) => {
     stopPoll();
@@ -82,8 +108,30 @@ export default function AnalysisTab() {
   const runAnalysis = async (e) => {
     e.preventDefault();
     if (!connStr.trim()) { toast.error('Enter a connection string.'); return; }
-    setJobSubmitting(true); setAnalysisJob(null);
+    
+    // --- 1. PREFLIGHT CHECK ---
+    const BASE_COST = 1; 
+    if (
+      creditAccount &&
+      !creditAccount.unlimited &&
+      !creditAccount.overageEnabled &&
+      creditAccount.balance < BASE_COST
+    ) {
+      toast.error(`Not enough credits. DB Analysis requires ${BASE_COST} credit(s), but you only have ${creditAccount.balance}.`);
+      return;
+    }
+
+    setJobSubmitting(true); 
+    setAnalysisJob(null);
+    billingIdRef.current = `db_ana_${Date.now()}`;
+
     try {
+      // --- 2. HOLD CREDITS ---
+      const authRes = await authorizeRun(billingIdRef.current, { acknowledgedOversized: false });
+      if (!authRes.ok) throw new Error(authRes.message || "Failed to reserve credits.");
+      dispatch(fetchCreditAccount());
+
+      // --- 3. EXECUTE ---
       const d = await apiFetch('/analysis/run', {
         method: 'POST',
         body: JSON.stringify({ connection_string: connStr.trim() }),
@@ -91,7 +139,14 @@ export default function AnalysisTab() {
       setAnalysisJob({ id: d.job_id, status: d.status, db_type: d.db_type });
       toast.success('Analysis started.');
       startPoll(d.job_id);
-    } catch (e) { toast.error(e.message); }
+    } catch (e) { 
+      toast.error(e.message); 
+      // --- RELEASE ON IMMEDIATE FAILURE ---
+      if (billingIdRef.current) {
+        await releaseRun(billingIdRef.current);
+        dispatch(fetchCreditAccount());
+      }
+    }
     finally { setJobSubmitting(false); }
   };
 
@@ -104,6 +159,12 @@ export default function AnalysisTab() {
       setAnalysisJob(p => ({ ...p, status: 'cancelled' }));
       toast.success('Job cancelled.');
       loadJobs();
+
+      // --- RELEASE CREDITS ON CANCEL ---
+      if (billingIdRef.current) {
+        await releaseRun(billingIdRef.current);
+        dispatch(fetchCreditAccount());
+      }
     } catch (e) { toast.error(e.message); }
     finally { setCancellingJob(false); }
   };
