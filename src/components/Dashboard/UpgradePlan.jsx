@@ -23,7 +23,11 @@ import {
   FX_INR_PER_USD,
   usdToInr,
 } from "../../config/pricing/creditMath";
-import { quotePlan, quoteCredits, formatCharge } from "../../config/pricing/purchaseQuote";
+import {
+  quotePlan,
+  quoteCredits,
+  formatCharge,
+} from "../../config/pricing/purchaseQuote";
 import { purchase } from "../../services/operations/paymentAPIs";
 
 /**
@@ -57,7 +61,7 @@ const UpgradePlan = () => {
   const [planType, setPlanType] = useState(
     account && account.planType && account.planType !== "legacy"
       ? account.planType
-      : leadPlanTypeKey()
+      : leadPlanTypeKey(),
   );
   const [showModal, setShowModal] = useState(false);
   // "sales" (default) or "admin-only" — same modal, different copy.
@@ -91,7 +95,12 @@ const UpgradePlan = () => {
     if (tier.custom || tier.available === false) return openSalesModal("sales");
     if (!canBuy) return openSalesModal("admin-only");
 
-    const quote = quotePlan({ planType, tierKey: tier.key, period: billing, currency });
+    const quote = quotePlan({
+      planType,
+      tierKey: tier.key,
+      period: billing,
+      currency,
+    });
     if (!quote.ok) return openSalesModal("sales");
 
     setConfirm({ kind: "plan_purchase", tier, quote });
@@ -120,14 +129,18 @@ const UpgradePlan = () => {
 
     const result = await dispatch(
       confirm.kind === "credit_topup"
-        ? purchase({ kind: "credit_topup", credits: confirm.quote.quantity, currency })
+        ? purchase({
+            kind: "credit_topup",
+            credits: confirm.quote.quantity,
+            currency,
+          })
         : purchase({
             kind: "plan_purchase",
             planType,
             tierKey: confirm.tier.key,
             period: billing,
             currency,
-          })
+          }),
     );
 
     setBusyKey(null);
@@ -168,7 +181,9 @@ const UpgradePlan = () => {
           </div>
           <div className="min-w-0 flex-1">
             <p className="font-black text-slate-900">
-              {canBuy ? "You don't have a plan yet" : "Your organisation has no plan yet"}
+              {canBuy
+                ? "You don't have a plan yet"
+                : "Your organisation has no plan yet"}
             </p>
             <p className="text-sm text-slate-600 mt-0.5 leading-relaxed">
               {canBuy
@@ -206,15 +221,26 @@ const UpgradePlan = () => {
               <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                 Available
               </p>
-              <p className="font-black text-slate-900">
-                {account.unlimited ? "Unlimited" : account.balance.toLocaleString()}
-                {!account.unlimited && (
-                  <span className="text-slate-400 font-medium">
-                    {" "}
-                    / {account.monthlyAllowance.toLocaleString()}
-                  </span>
-                )}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="font-black text-slate-900">
+                  {account.unlimited
+                    ? "Unlimited"
+                    : account.balance.toLocaleString()}
+                  {!account.unlimited && (
+                    <span className="text-slate-400 font-medium">
+                      {" "}
+                      / {account.monthlyAllowance.toLocaleString()}
+                    </span>
+                  )}
+                </p>
+                {/* NEW: Show a "Bonus/Rollover" badge if balance exceeds the monthly allowance */}
+                {!account.unlimited &&
+                  account.balance > account.monthlyAllowance && (
+                    <span className="text-[10px] font-bold uppercase text-emerald-600 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                      Includes Top-up
+                    </span>
+                  )}
+              </div>
             </div>
             {account.reserved > 0 && (
               <div>
@@ -234,8 +260,8 @@ const UpgradePlan = () => {
           Scale Your <span className="text-orange-500">Testing Capacity</span>
         </h1>
         <p className="text-slate-500 text-lg leading-relaxed">
-          One credit tests one page with up to two scenarios. You approve the exact
-          cost before anything expensive runs.
+          One credit tests one page with up to two scenarios. You approve the
+          exact cost before anything expensive runs.
         </p>
 
         {/* Toggles */}
@@ -329,7 +355,9 @@ const UpgradePlan = () => {
         </div>
 
         {activePlan?.blurb && (
-          <p className="text-sm text-slate-500 max-w-xl mx-auto">{activePlan.blurb}</p>
+          <p className="text-sm text-slate-500 max-w-xl mx-auto">
+            {activePlan.blurb}
+          </p>
         )}
       </div>
 
@@ -367,15 +395,19 @@ const UpgradePlan = () => {
         <div className="max-w-3xl mx-auto bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-6">
             <div className="min-w-0">
-              <h3 className="font-black text-slate-900 text-lg">Need credits sooner?</h3>
+              <h3 className="font-black text-slate-900 text-lg">
+                Need credits sooner?
+              </h3>
               <p className="text-sm text-slate-500 mt-1 leading-relaxed max-w-md">
                 Top up without changing your plan, at{" "}
                 {formatCharge(
-                  currency === "INR" ? usdToInr(account.overageRateUsd) : account.overageRateUsd,
-                  currency
+                  currency === "INR"
+                    ? usdToInr(account.overageRateUsd)
+                    : account.overageRateUsd,
+                  currency,
                 )}{" "}
-                per credit. They land immediately and are kept at your monthly reset — only
-                unused <em>plan</em> credits expire.
+                per credit. They land immediately and are kept at your monthly
+                reset — only unused <em>plan</em> credits expire.
               </p>
             </div>
 
@@ -395,7 +427,9 @@ const UpgradePlan = () => {
                   max="10000"
                   value={topUpQty}
                   onChange={(e) =>
-                    setTopUpQty(Math.max(1, Math.min(10000, Number(e.target.value) || 1)))
+                    setTopUpQty(
+                      Math.max(1, Math.min(10000, Number(e.target.value) || 1)),
+                    )
                   }
                   className="w-24 text-center font-black text-slate-900 border border-slate-200 rounded-lg py-2"
                 />
@@ -430,17 +464,17 @@ const UpgradePlan = () => {
                 disabled={!!busyKey}
                 className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm py-2.5 px-5 rounded-xl flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {busyKey === "topup" && <Loader2 size={15} className="animate-spin" />}
+                {busyKey === "topup" && (
+                  <Loader2 size={15} className="animate-spin" />
+                )}
                 {busyKey === "topup"
                   ? "Opening checkout…"
-                  : `Buy ${topUpQty} credits — ${
-                      formatCharge(
-                        currency === "INR"
-                          ? usdToInr(account.overageRateUsd) * topUpQty
-                          : account.overageRateUsd * topUpQty,
-                        currency
-                      )
-                    }`}
+                  : `Buy ${topUpQty} credits — ${formatCharge(
+                      currency === "INR"
+                        ? usdToInr(account.overageRateUsd) * topUpQty
+                        : account.overageRateUsd * topUpQty,
+                      currency,
+                    )}`}
               </button>
             </div>
           </div>
@@ -454,20 +488,21 @@ const UpgradePlan = () => {
           <div className="space-y-2 text-sm text-slate-600 leading-relaxed">
             <p className="font-bold text-slate-900">How credits are counted</p>
             <p>
-              Testing a page runs an exploration pass plus one execution pass per
-              scenario it finds. A page with 1–3 scenarios costs 1 credit, 4–5 costs 2,
-              and around 20 scenarios costs 7. You see the exact number for every page
-              on the review screen and approve it before the expensive phase starts.
+              Testing a page runs an exploration pass plus one execution pass
+              per scenario it finds. A page with 1–3 scenarios costs 1 credit,
+              4–5 costs 2, and around 20 scenarios costs 7. You see the exact
+              number for every page on the review screen and approve it before
+              the expensive phase starts.
             </p>
             <p>
               Any page producing more than {PRICING.formula.MAX_STORIES_PER_URL}{" "}
-              scenarios always pauses for explicit confirmation, so a run can never
-              quietly become expensive.
+              scenarios always pauses for explicit confirmation, so a run can
+              never quietly become expensive.
             </p>
             {currency === "INR" && (
               <p className="text-xs text-slate-400 pt-1">
-                Prices are set in USD and charged in INR at $1 = ₹{FX_INR_PER_USD}. Pay by
-                UPI, netbanking, card or wallet.
+                Prices are set in USD and charged in INR at $1 = ₹
+                {FX_INR_PER_USD}. Pay by UPI, netbanking, card or wallet.
               </p>
             )}
           </div>
@@ -499,11 +534,15 @@ const UpgradePlan = () => {
             <h3 className="text-2xl font-black text-slate-900 mb-1 tracking-tight">
               Confirm your purchase
             </h3>
-            <p className="text-sm text-slate-500 mb-6">{confirm.quote.description}</p>
+            <p className="text-sm text-slate-500 mb-6">
+              {confirm.quote.description}
+            </p>
 
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3 text-sm">
               <div className="flex justify-between items-baseline">
-                <span className="text-slate-500 font-medium">Total due today</span>
+                <span className="text-slate-500 font-medium">
+                  Total due today
+                </span>
                 <span className="text-2xl font-black text-slate-900">
                   {confirm.quote.amountFormatted}
                 </span>
@@ -518,15 +557,20 @@ const UpgradePlan = () => {
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500 font-medium">Billing period</span>
+                    <span className="text-slate-500 font-medium">
+                      Billing period
+                    </span>
                     <span className="font-bold text-slate-900">
-                      {confirm.quote.months} month{confirm.quote.months === 1 ? "" : "s"}
+                      {confirm.quote.months} month
+                      {confirm.quote.months === 1 ? "" : "s"}
                     </span>
                   </div>
                 </>
               ) : (
                 <div className="flex justify-between">
-                  <span className="text-slate-500 font-medium">Credits added now</span>
+                  <span className="text-slate-500 font-medium">
+                    Credits added now
+                  </span>
                   <span className="font-bold text-slate-900">
                     {confirm.quote.quantity.toLocaleString()}
                   </span>
@@ -539,7 +583,8 @@ const UpgradePlan = () => {
               <div className="pt-2 border-t border-slate-200 space-y-1.5">
                 {confirm.quote.currency === "INR" ? (
                   <p className="text-xs text-slate-400">
-                    Catalog price ${confirm.quote.amountUsd.toLocaleString("en-US")}, converted
+                    Catalog price $
+                    {confirm.quote.amountUsd.toLocaleString("en-US")}, converted
                     at $1 = ₹{FX_INR_PER_USD}.
                   </p>
                 ) : null}
@@ -557,34 +602,45 @@ const UpgradePlan = () => {
               <div className="mt-4 text-xs leading-relaxed text-slate-500 space-y-2">
                 {account && isExtension(confirm.tier) ? (
                   <p>
-                    This extends your current plan by {confirm.quote.months} month
-                    {confirm.quote.months === 1 ? "" : "s"}. Your balance and monthly reset date
-                    are unchanged.
+                    This extends your current plan by {confirm.quote.months}{" "}
+                    month{confirm.quote.months === 1 ? "" : "s"}
+                    and{" "}
+                    <span className="font-bold text-emerald-600">
+                      immediately adds {confirm.quote.credits.toLocaleString()}{" "}
+                      credits
+                    </span>{" "}
+                    to your current balance.
                   </p>
                 ) : account ? (
                   <>
                     <p>
                       This starts a new billing period today on{" "}
-                      <span className="font-bold text-slate-700">{confirm.quote.tierName}</span>.
+                      <span className="font-bold text-slate-700">
+                        {confirm.quote.tierName}
+                      </span>
+                      .
                     </p>
-                    {account.balance > 0 && account.rolloverPolicy !== "carry" && (
-                      <p className="text-amber-600 font-medium">
-                        Your {account.balance.toLocaleString()} unused plan credits will not carry
-                        over. Credits you purchased separately are always kept.
-                      </p>
-                    )}
+                    {account.balance > 0 &&
+                      account.rolloverPolicy !== "carry" && (
+                        <p className="text-amber-600 font-medium">
+                          Your {account.balance.toLocaleString()} unused plan
+                          credits will not carry over. Credits you purchased
+                          separately are always kept.
+                        </p>
+                      )}
                   </>
                 ) : (
                   <p>
                     Your plan activates as soon as the payment clears, and{" "}
-                    {confirm.quote.credits.toLocaleString()} credits become available
-                    straight away.
+                    {confirm.quote.credits.toLocaleString()} credits become
+                    available straight away.
                   </p>
                 )}
                 {confirm.quote.months > 1 && (
                   <p>
-                    Your {confirm.quote.credits.toLocaleString()} credits arrive monthly across
-                    the {confirm.quote.months} months — not all at once.
+                    Your {confirm.quote.credits.toLocaleString()} credits arrive
+                    monthly across the {confirm.quote.months} months — not all
+                    at once.
                   </p>
                 )}
               </div>
@@ -618,7 +674,8 @@ const UpgradePlan = () => {
             </div>
 
             <p className="text-[11px] text-slate-400 text-center mt-4">
-              Payments are processed securely by Razorpay. We never see your card details.
+              Payments are processed securely by Razorpay. We never see your
+              card details.
             </p>
           </div>
         </div>
@@ -645,15 +702,16 @@ const UpgradePlan = () => {
             <p className="text-slate-500 text-sm leading-relaxed mb-6">
               {modalReason === "admin-only" ? (
                 <>
-                  Plans and credits are shared across your whole organisation, so only a
-                  company admin can purchase them. Ask yours to visit this page — or reach
-                  out to us directly at the address below.
+                  Plans and credits are shared across your whole organisation,
+                  so only a company admin can purchase them. Ask yours to visit
+                  this page — or reach out to us directly at the address below.
                 </>
               ) : (
                 <>
-                  To discuss a custom arrangement, an on-premise deployment, or a tier that
-                  is not yet self-serve, please reach out to our sales team at the address
-                  below. We typically respond within a few hours.
+                  To discuss a custom arrangement, an on-premise deployment, or
+                  a tier that is not yet self-serve, please reach out to our
+                  sales team at the address below. We typically respond within a
+                  few hours.
                 </>
               )}
             </p>

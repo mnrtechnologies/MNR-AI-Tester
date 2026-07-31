@@ -31,7 +31,9 @@ const cm = require("../../src/config/pricing/creditMath");
 const pq = require("../../src/config/pricing/purchaseQuote");
 const { addOneMonth } = require("../jobs/allowanceResetJob");
 const mailSender = require("../utils/mailSender");
-const { paymentReceiptEmail } = require("../mail/templates/paymentReceiptEmail");
+const {
+  paymentReceiptEmail,
+} = require("../mail/templates/paymentReceiptEmail");
 
 /**
  * Add n calendar months, reusing the reset job's month arithmetic so the
@@ -172,7 +174,8 @@ async function applyPlanEntitlement({
 }) {
   const { planType, tierKey, months, allowance, priceUsdMonthly } = entitlement;
   const tier = cm.getTier(planType, tierKey);
-  if (!tier) throw new Error(`Unknown plan/tier "${planType}/${tierKey}" at fulfilment`);
+  if (!tier)
+    throw new Error(`Unknown plan/tier "${planType}/${tierKey}" at fulfilment`);
 
   const now = new Date();
   const existing = await credits.getActiveSubscription(companyId);
@@ -196,7 +199,8 @@ async function applyPlanEntitlement({
     return { subscription, mode: "created" };
   }
 
-  const sameTier = existing.planType === planType && existing.tierKey === tierKey;
+  const sameTier =
+    existing.planType === planType && existing.tierKey === tierKey;
   const stillLive = existing.endDate > now;
 
   /* ---------------- extended ---------------- */
@@ -208,7 +212,10 @@ async function applyPlanEntitlement({
     // monthly grant on the customer's existing cadence.
     await Subscription.updateOne(
       { _id: existing._id },
-      { $set: { endDate: newEnd, isActive: true } }
+      {
+        $set: { endDate: newEnd, isActive: true },
+        $inc: { "credits.balance": allowance },
+      },
     );
 
     const fresh = await Subscription.findById(existing._id);
@@ -220,12 +227,14 @@ async function applyPlanEntitlement({
       type: "purchase",
       // Zero: the customer bought TIME, not credits. Their monthly allowance
       // continues to arrive on schedule.
-      credits: 0,
+      credits: allowance,
       balanceAfter: fresh.credits.balance,
       reservedAfter: fresh.credits.reserved,
       actorUserId: actorUserId || null,
       actorRole: actorRole || null,
-      note: note || `Plan extended by ${months} month(s) to ${newEnd.toISOString().slice(0, 10)}`,
+      note:
+        note ||
+        `Plan extended by ${months} month(s) to ${newEnd.toISOString().slice(0, 10)}`,
     });
 
     await Company.findByIdAndUpdate(companyId, {
@@ -264,7 +273,7 @@ async function applyPlanEntitlement({
         "credits.overageRateUsd": tier.extraCreditUsd || null,
         "credits.needsManualReview": false,
       },
-    }
+    },
   );
 
   const updated = await credits.grantAllowance(existing._id, allowance, {
@@ -319,7 +328,8 @@ async function applyCreditTopup({
     amountUsd,
     actorUserId,
     actorRole,
-    note: note || `Purchased ${quantity} extra credit${quantity === 1 ? "" : "s"}`,
+    note:
+      note || `Purchased ${quantity} extra credit${quantity === 1 ? "" : "s"}`,
   });
 
   return { subscription, creditsGranted: quantity };
@@ -342,7 +352,9 @@ const CLAIMABLE = ["created", "attempted", "fulfilment_failed"];
 /** Best-effort receipt. Never allowed to fail a fulfilment — the money moved. */
 async function sendReceipt(payment, subscription) {
   try {
-    const company = await Company.findById(payment.companyId).select("name email");
+    const company = await Company.findById(payment.companyId).select(
+      "name email",
+    );
     if (!company?.email) return;
     await mailSender(
       company.email,
@@ -359,7 +371,7 @@ async function sendReceipt(payment, subscription) {
         creditsGranted: payment.creditsGranted,
         balance: subscription?.credits?.balance ?? null,
         endDate: subscription?.endDate || null,
-      })
+      }),
     );
   } catch (err) {
     console.error("⚠️ payment receipt email failed:", err.message);
@@ -382,7 +394,7 @@ async function sendReceipt(payment, subscription) {
  */
 async function fulfilPayment(
   paymentId,
-  { source, razorpayPaymentId, razorpaySignature, method, eventId } = {}
+  { source, razorpayPaymentId, razorpaySignature, method, eventId } = {},
 ) {
   // CLAIM FIRST, before a single credit moves.
   const claimed = await Payment.findOneAndUpdate(
@@ -398,14 +410,15 @@ async function fulfilPayment(
         verifiedAt: new Date(),
       },
     },
-    { returnDocument: "after" }
+    { returnDocument: "after" },
   );
 
   if (!claimed) {
     const current = await Payment.findById(paymentId);
     return {
       fulfilled: false,
-      reason: current?.status === "paid" ? "already_fulfilled" : "not_claimable",
+      reason:
+        current?.status === "paid" ? "already_fulfilled" : "not_claimable",
       payment: current,
     };
   }
@@ -433,13 +446,16 @@ async function fulfilPayment(
           {
             $set: {
               subscriptionId: subscription._id,
-              creditsGranted: result.mode === "extended" ? 0 : claimed.creditsPurchased,
+              creditsGranted: claimed.creditsPurchased,
             },
-          }
+          },
         );
       }
     } else {
-      if (claimed.creditsGranted !== null && claimed.creditsGranted !== undefined) {
+      if (
+        claimed.creditsGranted !== null &&
+        claimed.creditsGranted !== undefined
+      ) {
         subscription = await Subscription.findById(claimed.subscriptionId);
       } else {
         const result = await applyCreditTopup({
@@ -463,14 +479,16 @@ async function fulfilPayment(
               subscriptionId: subscription._id,
               creditsGranted: result.creditsGranted,
             },
-          }
+          },
         );
       }
     }
 
     await Payment.updateOne(
       { _id: claimed._id },
-      { $set: { status: "paid", fulfilledAt: new Date(), failureReason: null } }
+      {
+        $set: { status: "paid", fulfilledAt: new Date(), failureReason: null },
+      },
     );
 
     const payment = await Payment.findById(claimed._id);
@@ -486,13 +504,13 @@ async function fulfilPayment(
           failureReason: err.message,
           failedAt: new Date(),
         },
-      }
+      },
     );
     // Money was captured and the customer has nothing. This is the one failure
     // in the payment flow that needs a human, so make it impossible to miss.
     console.error(
       `🚨 PAYMENT FULFILMENT FAILED — payment ${claimed._id}, company ${claimed.companyId}, ` +
-        `${claimed.amountMinor / 100} ${claimed.currency} captured but not applied: ${err.message}`
+        `${claimed.amountMinor / 100} ${claimed.currency} captured but not applied: ${err.message}`,
     );
     throw err;
   }

@@ -63,7 +63,7 @@
         {
           "key": "starter",
           "name": "Starter",
-          "priceUsdMonthly": 1,
+          "priceUsdMonthly": 199,
           "credits": 250,
           "concurrentSites": 1,
           "extraCreditUsd": 1.0,

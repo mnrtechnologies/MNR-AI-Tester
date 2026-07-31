@@ -288,13 +288,21 @@ const CompanySubscription = () => {
               
               {allowance > 0 ? (
                 <div className="pt-4 mt-2 border-t border-white/10 space-y-3">
-                  <div className="flex justify-between items-center">
+<div className="flex justify-between items-center">
                     <span className="flex items-center gap-1.5">
                       <Zap size={14} className="text-orange-400" /> Credits Available
                     </span>
-                    <span className="font-mono text-white">
-                      {balance.toLocaleString()} / {allowance.toLocaleString()}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-white">
+                        {balance.toLocaleString()} / {allowance.toLocaleString()}
+                      </span>
+                      {/* NEW: Compact dark-mode badge for overflow credits */}
+                      {balance > allowance && (
+                        <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-1.5 py-0.5 rounded" title="Includes extension/top-up credits">
+                          Includes Top-up
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="w-full bg-slate-700 rounded-full h-1.5 overflow-hidden flex">
