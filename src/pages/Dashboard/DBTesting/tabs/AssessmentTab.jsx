@@ -1,5 +1,4 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Sparkles, Eye, EyeOff, Loader2, StopCircle, Download,
@@ -13,9 +12,6 @@ import StatusPill from '../components/StatusPill';
 import ShimmerBar from '../components/ShimmerBar';
 import AnalysisReportPanel from '../components/AnalysisReportPanel';
 import TestReportPanel from '../components/TestReportPanel';
-
-// --- NEW CREDIT IMPORTS ---
-import { fetchCreditAccount, authorizeRun, settleRun, releaseRun } from '../../../../services/operations/creditAPIs';
 
 export default function AssessmentTab() {
   const [assessForm, setAssessForm] = useState({
@@ -36,12 +32,6 @@ export default function AssessmentTab() {
   const [cancellingAssess, setCancellingAssess]   = useState(false);
   const pollRef  = useRef(null);
   const startRef = useRef(null);
-  const billingIdRef = useRef(null);
-
-  // --- REDUX & CREDIT STATE ---
-  const { user } = useSelector((state) => state.profile);
-  const creditAccount = user?.creditAccount;
-  const dispatch = useDispatch();
 
   // ─── Polling ─────────────────────────────────────────────────────────────
 
@@ -68,24 +58,8 @@ export default function AssessmentTab() {
       if (['completed', 'failed', 'cancelled'].includes(data.status)) {
         stopPoll();
         loadAssessments();
-        
-        if (data.status === 'completed') {
-          toast.success('Assessment complete!');
-          // --- SETTLE CREDITS ON SUCCESS ---
-          if (billingIdRef.current) {
-            await settleRun(billingIdRef.current);
-            dispatch(fetchCreditAccount());
-          }
-        }
-        
-        if (data.status === 'failed' || data.status === 'cancelled') {
-          if (data.status === 'failed') toast.error(data.error || 'Assessment failed');
-          // --- RELEASE CREDITS ON FAILURE/CANCEL ---
-          if (billingIdRef.current) {
-            await releaseRun(billingIdRef.current);
-            dispatch(fetchCreditAccount());
-          }
-        }
+        if (data.status === 'completed') toast.success('Assessment complete!');
+        if (data.status === 'failed')    toast.error(data.error || 'Assessment failed');
       }
     } catch {
       pollFailRef.current += 1;
@@ -94,7 +68,7 @@ export default function AssessmentTab() {
         toast.error('Lost connection — check your network and refresh.');
       }
     }
-  }, [stopPoll, loadAssessments, dispatch]);
+  }, [stopPoll, loadAssessments]);
 
   const startPoll = useCallback((id) => {
     stopPoll();
@@ -134,32 +108,8 @@ export default function AssessmentTab() {
     e.preventDefault();
     if (!assessForm.api_key.trim()) { toast.error('Provider API key is required.'); return; }
     if (!assessForm.replica_url.trim()) { toast.error('Replica URL is required.'); return; }
-    
-    // --- 1. PREFLIGHT CHECK ---
-    const BASE_COST = 5; 
-    if (
-      creditAccount &&
-      !creditAccount.unlimited &&
-      !creditAccount.overageEnabled &&
-      creditAccount.balance < BASE_COST
-    ) {
-      toast.error(`Not enough credits. Assessment requires ${BASE_COST} credit(s), but you only have ${creditAccount.balance}.`);
-      return;
-    }
-
-    setAssessSubmitting(true); 
-    setAssessment(null); 
-    setAssessDbTab('findings'); 
-    setAssessTestTab('test_results');
-    billingIdRef.current = `db_assess_${Date.now()}`;
-
+    setAssessSubmitting(true); setAssessment(null); setAssessDbTab('findings'); setAssessTestTab('test_results');
     try {
-      // --- 2. HOLD CREDITS ---
-      const authRes = await authorizeRun(billingIdRef.current, { acknowledgedOversized: false });
-      if (!authRes.ok) throw new Error(authRes.message || "Failed to reserve credits.");
-      dispatch(fetchCreditAccount());
-
-      // --- 3. EXECUTE ---
       const d = await apiFetch('/analysis/assessments', {
         method: 'POST',
         body: JSON.stringify({
@@ -172,14 +122,7 @@ export default function AssessmentTab() {
       setAssessment({ id: d.assessment_id, status: d.status });
       toast.success('Assessment started.');
       startPoll(d.assessment_id);
-    } catch (e) { 
-      toast.error(e.message); 
-      // --- RELEASE ON IMMEDIATE FAILURE ---
-      if (billingIdRef.current) {
-        await releaseRun(billingIdRef.current);
-        dispatch(fetchCreditAccount());
-      }
-    }
+    } catch (e) { toast.error(e.message); }
     finally { setAssessSubmitting(false); }
   };
 
@@ -192,12 +135,6 @@ export default function AssessmentTab() {
       setAssessment(p => ({ ...p, status: 'cancelled' }));
       toast.success('Assessment cancelled.');
       loadAssessments();
-
-      // --- RELEASE CREDITS ON CANCEL ---
-      if (billingIdRef.current) {
-        await releaseRun(billingIdRef.current);
-        dispatch(fetchCreditAccount());
-      }
     } catch (e) { toast.error(e.message); }
     finally { setCancellingAssess(false); }
   };
