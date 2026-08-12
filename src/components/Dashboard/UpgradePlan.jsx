@@ -20,8 +20,6 @@ import {
   listPlanTypes,
   leadPlanTypeKey,
   PRICING,
-  FX_INR_PER_USD,
-  usdToInr,
 } from "../../config/pricing/creditMath";
 import {
   quotePlan,
@@ -45,7 +43,6 @@ import { purchase } from "../../services/operations/paymentAPIs";
  *
  * The amounts shown come from purchaseQuote, the SAME module the server prices
  * the order with, so the figure a user confirms is the figure they are charged.
- * The currency toggle is display-only: the charge is always in USD.
  */
 
 const PRESET_TOPUPS = [25, 50, 100, 250];
@@ -57,7 +54,7 @@ const UpgradePlan = () => {
   const canBuy = user?.role === "company_admin";
 
   const [billing, setBilling] = useState("monthly");
-  const [currency, setCurrency] = useState("INR");
+  const currency = "USD";
   const [planType, setPlanType] = useState(
     account && account.planType && account.planType !== "legacy"
       ? account.planType
@@ -156,7 +153,6 @@ const UpgradePlan = () => {
     }
   };
 
-  /** "UPI, netbanking, cards or wallets" / "card". */
   const methodLabels = (methods = {}) => {
     const names = [
       methods.upi && "UPI",
@@ -171,9 +167,7 @@ const UpgradePlan = () => {
 
   return (
     <div className="max-w-[90rem] mx-auto space-y-10 pb-16 pt-8 px-4 sm:px-6 relative">
-      {/* No plan yet — the normal state of a brand-new company. A super admin
-          creates the account and stops there; buying the first plan is the
-          company admin's job, so say so plainly rather than showing a bare grid. */}
+      {/* No plan yet */}
       {!account && (
         <div className="max-w-3xl mx-auto bg-orange-50 border border-orange-200 rounded-2xl p-5 flex flex-wrap items-center gap-4">
           <div className="w-11 h-11 rounded-xl bg-white text-orange-500 flex items-center justify-center shrink-0 border border-orange-200">
@@ -233,7 +227,6 @@ const UpgradePlan = () => {
                     </span>
                   )}
                 </p>
-                {/* NEW: Show a "Bonus/Rollover" badge if balance exceeds the monthly allowance */}
                 {!account.unlimited &&
                   account.balance > account.monthlyAllowance && (
                     <span className="text-[10px] font-bold uppercase text-emerald-600 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
@@ -288,38 +281,6 @@ const UpgradePlan = () => {
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-5">
-            {/* This is not a display preference — it selects the currency the
-                order is created in, and therefore which payment methods exist.
-                UPI and netbanking are INR-settled and cannot appear on a USD
-                order, so the labels say so up front rather than surprising
-                someone at the checkout screen. */}
-            <div className="flex bg-slate-100 p-1 rounded-xl">
-              {[
-                ["INR", "INR (₹)", "UPI, netbanking & cards"],
-                ["USD", "USD ($)", "Cards only"],
-              ].map(([c, label, hint]) => (
-                <button
-                  key={c}
-                  onClick={() => setCurrency(c)}
-                  title={hint}
-                  className={`px-5 py-1.5 rounded-lg transition-all duration-200 flex flex-col items-center leading-tight ${
-                    currency === c
-                      ? "bg-white text-slate-900 shadow-sm"
-                      : "text-slate-500 hover:text-slate-700"
-                  }`}
-                >
-                  <span className="text-sm font-bold">{label}</span>
-                  <span
-                    className={`text-[9px] font-semibold uppercase tracking-wide ${
-                      currency === c ? "text-orange-500" : "text-slate-400"
-                    }`}
-                  >
-                    {hint}
-                  </span>
-                </button>
-              ))}
-            </div>
-
             <div className="flex items-center gap-3">
               <span
                 className={`text-sm font-bold ${billing === "monthly" ? "text-slate-900" : "text-slate-400"}`}
@@ -389,8 +350,7 @@ const UpgradePlan = () => {
         ))}
       </div>
 
-      {/* Buy extra credits — only meaningful on a live, non-custom plan that
-          publishes an extra-credit rate. */}
+      {/* Buy extra credits */}
       {account && !account.legacy && account.overageRateUsd != null && (
         <div className="max-w-3xl mx-auto bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-6">
@@ -400,14 +360,9 @@ const UpgradePlan = () => {
               </h3>
               <p className="text-sm text-slate-500 mt-1 leading-relaxed max-w-md">
                 Top up without changing your plan, at{" "}
-                {formatCharge(
-                  currency === "INR"
-                    ? usdToInr(account.overageRateUsd)
-                    : account.overageRateUsd,
-                  currency,
-                )}{" "}
-                per credit. They land immediately and are kept at your monthly
-                reset — only unused <em>plan</em> credits expire.
+                {formatCharge(account.overageRateUsd, currency)} per credit.
+                They land immediately and are kept at your monthly reset — only
+                unused <em>plan</em> credits expire.
               </p>
             </div>
 
@@ -470,9 +425,7 @@ const UpgradePlan = () => {
                 {busyKey === "topup"
                   ? "Opening checkout…"
                   : `Buy ${topUpQty} credits — ${formatCharge(
-                      currency === "INR"
-                        ? usdToInr(account.overageRateUsd) * topUpQty
-                        : account.overageRateUsd * topUpQty,
+                      account.overageRateUsd * topUpQty,
                       currency,
                     )}`}
               </button>
@@ -499,12 +452,6 @@ const UpgradePlan = () => {
               scenarios always pauses for explicit confirmation, so a run can
               never quietly become expensive.
             </p>
-            {currency === "INR" && (
-              <p className="text-xs text-slate-400 pt-1">
-                Prices are set in USD and charged in INR at $1 = ₹
-                {FX_INR_PER_USD}. Pay by UPI, netbanking, card or wallet.
-              </p>
-            )}
           </div>
         </div>
       </div>
@@ -519,7 +466,7 @@ const UpgradePlan = () => {
         </button>
       </p>
 
-      {/* Confirmation — the last screen before money moves. */}
+      {/* Confirmation Modal */}
       {confirm && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl p-8 w-full max-w-md relative shadow-2xl">
@@ -577,34 +524,19 @@ const UpgradePlan = () => {
                 </div>
               )}
 
-              {/* The amount above is exactly what will be charged, in the
-                  currency shown. On an INR purchase the USD catalog price is a
-                  reference only — never the headline. */}
               <div className="pt-2 border-t border-slate-200 space-y-1.5">
-                {confirm.quote.currency === "INR" ? (
-                  <p className="text-xs text-slate-400">
-                    Catalog price $
-                    {confirm.quote.amountUsd.toLocaleString("en-US")}, converted
-                    at $1 = ₹{FX_INR_PER_USD}.
-                  </p>
-                ) : null}
                 <p className="text-xs text-slate-500 font-medium">
                   Pay with {methodLabels(confirm.quote.methods)}
                 </p>
               </div>
             </div>
 
-            {/* Plan changes have consequences the customer must see BEFORE paying.
-                The 6-month note is NOT gated on an existing account: a
-                first-time buyer is the person most likely to expect six
-                allowances up front. */}
             {confirm.kind === "plan_purchase" && (
               <div className="mt-4 text-xs leading-relaxed text-slate-500 space-y-2">
                 {account && isExtension(confirm.tier) ? (
                   <p>
                     This extends your current plan by {confirm.quote.months}{" "}
-                    month{confirm.quote.months === 1 ? "" : "s"}
-                    and{" "}
+                    month{confirm.quote.months === 1 ? "" : "s"} and{" "}
                     <span className="font-bold text-emerald-600">
                       immediately adds {confirm.quote.credits.toLocaleString()}{" "}
                       credits
