@@ -24,7 +24,7 @@ const getAuthHeader = () => {
 
 export default function MobileTestingDashboard() {
   const [activeTab, setActiveTab]             = useState('logs');
-  const [formData, setFormData]               = useState({ email: '', password: '', maxActions: 200 });
+  const [formData, setFormData]               = useState({ email: '', password: '', apiKey: '', maxActions: 200 });
   const [apkFile, setApkFile]                 = useState(null);
   const [isDragOver, setIsDragOver]           = useState(false);
   const [uploadedApkInfo, setUploadedApkInfo] = useState(null);
@@ -278,7 +278,7 @@ export default function MobileTestingDashboard() {
     try {
       const appPackage  = uploadedApkInfo?.appPackage;
       const appActivity = uploadedApkInfo?.appActivity;
-      const sessionBody = { apkPath, appPackage, appActivity, maxActions: formData.maxActions };
+      const sessionBody = { apkPath, appPackage, appActivity, maxActions: formData.maxActions, apiKey: formData.apiKey.trim() };
       if (formData.email || formData.password) {
         sessionBody.credentials = { username: formData.email, password: formData.password };
       }
@@ -316,6 +316,7 @@ export default function MobileTestingDashboard() {
   const startSession = async (e) => {
     e.preventDefault();
     if (!apkFile) { toast.error('Please select an APK file.'); return; }
+    if (!formData.apiKey.trim()) { toast.error('Please enter your API key.'); return; }
 
     setLogs([]);
     setAssertions([]);
@@ -353,6 +354,7 @@ export default function MobileTestingDashboard() {
         appPackage,
         appActivity,
         maxActions:  formData.maxActions,
+        apiKey:      formData.apiKey.trim(),
       };
       if (formData.email || formData.password) {
         sessionBody.credentials = { username: formData.email, password: formData.password };
@@ -671,6 +673,19 @@ export default function MobileTestingDashboard() {
               </div>
             </div>
 
+            {/* API Key */}
+            <div>
+              <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block mb-1.5">
+                API Key <span className="text-rose-500 normal-case font-normal">(required)</span>
+              </label>
+              <input
+                type="password" name="apiKey" value={formData.apiKey}
+                onChange={handleInputChange} disabled={isSessionActive}
+                placeholder="sk-… (OpenAI or Anthropic key)"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+            </div>
+
             {/* Credentials + maxActions */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
@@ -731,11 +746,11 @@ export default function MobileTestingDashboard() {
             {/* Launch button */}
             <button
               type="submit"
-              disabled={isSessionActive || isLoading || !apkFile}
+              disabled={isSessionActive || isLoading || !apkFile || !formData.apiKey.trim()}
               className={`w-full py-4 rounded-2xl text-white text-base font-bold tracking-wide flex items-center justify-center gap-2.5 transition-all duration-200 ${
                 isSessionActive || isLoading
                   ? 'bg-slate-400 cursor-not-allowed shadow-none'
-                  : !apkFile
+                  : !apkFile || !formData.apiKey.trim()
                   ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
                   : 'bg-orange-500 hover:bg-orange-600 shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40 hover:-translate-y-0.5 active:translate-y-0'
               }`}
