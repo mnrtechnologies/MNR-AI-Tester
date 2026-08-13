@@ -9,12 +9,12 @@ export default function ContactPage() {
     phone: "",
     company: "",
     message: "",
-    service: "Select a service",
   });
 
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   const sectionRef = useRef(null);
 
@@ -26,7 +26,7 @@ export default function ContactPage() {
           entry.target.classList.add("opacity-100", "translate-y-0");
         }
       },
-      { threshold: 0.1 },
+      { threshold: 0.1 }
     );
 
     if (sectionRef.current) observer.observe(sectionRef.current);
@@ -66,19 +66,32 @@ export default function ContactPage() {
     e.preventDefault();
     const errors = validateForm();
     setFormErrors(errors);
+    setSubmitError("");
+    setSubmitSuccess(false);
 
     if (Object.keys(errors).length === 0) {
       setIsSubmitting(true);
 
+      const apiUrl = `${process.env.REACT_APP_API_URL}/api/contact`;
+
       try {
-        const response = await fetch("https://usebasin.com/f/4e0fba56e576", {
+        const response = await fetch(apiUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Accept: "application/json",
           },
-          body: JSON.stringify(formData),
+          body: JSON.stringify({
+            name: formData.name,
+            email: formData.email,
+            phone: formData.phone,
+            companyName: formData.company,
+            message: formData.message,
+            source: "MNR-AI-Tester",
+          }),
         });
+
+        const data = await response.json();
 
         if (response.ok) {
           setSubmitSuccess(true);
@@ -88,10 +101,13 @@ export default function ContactPage() {
             phone: "",
             company: "",
             message: "",
-            service: "Select a service",
           });
+        } else {
+          setSubmitError(data.message || "Failed to submit lead. Please try again.");
+          console.error("API Error:", data);
         }
       } catch (err) {
+        setSubmitError("An unexpected network error occurred.");
         console.error("Submit error", err);
       } finally {
         setIsSubmitting(false);
@@ -118,10 +134,11 @@ export default function ContactPage() {
         className="pb-24 px-6 opacity-0 translate-y-10 transition-all duration-700"
       >
         <div className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-10 items-stretch">
-          
           {/* LEFT INFO */}
           <div className="bg-slate-50 rounded-3xl p-8 lg:p-12 border border-slate-100 flex flex-col justify-center">
-            <h3 className="text-2xl font-bold mb-4 tracking-tight text-slate-900">Contact Information</h3>
+            <h3 className="text-2xl font-bold mb-4 tracking-tight text-slate-900">
+              Contact Information
+            </h3>
             <p className="text-slate-500 mb-10 leading-relaxed">
               Reach out to us for a consultation or to learn more about our
               services. Our team is ready to assist you.
@@ -170,12 +187,20 @@ export default function ContactPage() {
             onSubmit={handleSubmit}
             className="bg-white rounded-3xl shadow-xl shadow-slate-200/40 border border-slate-100 p-8 lg:p-12"
           >
-            <h3 className="text-2xl font-bold mb-8 text-slate-900 tracking-tight">Send Us a Message</h3>
+            <h3 className="text-2xl font-bold mb-8 text-slate-900 tracking-tight">
+              Send Us a Message
+            </h3>
 
             {submitSuccess && (
               <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 p-4 rounded-xl mb-8 font-medium flex items-center gap-2">
                 <CheckCircle2 size={20} className="text-emerald-500 shrink-0" />
                 Thank you! We'll get back to you shortly.
+              </div>
+            )}
+
+            {submitError && (
+              <div className="bg-red-50 border border-red-200 text-red-600 p-4 rounded-xl mb-8 font-medium">
+                {submitError}
               </div>
             )}
 
@@ -189,7 +214,9 @@ export default function ContactPage() {
                   className="w-full border border-slate-200 bg-slate-50 p-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400 focus:bg-white transition-all text-slate-900"
                 />
                 {formErrors.name && (
-                  <p className="text-red-500 text-sm mt-2 font-medium">{formErrors.name}</p>
+                  <p className="text-red-500 text-sm mt-2 font-medium">
+                    {formErrors.name}
+                  </p>
                 )}
               </div>
 
@@ -203,7 +230,9 @@ export default function ContactPage() {
                     className="w-full border border-slate-200 bg-slate-50 p-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400 focus:bg-white transition-all text-slate-900"
                   />
                   {formErrors.email && (
-                    <p className="text-red-500 text-sm mt-2 font-medium">{formErrors.email}</p>
+                    <p className="text-red-500 text-sm mt-2 font-medium">
+                      {formErrors.email}
+                    </p>
                   )}
                 </div>
 
@@ -234,13 +263,16 @@ export default function ContactPage() {
                   className="w-full border border-slate-200 bg-slate-50 p-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400 focus:bg-white transition-all resize-none text-slate-900"
                 />
                 {formErrors.message && (
-                  <p className="text-red-500 text-sm mt-2 font-medium">{formErrors.message}</p>
+                  <p className="text-red-500 text-sm mt-2 font-medium">
+                    {formErrors.message}
+                  </p>
                 )}
               </div>
 
               <button
+                type="submit"
                 disabled={isSubmitting}
-                className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20 hover:-translate-y-0.5 transition-all w-full font-bold tracking-wide mt-4"
+                className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20 hover:-translate-y-0.5 transition-all w-full font-bold tracking-wide mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? "Sending..." : "Send Message"}
                 <Send size={18} />
@@ -249,7 +281,6 @@ export default function ContactPage() {
           </form>
         </div>
       </section>
-
     </main>
   );
 }
