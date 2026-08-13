@@ -20,6 +20,14 @@
     "PHASE2_MAX_URLS": 10
   },
 
+  "apiTestFormula": {
+    "_comment": "The capacity meter for API SECURITY SCANS (api_test_run), the analogue of `formula` for web testing. Same rule applies: BYOK only. Managed API runs bill from modelRates like every other Managed run.",
+    "_calibration": "MEASURED, unlike `formula`. Wall-clock duration of real runs against mnr-clipcut.com on 2026-08-12: 27 endpoints/83 tests took 112-159s over 8 runs (mean 145s), and 50 endpoints/222 tests took 447s. Duration is linear in test count at ~1.9s/test (83*1.9=158 vs 145 actual; 222*1.9=422 vs 447 actual) and endpoint count adds nothing separable, being collinear with it. Rounded to 2 for headroom. SECONDS_PER_CREDIT is derived from internal.creditsPerServerMonth: a 30-day server-month is 2592000s over 11000 credits = 236s per credit. Re-measure if the executor's request_delay (0.5s) changes, since that dominates Phase 3.",
+    "SECONDS_PER_TEST": 2,
+    "SECONDS_PER_CREDIT": 236,
+    "MAX_TESTS_PER_RUN": 5000
+  },
+
   "usdPerCredit": 0.5,
 
   "modelRates": {
@@ -35,7 +43,8 @@
       "claude-haiku-4-5": { "inputUsdPerMTok": 1.0, "outputUsdPerMTok": 5.0, "verified": true },
       "claude-opus-5": { "inputUsdPerMTok": 5.0, "outputUsdPerMTok": 25.0, "verified": true },
       "claude-opus-4-8": { "inputUsdPerMTok": 5.0, "outputUsdPerMTok": 25.0, "verified": true },
-      "gpt-4.1-mini-2025-04-14": { "inputUsdPerMTok": 0.4, "outputUsdPerMTok": 1.6, "verified": false }
+      "gpt-4.1-mini-2025-04-14": { "inputUsdPerMTok": 0.4, "outputUsdPerMTok": 1.6, "verified": false },
+      "gpt-4o": { "inputUsdPerMTok": 2.5, "outputUsdPerMTok": 10.0, "verified": false }
     }
   },
 

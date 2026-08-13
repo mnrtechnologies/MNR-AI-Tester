@@ -2,6 +2,7 @@ const CreditReservation = require("../models/CreditReservation");
 const Subscription = require("../models/Subscription");
 const credits = require("../services/creditService");
 const usageBilling = require("../services/usageBilling");
+const apiTestRunBilling = require("../services/apiTestRunBilling");
 
 /**
  * creditReconciler — the authoritative settler.
@@ -12,13 +13,17 @@ const usageBilling = require("../services/usageBilling");
  * forever. Without this job those held credits are lost to the customer
  * permanently, which is the single worst failure mode in the whole system.
  *
- * Three responsibilities:
+ * Four responsibilities:
  *   1. Settle reservations whose TTL has passed (commit or release per URL) —
- *      the BYOK capacity meter.
- *   2. Bill recorded model usage — the Managed cost meter. This is the only
- *      thing that debits for measured tokens, so a stalled reconciler means
- *      Managed runs are free until it recovers.
- *   3. Verify the invariant  credits.reserved === sum(held reservations)
+ *      the BYOK capacity meter for WEB testing.
+ *   2. Bill recorded model usage — the Managed cost meter, for every engine.
+ *      This is the only thing that debits for measured tokens, so a stalled
+ *      reconciler means Managed runs are free until it recovers.
+ *   3. Bill finished API security scans — the BYOK capacity meter for API
+ *      testing. Separate from (1) because API runs have no per-URL reservation
+ *      to settle: the engine reports counts once the scan is over, and there is
+ *      nothing to hold against in the meantime.
+ *   4. Verify the invariant  credits.reserved === sum(held reservations)
  *      and write a compensating ledger row when it drifts.
  */
 
@@ -31,8 +36,10 @@ const INVARIANT_INTERVAL_MS = 60 * 60 * 1000;
 let sweepTimer = null;
 let invariantTimer = null;
 let billingTimer = null;
+let apiBillingTimer = null;
 let running = false;
 let billing = false;
+let billingApiRuns = false;
 
 async function sweepExpiredReservations() {
   if (running) return; // never overlap sweeps
@@ -86,6 +93,30 @@ async function billMeteredUsage() {
     console.error("⚠️ usage billing pass failed:", err.message);
   } finally {
     billing = false;
+  }
+}
+
+/**
+ * Bill finished API security scans (BYOK plans).
+ *
+ * Guarded separately for the same reason usage billing is: the capacity meter
+ * and the cost meter are independent money paths, and a failure in one must not
+ * stop the other.
+ */
+async function billApiTestRuns() {
+  if (billingApiRuns) return;
+  billingApiRuns = true;
+  try {
+    // Recover runs stranded by a pass that died mid-flight, before billing.
+    await apiTestRunBilling.releaseStaleClaims();
+    const result = await apiTestRunBilling.billFinishedRuns({ log: true });
+    if (result.errors.length) {
+      console.warn(`⚠️ API run billing had ${result.errors.length} failures`);
+    }
+  } catch (err) {
+    console.error("⚠️ API run billing pass failed:", err.message);
+  } finally {
+    billingApiRuns = false;
   }
 }
 
@@ -154,23 +185,27 @@ function start() {
 
   sweepTimer = setInterval(sweepExpiredReservations, SWEEP_INTERVAL_MS);
   billingTimer = setInterval(billMeteredUsage, BILLING_INTERVAL_MS);
+  apiBillingTimer = setInterval(billApiTestRuns, BILLING_INTERVAL_MS);
   invariantTimer = setInterval(verifyReservedInvariant, INVARIANT_INTERVAL_MS);
   if (sweepTimer.unref) sweepTimer.unref();
   if (billingTimer.unref) billingTimer.unref();
+  if (apiBillingTimer.unref) apiBillingTimer.unref();
   if (invariantTimer.unref) invariantTimer.unref();
 
   console.log(
     `♻️  credit reconciler started (settle ${SWEEP_INTERVAL_MS / 1000}s, ` +
-      `meter ${BILLING_INTERVAL_MS / 1000}s)`
+      `meter ${BILLING_INTERVAL_MS / 1000}s, api-scans ${BILLING_INTERVAL_MS / 1000}s)`
   );
 }
 
 function stop() {
   if (sweepTimer) clearInterval(sweepTimer);
   if (billingTimer) clearInterval(billingTimer);
+  if (apiBillingTimer) clearInterval(apiBillingTimer);
   if (invariantTimer) clearInterval(invariantTimer);
   sweepTimer = null;
   billingTimer = null;
+  apiBillingTimer = null;
   invariantTimer = null;
 }
 

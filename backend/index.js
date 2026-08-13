@@ -13,6 +13,24 @@ const { Server } = require("socket.io");
 // would silently miss backend/.env and leave MONGODB_URL undefined.
 require("dotenv").config({ path: require("path").join(__dirname, ".env") });
 
+/**
+ * Node resolves mongodb+srv:// through c-ares, which reads its own nameserver
+ * list rather than the Windows resolver. When it fails to enumerate the
+ * adapters it silently falls back to 127.0.0.1, and the SRV lookup dies with
+ * ECONNREFUSED even though nslookup and every browser on the machine work.
+ *
+ * Set DNS_SERVERS (comma-separated) to pin the resolver on such a host, e.g.
+ * DNS_SERVERS=1.1.1.1,1.0.0.1. Leave it unset in production so the instance
+ * keeps whatever its network provides.
+ */
+if (process.env.DNS_SERVERS) {
+  const servers = process.env.DNS_SERVERS.split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  require("dns").setServers(servers);
+  console.log(`DNS resolvers pinned to ${servers.join(", ")}`);
+}
+
 const db = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const dashboardRoute = require("./routes/dashboardRoute")
