@@ -513,6 +513,53 @@ function PhaseLogin({ onDone, onStatusChange, onSessionCreated }) {
   const [liveOtp, setLiveOtp] = useState("");
   const wsRef = useRef(null);
 
+  // Optional Business Requirements Document. When brdId is empty the run
+  // starts exactly as it always has — the field is never required.
+  const [brdId, setBrdId] = useState("");
+  const [brdInfo, setBrdInfo] = useState(null); // { filename, chars, features_preview }
+  const [brdState, setBrdState] = useState("idle"); // idle | uploading | ready | error
+  const [brdError, setBrdError] = useState("");
+  const brdInputRef = useRef(null);
+
+  const uploadBrd = async (file) => {
+    if (!file) return;
+    setBrdState("uploading");
+    setBrdError("");
+    setBrdInfo(null);
+    setBrdId("");
+
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      if (userId) form.append("user_id", userId);
+
+      const res = await fetch(`${API}/brd/upload`, { method: "POST", body: form });
+      const data = await res.json();
+
+      if (!res.ok) {
+        // The backend writes these messages for the end user (wrong file type,
+        // scanned PDF, too large), so show them verbatim rather than a generic
+        // failure string.
+        throw new Error(data?.detail || "Upload failed");
+      }
+
+      setBrdId(data.brd_id);
+      setBrdInfo(data);
+      setBrdState("ready");
+    } catch (e) {
+      setBrdError(e.message || "Upload failed");
+      setBrdState("error");
+    }
+  };
+
+  const clearBrd = () => {
+    setBrdId("");
+    setBrdInfo(null);
+    setBrdError("");
+    setBrdState("idle");
+    if (brdInputRef.current) brdInputRef.current.value = "";
+  };
+
   useEffect(() => {
     if (onStatusChange) onStatusChange(status);
   }, [status, onStatusChange]);
@@ -583,6 +630,7 @@ function PhaseLogin({ onDone, onStatusChange, onSessionCreated }) {
               goal,
               userId,
               data.session_id,
+              brdId,
             ),
           800,
         );
@@ -765,6 +813,166 @@ function PhaseLogin({ onDone, onStatusChange, onSessionCreated }) {
             </div>
           )}
 
+          {/* Optional BRD — only Standard Checking consumes it today */}
+          {mode === "checking" && (
+            <>
+              <div className="divider" style={{ margin: "4px 0" }} />
+              <div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: "#000000",
+                    marginBottom: 4,
+                  }}
+                >
+                  Business Requirements Document{" "}
+                  <span style={{ color: C.muted, fontWeight: 400 }}>
+                    (Optional)
+                  </span>
+                </div>
+                <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>
+                  Upload a BRD and test cases are written from its acceptance
+                  criteria, alongside the usual exploration-based ones. Every row
+                  in the Excel is labelled with which of the two it came from.
+                  Without a document, generation works exactly as it does today.
+                </div>
+
+                <input
+                  ref={brdInputRef}
+                  type="file"
+                  accept=".pdf,.docx,.txt,.md"
+                  style={{ display: "none" }}
+                  onChange={(e) => uploadBrd(e.target.files?.[0])}
+                />
+
+                {brdState !== "ready" && (
+                  <button
+                    className="btn"
+                    style={{
+                      width: "100%",
+                      padding: "12px",
+                      border: `1px dashed ${brdState === "error" ? C.red : C.border}`,
+                      background: "transparent",
+                      color: brdState === "error" ? C.red : C.muted,
+                      fontSize: 13,
+                    }}
+                    onClick={() => brdInputRef.current?.click()}
+                    disabled={status === "running" || brdState === "uploading"}
+                  >
+                    {brdState === "uploading" ? (
+                      <>
+                        <span className="spinner" /> Reading document...
+                      </>
+                    ) : (
+                      "📄 Choose a document  ·  PDF, DOCX, TXT or MD  ·  max 10 MB"
+                    )}
+                  </button>
+                )}
+
+                {brdState === "ready" && brdInfo && (
+                  <div
+                    className="fade-up"
+                    style={{
+                      padding: "12px 14px",
+                      borderRadius: 8,
+                      background: "rgba(16,185,129,.06)",
+                      border: `1px solid rgba(16,185,129,.25)`,
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: 12,
+                      }}
+                    >
+                      <div style={{ minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: C.green,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          ✓ {brdInfo.filename}
+                        </div>
+                        <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                          {brdInfo.chars?.toLocaleString()} characters read
+                          {brdInfo.features_preview?.length
+                            ? ` · ${brdInfo.features_preview.length} sections detected`
+                            : ""}
+                        </div>
+                      </div>
+                      <button
+                        className="btn"
+                        style={{
+                          padding: "6px 12px",
+                          fontSize: 12,
+                          background: "transparent",
+                          color: C.muted,
+                          border: `1px solid ${C.border}`,
+                          flexShrink: 0,
+                        }}
+                        onClick={clearBrd}
+                        disabled={status === "running"}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    {brdInfo.features_preview?.length > 0 && (
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: C.muted,
+                          marginTop: 8,
+                          paddingTop: 8,
+                          borderTop: `1px solid rgba(16,185,129,.2)`,
+                          lineHeight: 1.6,
+                        }}
+                      >
+                        {brdInfo.features_preview.slice(0, 4).map((f, i) => (
+                          <div
+                            key={i}
+                            style={{
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            • {f}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {brdState === "error" && (
+                  <div
+                    className="fade-up"
+                    style={{
+                      marginTop: 8,
+                      fontSize: 12,
+                      color: C.red,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {brdError}
+                    <div style={{ color: C.muted, marginTop: 4 }}>
+                      You can fix the file and try again, or start the run
+                      without it.
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
           <div className="divider" style={{ margin: "4px 0" }} />
 
           <div>
@@ -939,6 +1147,9 @@ function PhaseLogin({ onDone, onStatusChange, onSessionCreated }) {
               !targetUrl ||
               (!apiKey && !anthropicApiKey) ||
               (mode === "feature" && !goal) ||
+              // Not a required field — but starting mid-upload would silently
+              // drop a document the user just chose.
+              brdState === "uploading" ||
               status === "running" ||
               status === "done"
             }
@@ -1023,6 +1234,7 @@ function PhaseChecking({
   anthropicApiKey,
   userId,
   authSessionId,
+  brdId,
   onExcelReady,
   onSessionReady,
   onStatusChange,
@@ -1086,6 +1298,12 @@ function PhaseChecking({
       }
 
       pushLog(`Initializing Checking Pipeline → ${targetUrl}`, "cyan");
+      if (brdId) {
+        pushLog(
+          "📄 Requirements document attached — test cases will be written against it",
+          "cyan",
+        );
+      }
       const res = await fetch(`${API}/checking/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1096,6 +1314,7 @@ function PhaseChecking({
           user_id: userId || undefined,
           auth_session_id: authSessionId || undefined,
           session_id: authSessionId || undefined,
+          brd_id: brdId || undefined,
         }),
       });
       const data = await res.json();
@@ -3200,60 +3419,6 @@ function PhaseValidationMongoDB({
     reset: resetLiveUsage,
   } = useLiveUsage();
 
-  // Tracks in-flight confirm-downloaded calls so we don't fire duplicates
-  // if the user double-clicks a download link. Keyed by `${session_id}:${file_type}`.
-  const [confirmingDownload, setConfirmingDownload] = useState({});
-
-  // Called right after the user clicks a download link. Tells the backend
-  // that ONE specific file (test_report or final_report) for ONE session_id
-  // has been downloaded, so it can be deleted from S3. The download itself
-  // still happens natively via the <a href> — this just fires alongside it.
-  const confirmDownloaded = async (sessionId, fileType) => {
-    const key = `${sessionId}:${fileType}`;
-    if (confirmingDownload[key]) return; // already in flight, avoid dupes
-
-    setConfirmingDownload((prev) => ({ ...prev, [key]: true }));
-
-    try {
-      const res = await fetch(
-        `${API}/excel/${sessionId}/confirm-downloaded`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ file_type: fileType }),
-        },
-      );
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        console.warn(
-          `confirm-downloaded failed for ${sessionId} (${fileType}):`,
-          body.detail || res.status,
-        );
-        return; // leave the link as-is so the user can try again
-      }
-
-      // Success (or "already_deleted") — clear that file's link locally so
-      // it disappears from the UI without needing a full re-fetch. Only the
-      // one matching session_id + file_type is touched; everything else in
-      // `sessions` is left untouched.
-      const urlField = fileType === "test_report" ? "s3_download_url" : "final_s3_url";
-      setSessions((prev) =>
-        prev.map((s) =>
-          s.session_id === sessionId ? { ...s, [urlField]: null } : s,
-        ),
-      );
-    } catch (err) {
-      console.error(`confirm-downloaded error for ${sessionId} (${fileType}):`, err);
-    } finally {
-      setConfirmingDownload((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-    }
-  };
-
   const [progress, setProgress] = useState({
     pending: 0,
     in_progress: 0,
@@ -3264,6 +3429,8 @@ function PhaseValidationMongoDB({
   const [taskProgress, setTaskProgress] = useState({ done: 0, total: 0 });
   const [logs, setLogs] = useState([]);
   const [screenshot, setScreenshot] = useState(null);
+  // Keyed by `${session_id}:${file_type}` while a download is in flight.
+  const [downloading, setDownloading] = useState({});
   const [globalBatchReport, setGlobalBatchReport] = useState(null);
   const wsRef = useRef(null);
 
@@ -3271,6 +3438,70 @@ function PhaseValidationMongoDB({
     (s) => s.phase3_status === "in_progress",
   );
   const activeSessionId = activeSessionItem?.session_id || null;
+
+  // Pull the file through fetch rather than navigating to it, so we know when
+  // it has actually arrived. A plain <a href> gives no completion signal, which
+  // left the link on screen after the server had already consumed the file —
+  // so the next click returned "already downloaded".
+  const downloadReport = async (session, fileType) => {
+    const key = `${session.session_id}:${fileType}`;
+    if (downloading[key]) return;
+    setDownloading((p) => ({ ...p, [key]: true }));
+
+    const clearLink = () => {
+      const field =
+        fileType === "test_report" ? "s3_download_url" : "final_s3_url";
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.session_id === session.session_id ? { ...s, [field]: null } : s,
+        ),
+      );
+    };
+
+    try {
+      const res = await fetch(
+        `${API}/excel/${session.session_id}/download/${fileType}`,
+      );
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        pushLog(`❌ ${body.detail || `Download failed (${res.status})`}`, "red");
+        // 404/410 mean the file is genuinely gone — retire the link so it
+        // stops offering something that cannot be delivered.
+        if (res.status === 410 || res.status === 404) clearLink();
+        return;
+      }
+
+      const disposition = res.headers.get("Content-Disposition") || "";
+      const match = disposition.match(/filename="?([^"]+)"?/);
+      const filename =
+        (match && match[1]) || `${fileType}_${session.session_id}.xlsx`;
+
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+
+      pushLog(`📥 Downloaded ${filename}`, "green");
+
+      // The server deletes only once Phase 3 has finished; mirror that rule
+      // so the link survives a mid-run download of the test report.
+      if (session.phase3_status === "completed") clearLink();
+    } catch (err) {
+      pushLog(`❌ Download error: ${err.message}`, "red");
+    } finally {
+      setDownloading((p) => {
+        const next = { ...p };
+        delete next[key];
+        return next;
+      });
+    }
+  };
 
   useEffect(() => {
     return () => {
@@ -3836,21 +4067,16 @@ function PhaseValidationMongoDB({
 
                       <div style={{ display: "flex", gap: 8, marginLeft: 12 }}>
                         {s.s3_download_url && (
-                          <a
-                            href={s.s3_download_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={() => {
-                              // Fire-and-forget: backend deletes this file
-                              // from S3 once it confirms the download. Only
-                              // safe once phase3_status is "completed" — the
-                              // backend enforces this regardless, but we
-                              // check client-side too to skip a useless call.
-                              if (s.phase3_status === "completed") {
-                                confirmDownloaded(s.session_id, "test_report");
-                              }
-                            }}
-
+                          <button
+                            // Streams through the API, which deletes the file
+                            // only after the bytes have been sent. The old
+                            // presigned-URL + onClick-confirm pair raced, and
+                            // the delete usually won — so the first download
+                            // came back as an S3 error document.
+                            onClick={() => downloadReport(s, "test_report")}
+                            disabled={
+                              !!downloading[`${s.session_id}:test_report`]
+                            }
                             style={{
                               display: "flex",
                               alignItems: "center",
@@ -3863,6 +4089,7 @@ function PhaseValidationMongoDB({
                               fontWeight: 600,
                               border: `1px solid rgba(107, 114, 128, 0.2)`,
                               transition: "all 0.2s ease",
+                              cursor: "pointer",
                             }}
                             title="Download Initial Test Report"
                           >
@@ -3880,23 +4107,20 @@ function PhaseValidationMongoDB({
                               <polyline points="7 10 12 15 17 10" />
                               <line x1="12" y1="15" x2="12" y2="3" />
                             </svg>
-                            Test Report
-                          </a>
+                            {downloading[`${s.session_id}:test_report`]
+                              ? "Downloading..."
+                              : "Test Report"}
+                          </button>
                         )}
 
                         {s.final_s3_url && (
-                          <a
-                            href={s.final_s3_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={() => {
-                              // Same as the test_report link above — confirms
-                              // this specific file (final_report) for this
-                              // specific session_id only.
-                              if (s.phase3_status === "completed") {
-                                confirmDownloaded(s.session_id, "final_report");
-                              }
-                            }}
+                          <button
+                            // Same streaming endpoint as the test report —
+                            // delivery first, deletion after.
+                            onClick={() => downloadReport(s, "final_report")}
+                            disabled={
+                              !!downloading[`${s.session_id}:final_report`]
+                            }
                             style={{
                               display: "flex",
                               alignItems: "center",
@@ -3909,6 +4133,7 @@ function PhaseValidationMongoDB({
                               fontWeight: 600,
                               border: `1px solid rgba(16, 185, 129, 0.2)`,
                               transition: "all 0.2s ease",
+                              cursor: "pointer",
                             }}
                             title="Download Final Validation Report"
                           >
@@ -3926,8 +4151,10 @@ function PhaseValidationMongoDB({
                               <polyline points="7 10 12 15 17 10" />
                               <line x1="12" y1="15" x2="12" y2="3" />
                             </svg>
-                            Final Report
-                          </a>
+                            {downloading[`${s.session_id}:final_report`]
+                              ? "Downloading..."
+                              : "Final Report"}
+                          </button>
                         )}
                       </div>
                     </div>
@@ -3977,6 +4204,9 @@ export default function App() {
 
   const [excelReports, setExcelReports] = useState([]);
   const [authSessionId, setAuthSessionId] = useState("");
+  // Empty string when the user uploaded no BRD — /checking/start then receives
+  // no brd_id and the backend runs its original generation path.
+  const [brdId, setBrdId] = useState("");
   const isProcessing = ["connecting", "starting", "running"].includes(
     activePhaseStatus,
   );
@@ -4068,12 +4298,14 @@ export default function App() {
     selectedGoal,
     uid,
     loginSessionId,
+    uploadedBrdId,
   ) => {
     localStorage.setItem("targetUrl", url);
     localStorage.setItem("autopilotRunning", "true");
     setTargetUrl(url);
     setApiKey(openaiKey);
     setAnthropicApiKey(antKey);
+    setBrdId(uploadedBrdId || "");
     setActiveSessionId(loginSessionId || "");
     setMode(selectedMode);
     setGoal(selectedGoal || "");
@@ -4278,6 +4510,7 @@ export default function App() {
                 anthropicApiKey={anthropicApiKey}
                 userId={userId}
                 authSessionId={authSessionId}
+                brdId={brdId}
                 onExcelReady={handleExcelReady}
                 onSessionReady={(sid) => setActiveSessionId(sid)}
                 onStatusChange={setActivePhaseStatus}
