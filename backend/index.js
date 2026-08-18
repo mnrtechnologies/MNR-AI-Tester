@@ -299,7 +299,7 @@ app.use("/api/subscription", subsRoute);
 app.use("/api/credits", creditRoute);
 app.use("/api/payments", paymentRoute);
 app.use("/api/projects", projectRoute);
-
+app.use("/internal", require("./middleware/internalAuth"), require("./routes/internalRoutes"));  
 /**
  * Health check endpoint
  */

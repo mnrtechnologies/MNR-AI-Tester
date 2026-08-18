@@ -6,10 +6,15 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { io as socketIO } from 'socket.io-client';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchCreditAccount } from '../../services/operations/creditAPIs'; // ← adjust path to match your actual folder structure
+import { applyCreditDelta } from '../../slices/profileSlice'; // ← same
 
 const API_URL    = process.env.REACT_APP_AI_MOBILE_TESTER_BACKEND_URL;
 const UPLOAD_URL = process.env.REACT_APP_AI_MOBILE_UPLOAD_URL;
 const WS_URL     = process.env.REACT_APP_AI_MOBILE_TESTER_BACKEND_WS_URL;
+const AUTH_BACKEND_URL = process.env.REACT_APP_AUTH_URL;
 
 const PHASE_ORDER = ['Validation', 'Exploration', 'Testing'];
 
@@ -28,6 +33,9 @@ export default function MobileTestingDashboard() {
   const [apkFile, setApkFile]                 = useState(null);
   const [isDragOver, setIsDragOver]           = useState(false);
   const [uploadedApkInfo, setUploadedApkInfo] = useState(null);
+  const dispatch = useDispatch();                                                        
+  const authToken = useSelector((state) => state.auth.token);                              
+  const creditsBalance = useSelector((state) => state.profile.user?.creditAccount?.balance ?? null); 
 
   const [sessionId, setSessionId]             = useState(null);
   const [loadingState, setLoadingState]       = useState(null); // null | 'uploading' | 'starting' | 'running'
@@ -39,7 +47,6 @@ export default function MobileTestingDashboard() {
   const [stats, setStats]                     = useState({ screens: 0, passed: 0, failed: 0 });
   const [assertions, setAssertions]           = useState([]);
   const [wsConnected, setWsConnected]         = useState(false);
-
   const [showStopModal, setShowStopModal]     = useState(false);
   const [isDownloading, setIsDownloading]     = useState(false);
 
@@ -227,6 +234,24 @@ export default function MobileTestingDashboard() {
     poll();
     return () => clearInterval(id);
   }, [sessionId, phase]);
+ 
+
+ // Credits — fetch initial balance, then keep it live via the auth backend's socket
+useEffect(() => {
+  if (!AUTH_BACKEND_URL) return;
+
+  dispatch(fetchCreditAccount()); // same thunk used everywhere else — populates Redux, not local state
+
+  const creditSocket = socketIO(AUTH_BACKEND_URL, { auth: { token: authToken } });
+
+  creditSocket.on('credits:update', (payload) => {
+    // patches Redux in place — every component reading creditAccount.balance
+    // updates together, not just this page
+    dispatch(applyCreditDelta(payload.account));
+  });
+
+  return () => creditSocket.disconnect();
+}, [dispatch, authToken]);
 
   // helpers
   const handleFileSelect = (file) => {
@@ -238,6 +263,7 @@ export default function MobileTestingDashboard() {
     setApkFile(file);
     setUploadedApkInfo(null);
   };
+//Helper
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -566,6 +592,13 @@ export default function MobileTestingDashboard() {
                 <div className={`w-2 h-2 rounded-full ${statusConfig.dot}`} />
                 {statusConfig.label}
               </div>
+
+              {creditsBalance !== null && (
+                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-orange-50 text-orange-700 border border-orange-200">
+                   <Zap size={12} fill="currentColor" />
+                    {creditsBalance.toLocaleString()} credits left
+                    </div>
+                 )}
 
               {sessionId && (
                 <div className={`flex items-center gap-1.5 text-xs font-semibold ${wsConnected ? 'text-emerald-600' : 'text-amber-500'}`}>

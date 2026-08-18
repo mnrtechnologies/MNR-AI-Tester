@@ -90,7 +90,11 @@ function activeFilter(subscriptionId) {
 /** Resolve the company's live subscription, or null. */
 async function getActiveSubscription(companyId) {
   if (!companyId) return null;
-  return Subscription.findOne({ companyId, isActive: true });
+  return Subscription.findOne({
+    companyId,
+    isActive: true,
+    endDate: { $gt: new Date() },
+  });
 }
 
 /**
@@ -122,11 +126,14 @@ async function holdCredits(subscriptionId, amount, meta = {}) {
   const sub = await Subscription.findOneAndUpdate(
     { ...activeFilter(subscriptionId), "credits.balance": { $gte: amount } },
     { $inc: { "credits.balance": -amount, "credits.reserved": amount } },
-    { returnDocument: "after" }
+    { returnDocument: "after" },
   );
   if (!sub) return null;
 
-  await Subscription.updateOne({ _id: sub._id }, { $set: mirrorSet(sub.credits) });
+  await Subscription.updateOne(
+    { _id: sub._id },
+    { $set: mirrorSet(sub.credits) },
+  );
 
   await writeLedger({
     companyId: sub.companyId,
@@ -159,11 +166,14 @@ async function commitCredits(subscriptionId, amount, meta = {}) {
       },
       $set: { "planDetails.lastTestDate": new Date() },
     },
-    { returnDocument: "after" }
+    { returnDocument: "after" },
   );
   if (!sub) return null;
 
-  await Subscription.updateOne({ _id: sub._id }, { $set: mirrorSet(sub.credits) });
+  await Subscription.updateOne(
+    { _id: sub._id },
+    { $set: mirrorSet(sub.credits) },
+  );
 
   await writeLedger({
     companyId: sub.companyId,
@@ -191,11 +201,14 @@ async function releaseCredits(subscriptionId, amount, meta = {}) {
   const sub = await Subscription.findOneAndUpdate(
     { _id: subscriptionId, "credits.reserved": { $gte: amount } },
     { $inc: { "credits.reserved": -amount, "credits.balance": amount } },
-    { returnDocument: "after" }
+    { returnDocument: "after" },
   );
   if (!sub) return null;
 
-  await Subscription.updateOne({ _id: sub._id }, { $set: mirrorSet(sub.credits) });
+  await Subscription.updateOne(
+    { _id: sub._id },
+    { $set: mirrorSet(sub.credits) },
+  );
 
   await writeLedger({
     companyId: sub.companyId,
@@ -225,11 +238,14 @@ async function adjustCredits(subscriptionId, delta, meta = {}) {
   const sub = await Subscription.findOneAndUpdate(
     filter,
     { $inc: inc },
-    { returnDocument: "after" }
+    { returnDocument: "after" },
   );
   if (!sub) return null;
 
-  await Subscription.updateOne({ _id: sub._id }, { $set: mirrorSet(sub.credits) });
+  await Subscription.updateOne(
+    { _id: sub._id },
+    { $set: mirrorSet(sub.credits) },
+  );
 
   await writeLedger({
     companyId: sub.companyId,
@@ -275,11 +291,14 @@ async function debitUsageCredits(subscriptionId, credits, meta = {}) {
       },
       $set: { "planDetails.lastTestDate": new Date() },
     },
-    { returnDocument: "after" }
+    { returnDocument: "after" },
   );
   if (!sub) return null;
 
-  await Subscription.updateOne({ _id: sub._id }, { $set: mirrorSet(sub.credits) });
+  await Subscription.updateOne(
+    { _id: sub._id },
+    { $set: mirrorSet(sub.credits) },
+  );
 
   await writeLedger({
     companyId: sub.companyId,
@@ -323,11 +342,14 @@ async function addPurchasedCredits(subscriptionId, quantity, meta = {}) {
         "credits.lifetimeGranted": quantity,
       },
     },
-    { returnDocument: "after" }
+    { returnDocument: "after" },
   );
   if (!sub) return null;
 
-  await Subscription.updateOne({ _id: sub._id }, { $set: mirrorSet(sub.credits) });
+  await Subscription.updateOne(
+    { _id: sub._id },
+    { $set: mirrorSet(sub.credits) },
+  );
 
   await writeLedger({
     companyId: sub.companyId,
@@ -358,7 +380,20 @@ async function addPurchasedCredits(subscriptionId, quantity, meta = {}) {
  * Callers pass survivingPurchased(sub); omitting it leaves the purchased bucket
  * untouched, which is what every pre-existing caller wants.
  */
-async function grantAllowance(subscriptionId, credits, { mode = "set", type = "grant", note, actorUserId, actorRole, nextResetAt, paymentId, preservePurchased } = {}) {
+async function grantAllowance(
+  subscriptionId,
+  credits,
+  {
+    mode = "set",
+    type = "grant",
+    note,
+    actorUserId,
+    actorRole,
+    nextResetAt,
+    paymentId,
+    preservePurchased,
+  } = {},
+) {
   const update = {
     $inc: { "credits.lifetimeGranted": credits },
     $set: {
@@ -384,11 +419,14 @@ async function grantAllowance(subscriptionId, credits, { mode = "set", type = "g
   const sub = await Subscription.findOneAndUpdate(
     { _id: subscriptionId },
     update,
-    { returnDocument: "after" }
+    { returnDocument: "after" },
   );
   if (!sub) return null;
 
-  await Subscription.updateOne({ _id: sub._id }, { $set: mirrorSet(sub.credits) });
+  await Subscription.updateOne(
+    { _id: sub._id },
+    { $set: mirrorSet(sub.credits) },
+  );
 
   await writeLedger({
     companyId: sub.companyId,
@@ -430,7 +468,7 @@ async function computeEstimate(parentSession, userId, opts = {}) {
       sessionId: s.session_id,
       pageUrl: s.page_url,
       storyCount: s.story_count,
-    }))
+    })),
   );
 
   // What discovery already holds for this parent session, if anything.
@@ -551,7 +589,7 @@ async function settleReservation(reservationId, { force = false } = {}) {
     const decision = decideLine(
       sheetBySession.get(line.sessionId),
       isExpired,
-      reservation.scope
+      reservation.scope,
     );
     if (decision === "commit") {
       toCommit += line.credits;
@@ -599,7 +637,7 @@ async function settleReservation(reservationId, { force = false } = {}) {
         releasedAt: toRelease > 0 ? new Date() : null,
       },
     },
-    { returnDocument: "after" }
+    { returnDocument: "after" },
   );
   if (!claimed) return { settled: false, reason: "already_settled" };
 
@@ -617,7 +655,10 @@ async function settleReservation(reservationId, { force = false } = {}) {
     await releaseCredits(reservation.subscriptionId, releaseTotal, {
       reservationId: reservation._id,
       parentSession: reservation.parentSession,
-      note: undecided > 0 ? "Reservation expired with work still undecided" : "Work never dispatched",
+      note:
+        undecided > 0
+          ? "Reservation expired with work still undecided"
+          : "Work never dispatched",
     });
   }
 
@@ -657,7 +698,7 @@ async function releaseParentSession(parentSession, companyId) {
           releasedAt: new Date(),
         },
       },
-      { returnDocument: "after" }
+      { returnDocument: "after" },
     );
     if (!claimed) continue;
 
@@ -704,10 +745,14 @@ function getAccountSnapshot(sub) {
       billsUsage: false,
       planType: "legacy",
       tierKey: sub.legacyPlan || null,
-      tierName: sub.legacyPlan ? sub.legacyPlan.replace(/^\w/, (c) => c.toUpperCase()) : "Legacy plan",
+      tierName: sub.legacyPlan
+        ? sub.legacyPlan.replace(/^\w/, (c) => c.toUpperCase())
+        : "Legacy plan",
       engine: null,
       concurrentSites: 1,
-      balance: unlimited ? Number.MAX_SAFE_INTEGER : Math.max(0, allowance - used),
+      balance: unlimited
+        ? Number.MAX_SAFE_INTEGER
+        : Math.max(0, allowance - used),
       reserved: 0,
       monthlyAllowance: unlimited ? Number.MAX_SAFE_INTEGER : allowance,
       unlimited,
@@ -757,7 +802,9 @@ function getAccountSnapshot(sub) {
     isActive: sub.isActive,
     remainingDays: sub.remainingDays,
     endDate: sub.endDate,
-    lowCreditThreshold: Math.ceil(((c.monthlyAllowance || 0) * cm.LOW_CREDIT_WARN_PCT) / 100),
+    lowCreditThreshold: Math.ceil(
+      ((c.monthlyAllowance || 0) * cm.LOW_CREDIT_WARN_PCT) / 100,
+    ),
   };
 }
 
