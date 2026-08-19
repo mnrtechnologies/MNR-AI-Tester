@@ -1,18 +1,5 @@
 const mongoose = require("mongoose");
-
-/**
- * MobileCreditUsage — mirrors the `mobile_credit_usage` collection the
- * mobile backend's usageMeter.ts writes to directly via the raw MongoDB
- * driver. Same DB, two writers with two different drivers — that's fine,
- * Mongo doesn't care. This model exists ONLY so Express (Mongoose) can
- * query and claim rows; Express does not create these documents.
- *
- * Ownership split, same convention as ApiTestRun.js:
- *   Mobile backend writes — testCasesGenerated, userKey.*, platformKey.*,
- *                            status, creditsUsedEstimate
- *   Express owns          — billed, claimToken, claimedAt, billedAt,
- *                            chargedCredits, skippedReason
- */
+const mobileConnection = require("../config/mobileDb");
 const mobileCreditUsageSchema = new mongoose.Schema(
   {
     session_id: { type: String, required: true, unique: true, index: true },
@@ -58,7 +45,7 @@ const mobileCreditUsageSchema = new mongoose.Schema(
     created_at: { type: Date, default: Date.now, index: true },
     updated_at: { type: Date, default: Date.now },
   },
-  { collection: "mobile_credit_usage", timestamps: false }
+  { collection: "mobile_credit_usage", timestamps: false },
 );
 
 // The reconciler's hot path: completed sessions that haven't been billed.
@@ -66,8 +53,8 @@ mobileCreditUsageSchema.index({ billed: 1, claimToken: 1, status: 1 });
 // The stale-sweep's hot path: in-progress sessions untouched for a while.
 mobileCreditUsageSchema.index({ status: 1, updated_at: 1 });
 
-module.exports = mongoose.model(
+module.exports = mobileConnection.model(
   "MobileCreditUsage",
   mobileCreditUsageSchema,
-  "mobile_credit_usage"
+  "mobile_credit_usage",
 );
