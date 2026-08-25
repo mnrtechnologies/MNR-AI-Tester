@@ -5,6 +5,7 @@ const credits = require("../services/creditService");
 const usageBilling = require("../services/usageBilling");
 const apiTestRunBilling = require("../services/apiTestRunBilling");
 const mobileCreditBilling = require("../services/mobileCreditBilling");
+const specTestBilling = require("../services/specTestBilling");
 /**
  * creditReconciler — the authoritative settler.
  *
@@ -42,11 +43,13 @@ let billingTimer = null;
 let apiBillingTimer = null;
 let mobileBillingTimer = null;
 let dbBillingTimer = null;
+let specBillingTimer = null;
 let running = false;
 let billing = false;
 let billingApiRuns = false;
 let billingMobileRuns = false;
 let billingDbRuns = false;
+let billingSpecRuns = false;
 
 async function sweepExpiredReservations() {
   if (running) return; // never overlap sweeps
@@ -173,6 +176,22 @@ async function billDbTestRuns() {
   }
 }
 
+async function billSpecTestRuns() {
+  if (billingSpecRuns) return;
+  billingSpecRuns = true;
+  try {
+    await specTestBilling.releaseStaleClaims();
+    const result = await specTestBilling.billFinishedRuns({ log: true });
+    if (result.errors.length) {
+      console.warn(`⚠️ Spec-test billing had ${result.errors.length} failures`);
+    }
+  } catch (err) {
+    console.error("⚠️ Spec-test billing pass failed:", err.message);
+  } finally {
+    billingSpecRuns = false;
+  }
+}
+
 async function verifyReservedInvariant() {
   try {
     const grouped = await CreditReservation.aggregate([
@@ -238,17 +257,20 @@ function start() {
   apiBillingTimer = setInterval(billApiTestRuns, BILLING_INTERVAL_MS);
   mobileBillingTimer = setInterval(billMobileRuns, BILLING_INTERVAL_MS);
   dbBillingTimer = setInterval(billDbTestRuns, BILLING_INTERVAL_MS);
+  specBillingTimer = setInterval(billSpecTestRuns, BILLING_INTERVAL_MS);
   invariantTimer = setInterval(verifyReservedInvariant, INVARIANT_INTERVAL_MS);
   if (sweepTimer.unref) sweepTimer.unref();
   if (billingTimer.unref) billingTimer.unref();
   if (apiBillingTimer.unref) apiBillingTimer.unref();
   if (mobileBillingTimer.unref) mobileBillingTimer.unref();
   if (dbBillingTimer.unref) dbBillingTimer.unref();
+  if (specBillingTimer.unref) specBillingTimer.unref();
   if (invariantTimer.unref) invariantTimer.unref();
   console.log(
     `♻️  credit reconciler started (settle ${SWEEP_INTERVAL_MS / 1000}s, ` +
       `meter ${BILLING_INTERVAL_MS / 1000}s, api-scans ${BILLING_INTERVAL_MS / 1000}s, ` +
-      `mobile ${BILLING_INTERVAL_MS / 1000}s, db-tests ${BILLING_INTERVAL_MS / 1000}s)`,
+      `mobile ${BILLING_INTERVAL_MS / 1000}s, db-tests ${BILLING_INTERVAL_MS / 1000}s, ` +
+      `spec-tests ${BILLING_INTERVAL_MS / 1000}s)`,
   );
 }
 
@@ -258,12 +280,14 @@ function stop() {
   if (apiBillingTimer) clearInterval(apiBillingTimer);
   if (mobileBillingTimer) clearInterval(mobileBillingTimer);
   if (dbBillingTimer) clearInterval(dbBillingTimer);
+  if (specBillingTimer) clearInterval(specBillingTimer);
   if (invariantTimer) clearInterval(invariantTimer);
   sweepTimer = null;
   billingTimer = null;
   apiBillingTimer = null;
   mobileBillingTimer = null;
   dbBillingTimer = null;
+  specBillingTimer = null;
   invariantTimer = null;
 }
 

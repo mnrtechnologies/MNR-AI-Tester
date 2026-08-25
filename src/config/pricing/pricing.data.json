@@ -28,6 +28,18 @@
     "MAX_TESTS_PER_RUN": 5000
   },
 
+  "specTestFormula": {
+    "_comment": "The capacity meter for TEST CASE DESIGN (spec_test_run), the analogue of `formula` for web and `apiTestFormula` for API scans. BYOK only. Managed spec runs bill from modelRates like every other Managed run.",
+    "_calibration": "PARTLY MEASURED. gpt-4.1-mini: 20.6s per requirement, from 2 production runs (23 requirements, 141 test cases) via scripts/calibrate_rates.py on 2026-08-24 — a small sample, so re-run it as more documents go through. The first provisional guess was 10s and was half the truth, which under-held credits. claude-sonnet-4-6 is still UNMEASURED and carries a placeholder; run a document with an Anthropic key to fix it. Re-run after any change to the designer prompt or the models used.",
+    "SECONDS_PER_REQUIREMENT_BY_MODEL": {
+      "gpt-4.1-mini-2025-04-14": 20.6,
+      "claude-sonnet-4-6": 25
+    },
+    "SECONDS_PER_REQUIREMENT_DEFAULT": 25,
+    "SECONDS_PER_CREDIT": 236,
+    "MAX_REQUIREMENTS_PER_RUN": 300
+  },
+
   "usdPerCredit": 0.5,
 
   "modelRates": {

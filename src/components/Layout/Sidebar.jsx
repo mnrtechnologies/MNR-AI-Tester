@@ -10,7 +10,8 @@ import {
   Globe,
   ChevronLeft,
   Menu,
-  History
+  History,
+  FileText
 } from "lucide-react";
 import { useSelector } from "react-redux";
 
@@ -22,6 +23,7 @@ const Sidebar = () => {
     { name: "Dashboard", icon: <LayoutDashboard size={20} />, path: "/dashboard" },
     { name: "Projects", icon: <FolderKanban size={20} />, path: "/projects" },
     { name: "Web Testing", icon: <Bot size={20} />, path: "/web-testing" },
+    { name: "Doc To TestCase", icon: <FileText size={20} />, path: "/test-case-designer" },
     { name: "Regression Testing", icon: <History size={20} />, path: "/regression-testing" },
     { name: "Mobile App Testing", icon: <Smartphone size={20} />, path: "/mobile-testing" },
     { name: "API Testing", icon: <Globe size={20} />, path: "/api-testing" },

@@ -21,6 +21,7 @@ import { useDispatch } from "react-redux";
 import APITesting from "./pages/Dashboard/APITesting.jsx";
 import MobileAppTesting from "./pages/Dashboard/MobileAppTesting.jsx";
 import DBTesting from "./pages/Dashboard/DBTesting";
+import TestCaseDesigner from "./pages/Dashboard/TestCaseDesigner.jsx";
 import { getUserDetails } from "./services/operations/authAPIs.js";
 import Projects from "./pages/Dashboard/Projects.jsx";
 import SuperAdmin from "./pages/Dashboard/SuperAdmin/SuperAdmin.jsx";
@@ -366,6 +367,18 @@ function App() {
           <ProtectedRoute>
             <DashboardLayout>
               <APITesting />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* --- /test-case-designer Route --- */}
+      <Route
+        path="/test-case-designer"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <TestCaseDesigner />
             </DashboardLayout>
           </ProtectedRoute>
         }

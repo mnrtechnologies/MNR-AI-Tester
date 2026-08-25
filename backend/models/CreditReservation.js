@@ -46,7 +46,7 @@ const creditReservationSchema = new mongoose.Schema(
 
     // "phase2" — the up-front discovery cap (we cannot know the URL count yet)
     // "phase3" — the priced top-up authorized at the review gate
-    scope: { type: String, enum: ["phase2", "phase3"], required: true },
+    scope: { type: String, enum: ["phase2", "phase3", "spec"], required: true },
 
     // `${parentSession}:${scope}` — see the class comment.
     idempotencyKey: { type: String, required: true, unique: true },

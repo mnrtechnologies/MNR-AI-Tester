@@ -84,6 +84,8 @@ export const creditEndpoints = {
   // Metering. authorize-run answers 200 / 402 (no funds) / 409 (oversized URL).
   RESERVE_EXPLORATION_API: BASE_URL + "/credits/reserve-exploration",
   AUTHORIZE_RUN_API: BASE_URL + "/credits/authorize-run",
+  SPEC_ESTIMATE_API: BASE_URL + "/credits/spec-estimate",
+  AUTHORIZE_SPEC_RUN_API: BASE_URL + "/credits/authorize-spec-run",
   SETTLE_RUN_API: BASE_URL + "/credits/settle",
   RELEASE_RUN_API: BASE_URL + "/credits/release",
 

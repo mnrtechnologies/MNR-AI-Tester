@@ -513,53 +513,6 @@ function PhaseLogin({ onDone, onStatusChange, onSessionCreated }) {
   const [liveOtp, setLiveOtp] = useState("");
   const wsRef = useRef(null);
 
-  // Optional Business Requirements Document. When brdId is empty the run
-  // starts exactly as it always has — the field is never required.
-  const [brdId, setBrdId] = useState("");
-  const [brdInfo, setBrdInfo] = useState(null); // { filename, chars, features_preview }
-  const [brdState, setBrdState] = useState("idle"); // idle | uploading | ready | error
-  const [brdError, setBrdError] = useState("");
-  const brdInputRef = useRef(null);
-
-  const uploadBrd = async (file) => {
-    if (!file) return;
-    setBrdState("uploading");
-    setBrdError("");
-    setBrdInfo(null);
-    setBrdId("");
-
-    try {
-      const form = new FormData();
-      form.append("file", file);
-      if (userId) form.append("user_id", userId);
-
-      const res = await fetch(`${API}/brd/upload`, { method: "POST", body: form });
-      const data = await res.json();
-
-      if (!res.ok) {
-        // The backend writes these messages for the end user (wrong file type,
-        // scanned PDF, too large), so show them verbatim rather than a generic
-        // failure string.
-        throw new Error(data?.detail || "Upload failed");
-      }
-
-      setBrdId(data.brd_id);
-      setBrdInfo(data);
-      setBrdState("ready");
-    } catch (e) {
-      setBrdError(e.message || "Upload failed");
-      setBrdState("error");
-    }
-  };
-
-  const clearBrd = () => {
-    setBrdId("");
-    setBrdInfo(null);
-    setBrdError("");
-    setBrdState("idle");
-    if (brdInputRef.current) brdInputRef.current.value = "";
-  };
-
   useEffect(() => {
     if (onStatusChange) onStatusChange(status);
   }, [status, onStatusChange]);
@@ -630,7 +583,6 @@ function PhaseLogin({ onDone, onStatusChange, onSessionCreated }) {
               goal,
               userId,
               data.session_id,
-              brdId,
             ),
           800,
         );
@@ -813,166 +765,6 @@ function PhaseLogin({ onDone, onStatusChange, onSessionCreated }) {
             </div>
           )}
 
-          {/* Optional BRD — only Standard Checking consumes it today */}
-          {mode === "checking" && (
-            <>
-              <div className="divider" style={{ margin: "4px 0" }} />
-              <div>
-                <div
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "#000000",
-                    marginBottom: 4,
-                  }}
-                >
-                  Business Requirements Document{" "}
-                  <span style={{ color: C.muted, fontWeight: 400 }}>
-                    (Optional)
-                  </span>
-                </div>
-                <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>
-                  Upload a BRD and test cases are written from its acceptance
-                  criteria, alongside the usual exploration-based ones. Every row
-                  in the Excel is labelled with which of the two it came from.
-                  Without a document, generation works exactly as it does today.
-                </div>
-
-                <input
-                  ref={brdInputRef}
-                  type="file"
-                  accept=".pdf,.docx,.txt,.md"
-                  style={{ display: "none" }}
-                  onChange={(e) => uploadBrd(e.target.files?.[0])}
-                />
-
-                {brdState !== "ready" && (
-                  <button
-                    className="btn"
-                    style={{
-                      width: "100%",
-                      padding: "12px",
-                      border: `1px dashed ${brdState === "error" ? C.red : C.border}`,
-                      background: "transparent",
-                      color: brdState === "error" ? C.red : C.muted,
-                      fontSize: 13,
-                    }}
-                    onClick={() => brdInputRef.current?.click()}
-                    disabled={status === "running" || brdState === "uploading"}
-                  >
-                    {brdState === "uploading" ? (
-                      <>
-                        <span className="spinner" /> Reading document...
-                      </>
-                    ) : (
-                      "📄 Choose a document  ·  PDF, DOCX, TXT or MD  ·  max 10 MB"
-                    )}
-                  </button>
-                )}
-
-                {brdState === "ready" && brdInfo && (
-                  <div
-                    className="fade-up"
-                    style={{
-                      padding: "12px 14px",
-                      borderRadius: 8,
-                      background: "rgba(16,185,129,.06)",
-                      border: `1px solid rgba(16,185,129,.25)`,
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        gap: 12,
-                      }}
-                    >
-                      <div style={{ minWidth: 0 }}>
-                        <div
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 600,
-                            color: C.green,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          ✓ {brdInfo.filename}
-                        </div>
-                        <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
-                          {brdInfo.chars?.toLocaleString()} characters read
-                          {brdInfo.features_preview?.length
-                            ? ` · ${brdInfo.features_preview.length} sections detected`
-                            : ""}
-                        </div>
-                      </div>
-                      <button
-                        className="btn"
-                        style={{
-                          padding: "6px 12px",
-                          fontSize: 12,
-                          background: "transparent",
-                          color: C.muted,
-                          border: `1px solid ${C.border}`,
-                          flexShrink: 0,
-                        }}
-                        onClick={clearBrd}
-                        disabled={status === "running"}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                    {brdInfo.features_preview?.length > 0 && (
-                      <div
-                        style={{
-                          fontSize: 11,
-                          color: C.muted,
-                          marginTop: 8,
-                          paddingTop: 8,
-                          borderTop: `1px solid rgba(16,185,129,.2)`,
-                          lineHeight: 1.6,
-                        }}
-                      >
-                        {brdInfo.features_preview.slice(0, 4).map((f, i) => (
-                          <div
-                            key={i}
-                            style={{
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            • {f}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {brdState === "error" && (
-                  <div
-                    className="fade-up"
-                    style={{
-                      marginTop: 8,
-                      fontSize: 12,
-                      color: C.red,
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    {brdError}
-                    <div style={{ color: C.muted, marginTop: 4 }}>
-                      You can fix the file and try again, or start the run
-                      without it.
-                    </div>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-
           <div className="divider" style={{ margin: "4px 0" }} />
 
           <div>
@@ -1147,9 +939,6 @@ function PhaseLogin({ onDone, onStatusChange, onSessionCreated }) {
               !targetUrl ||
               (!apiKey && !anthropicApiKey) ||
               (mode === "feature" && !goal) ||
-              // Not a required field — but starting mid-upload would silently
-              // drop a document the user just chose.
-              brdState === "uploading" ||
               status === "running" ||
               status === "done"
             }
@@ -1234,7 +1023,6 @@ function PhaseChecking({
   anthropicApiKey,
   userId,
   authSessionId,
-  brdId,
   onExcelReady,
   onSessionReady,
   onStatusChange,
@@ -1298,12 +1086,6 @@ function PhaseChecking({
       }
 
       pushLog(`Initializing Checking Pipeline → ${targetUrl}`, "cyan");
-      if (brdId) {
-        pushLog(
-          "📄 Requirements document attached — test cases will be written against it",
-          "cyan",
-        );
-      }
       const res = await fetch(`${API}/checking/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1314,7 +1096,6 @@ function PhaseChecking({
           user_id: userId || undefined,
           auth_session_id: authSessionId || undefined,
           session_id: authSessionId || undefined,
-          brd_id: brdId || undefined,
         }),
       });
       const data = await res.json();
@@ -4204,9 +3985,6 @@ export default function App() {
 
   const [excelReports, setExcelReports] = useState([]);
   const [authSessionId, setAuthSessionId] = useState("");
-  // Empty string when the user uploaded no BRD — /checking/start then receives
-  // no brd_id and the backend runs its original generation path.
-  const [brdId, setBrdId] = useState("");
   const isProcessing = ["connecting", "starting", "running"].includes(
     activePhaseStatus,
   );
@@ -4298,14 +4076,12 @@ export default function App() {
     selectedGoal,
     uid,
     loginSessionId,
-    uploadedBrdId,
   ) => {
     localStorage.setItem("targetUrl", url);
     localStorage.setItem("autopilotRunning", "true");
     setTargetUrl(url);
     setApiKey(openaiKey);
     setAnthropicApiKey(antKey);
-    setBrdId(uploadedBrdId || "");
     setActiveSessionId(loginSessionId || "");
     setMode(selectedMode);
     setGoal(selectedGoal || "");
@@ -4510,7 +4286,6 @@ export default function App() {
                 anthropicApiKey={anthropicApiKey}
                 userId={userId}
                 authSessionId={authSessionId}
-                brdId={brdId}
                 onExcelReady={handleExcelReady}
                 onSessionReady={(sid) => setActiveSessionId(sid)}
                 onStatusChange={setActivePhaseStatus}

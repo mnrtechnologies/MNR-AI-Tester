@@ -11,6 +11,8 @@ const {
   getPricingConfig,
   reserveExploration,
   authorizeRun,
+  getSpecEstimate,
+  authorizeSpecRun,
   settleRun,
   releaseRun,
   grantCredits,
@@ -57,6 +59,12 @@ router.post("/reserve-exploration", auth, reserveExploration);
 
 // The gate. 200 authorized / 402 insufficient / 409 oversized URL.
 router.post("/authorize-run", auth, authorizeRun);
+
+// Test Case Designer. Separate from authorize-run because the cost is
+// knowable up front here: analysis reports the requirement count, and design
+// is one model call each, so a real price can be quoted before the spend.
+router.get("/spec-estimate", auth, getSpecEstimate);
+router.post("/authorize-spec-run", auth, authorizeSpecRun);
 
 // Idempotent. The reconciler is the authoritative settler; this is the fast path.
 router.post("/settle", auth, settleRun);

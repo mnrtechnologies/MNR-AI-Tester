@@ -15,6 +15,8 @@ const {
   CREDIT_PREFLIGHT_API,
   RESERVE_EXPLORATION_API,
   AUTHORIZE_RUN_API,
+  SPEC_ESTIMATE_API,
+  AUTHORIZE_SPEC_RUN_API,
   SETTLE_RUN_API,
   RELEASE_RUN_API,
   GRANT_CREDITS_API,
@@ -178,6 +180,47 @@ export const authorizeRun = async (parentSession, { acknowledgedOversized = fals
       "POST",
       AUTHORIZE_RUN_API,
       { parentSession, acknowledgedOversized },
+      authHeader()
+    );
+    return { ok: true, data: response.data.data, message: response.data.message };
+  } catch (error) {
+    return toResult(error);
+  }
+};
+
+/**
+ * What will a test case design run cost? Read-only — holds nothing.
+ *
+ * Priced server-side from the run record the engine wrote. The browser only
+ * supplies the run id; it never computes or asserts a price.
+ */
+export const getSpecEstimate = async (runId) => {
+  try {
+    const response = await apiConnector(
+      "GET",
+      `${SPEC_ESTIMATE_API}?runId=${encodeURIComponent(runId)}`,
+      null,
+      authHeader()
+    );
+    return { ok: true, data: response.data.data, message: response.data.message };
+  } catch (error) {
+    return toResult(error);
+  }
+};
+
+/**
+ * The gate for a test case design run. Holds the estimated credits and stamps
+ * the run as authorized so the engine will accept the design request.
+ *
+ * 402 -> not enough credits.  409 -> unusually large document, needs
+ * acknowledgedOversized: true to proceed.
+ */
+export const authorizeSpecRun = async (runId, { acknowledgedOversized = false } = {}) => {
+  try {
+    const response = await apiConnector(
+      "POST",
+      AUTHORIZE_SPEC_RUN_API,
+      { runId, acknowledgedOversized },
       authHeader()
     );
     return { ok: true, data: response.data.data, message: response.data.message };

@@ -212,6 +212,76 @@ function formatPrice(usd, currency) {
  * Exports
  * ------------------------------------------------------------------ */
 
+
+/* ------------------------------------------------------------------ *
+ * Test Case Designer (spec_test_run)
+ *
+ * A different meter from web testing, because the work is different. A web
+ * "story" is EXECUTED against a live browser and costs ~50 model calls; a spec
+ * test case is a few lines of JSON, and one model call produces about seven of
+ * them. Pricing spec runs with creditsForStories() overcharges by ~50x.
+ *
+ * So this meters what a run actually consumes: worker seconds. Requirements
+ * drive that (one call each), which is also why the estimate is honest — the
+ * requirement count is known BEFORE the expensive phase, so the customer can be
+ * told the price before committing.
+ * ------------------------------------------------------------------ */
+
+const SF = PRICING.specTestFormula;
+
+/** Seconds one requirement takes on a given model. Unmeasured models get the pessimistic default. */
+function secondsPerRequirement(model) {
+  return (
+    (model && SF.SECONDS_PER_REQUIREMENT_BY_MODEL[model]) ||
+    SF.SECONDS_PER_REQUIREMENT_DEFAULT
+  );
+}
+
+/**
+ * ESTIMATE — what a run will cost, quoted at the gate.
+ *
+ * Two parts, and only one of them is a prediction:
+ *
+ *   parseMs        ALREADY MEASURED. Analysis has finished by the time we
+ *                  quote, so its duration is a fact, not a guess. Leaving it
+ *                  out made the quote systematically low — the parse phase is
+ *                  ~28s of real worker time that settlement charges for, which
+ *                  on a small document is the whole difference between 1 credit
+ *                  and 2.
+ *   design         predicted, from the per-model rate.
+ *
+ * Both go through the same ceil() as creditsForSpecDuration(), so the quote and
+ * the charge agree unless the run itself deviates from the model's average.
+ */
+function creditsForSpecRun(requirements, model, parseMs = 0) {
+  const n = Math.max(0, Math.floor(Number(requirements) || 0));
+  if (n === 0) return 0;
+  const measuredParse = Math.max(0, Number(parseMs) || 0) / 1000;
+  const predictedDesign = n * secondsPerRequirement(model);
+  return Math.max(
+    1,
+    Math.ceil((measuredParse + predictedDesign) / SF.SECONDS_PER_CREDIT),
+  );
+}
+
+/**
+ * SETTLEMENT — what a run actually cost, from measured worker occupancy.
+ *
+ * Deliberately not the estimate: the estimate predicts from a per-model average,
+ * this is the real time the run held a worker. A capacity meter should charge
+ * for capacity actually consumed.
+ */
+function creditsForSpecDuration(durationMs) {
+  const seconds = Math.max(0, Number(durationMs) || 0) / 1000;
+  if (seconds === 0) return 0;
+  return Math.max(1, Math.ceil(seconds / SF.SECONDS_PER_CREDIT));
+}
+
+/** Documents past this need explicit confirmation rather than a silent bill. */
+function isOversizedSpecRun(requirements) {
+  return (Number(requirements) || 0) > SF.MAX_REQUIREMENTS_PER_RUN;
+}
+
 module.exports = {
   PRICING,
   CONSTANTS: F,
@@ -219,6 +289,13 @@ module.exports = {
 
   callsForStories,
   creditsForStories,
+
+  secondsPerRequirement,
+  creditsForSpecRun,
+  creditsForSpecDuration,
+  isOversizedSpecRun,
+  MAX_REQUIREMENTS_PER_RUN: SF.MAX_REQUIREMENTS_PER_RUN,
+  SPEC_SECONDS_PER_CREDIT: SF.SECONDS_PER_CREDIT,
   isOversized,
   priceRun,
   reservationTtlMinutes,
