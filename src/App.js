@@ -38,6 +38,7 @@ import AddStaff from "./components/Dashboard/CompanyAdmin/AddStaff.jsx";
 import CompanySubscription from "./components/Dashboard/CompanyAdmin/CompanySubscription.jsx";
 import UpgradePlan from "./components/Dashboard/UpgradePlan.jsx";
 import RegressionTesting from "./pages/Dashboard/RegressionTesting.jsx";
+import PerfTesting from "./pages/Dashboard/PerfTesting/index.jsx";
 
 // Layout for Dashboard pages ONLY
 const DashboardLayout = ({ children }) => (
@@ -343,6 +344,18 @@ function App() {
           <ProtectedRoute>
             <DashboardLayout>
               <DBTesting />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* --- /performance-testing Route --- */}
+      <Route
+        path="/performance-testing"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <PerfTesting />
             </DashboardLayout>
           </ProtectedRoute>
         }

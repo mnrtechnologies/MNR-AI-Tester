@@ -5,13 +5,11 @@
     "lastReviewed": "2026-07-28",
     "note": "The `formula` block is modelled, not measured: EXPLORATION_CALLS and CALLS_PER_STORY come from the engine's loop ceilings (semantic_tester.py max_iter, orchestrator.py max_steps), not from token logs. It meters BYOK plans, where a credit represents CAPACITY rather than cost, so an approximation is acceptable. Managed plans do not use it — they bill from `modelRates` against tokens the engine actually reported."
   },
-
   "meters": {
     "byok": "capacity",
     "managed": "usage",
     "note": "Which meter each plan family bills on. BYOK customers pay their model provider directly, so charging them per token would bill twice for the same call; their credits meter our server capacity via `formula`. On Managed plans we pay the provider, so credits pass that cost through via `modelRates`."
   },
-
   "formula": {
     "EXPLORATION_CALLS": 62,
     "CALLS_PER_STORY": 50,
@@ -19,7 +17,6 @@
     "MAX_STORIES_PER_URL": 20,
     "PHASE2_MAX_URLS": 10
   },
-
   "apiTestFormula": {
     "_comment": "The capacity meter for API SECURITY SCANS (api_test_run), the analogue of `formula` for web testing. Same rule applies: BYOK only. Managed API runs bill from modelRates like every other Managed run.",
     "_calibration": "MEASURED, unlike `formula`. Wall-clock duration of real runs against mnr-clipcut.com on 2026-08-12: 27 endpoints/83 tests took 112-159s over 8 runs (mean 145s), and 50 endpoints/222 tests took 447s. Duration is linear in test count at ~1.9s/test (83*1.9=158 vs 145 actual; 222*1.9=422 vs 447 actual) and endpoint count adds nothing separable, being collinear with it. Rounded to 2 for headroom. SECONDS_PER_CREDIT is derived from internal.creditsPerServerMonth: a 30-day server-month is 2592000s over 11000 credits = 236s per credit. Re-measure if the executor's request_delay (0.5s) changes, since that dominates Phase 3.",
@@ -27,7 +24,6 @@
     "SECONDS_PER_CREDIT": 236,
     "MAX_TESTS_PER_RUN": 5000
   },
-
   "specTestFormula": {
     "_comment": "The capacity meter for TEST CASE DESIGN (spec_test_run), the analogue of `formula` for web and `apiTestFormula` for API scans. BYOK only. Managed spec runs bill from modelRates like every other Managed run.",
     "_calibration": "PARTLY MEASURED. gpt-4.1-mini: 20.6s per requirement, from 2 production runs (23 requirements, 141 test cases) via scripts/calibrate_rates.py on 2026-08-24 — a small sample, so re-run it as more documents go through. The first provisional guess was 10s and was half the truth, which under-held credits. claude-sonnet-4-6 is still UNMEASURED and carries a placeholder; run a document with an Anthropic key to fix it. Re-run after any change to the designer prompt or the models used.",
@@ -39,9 +35,7 @@
     "SECONDS_PER_CREDIT": 236,
     "MAX_REQUIREMENTS_PER_RUN": 300
   },
-
   "usdPerCredit": 0.5,
-
   "modelRates": {
     "_note": "USD per 1,000,000 tokens. Anthropic rates are from the published price list. OpenAI rates are UNVERIFIED — confirm against openai.com/api/pricing before enabling Managed billing, because gpt-4.1-mini is the default engine for Managed Starter and Growth.",
     "_cacheMultipliers": {
@@ -50,29 +44,54 @@
       "note": "Cache reads bill at ~0.1x the input rate; 5-minute-TTL cache writes at 1.25x. The engine does not use prompt caching yet, so these are zero in practice — see the caching lever in the pricing doc."
     },
     "models": {
-      "claude-sonnet-4-6": { "inputUsdPerMTok": 3.0, "outputUsdPerMTok": 15.0, "verified": true },
-      "claude-sonnet-5": { "inputUsdPerMTok": 3.0, "outputUsdPerMTok": 15.0, "verified": true },
-      "claude-haiku-4-5": { "inputUsdPerMTok": 1.0, "outputUsdPerMTok": 5.0, "verified": true },
-      "claude-opus-5": { "inputUsdPerMTok": 5.0, "outputUsdPerMTok": 25.0, "verified": true },
-      "claude-opus-4-8": { "inputUsdPerMTok": 5.0, "outputUsdPerMTok": 25.0, "verified": true },
-      "gpt-4.1-mini-2025-04-14": { "inputUsdPerMTok": 0.4, "outputUsdPerMTok": 1.6, "verified": false },
-      "gpt-4o": { "inputUsdPerMTok": 2.5, "outputUsdPerMTok": 10.0, "verified": false }
+      "claude-sonnet-4-6": {
+        "inputUsdPerMTok": 3,
+        "outputUsdPerMTok": 15,
+        "verified": true
+      },
+      "claude-sonnet-5": {
+        "inputUsdPerMTok": 3,
+        "outputUsdPerMTok": 15,
+        "verified": true
+      },
+      "claude-haiku-4-5": {
+        "inputUsdPerMTok": 1,
+        "outputUsdPerMTok": 5,
+        "verified": true
+      },
+      "claude-opus-5": {
+        "inputUsdPerMTok": 5,
+        "outputUsdPerMTok": 25,
+        "verified": true
+      },
+      "claude-opus-4-8": {
+        "inputUsdPerMTok": 5,
+        "outputUsdPerMTok": 25,
+        "verified": true
+      },
+      "gpt-4.1-mini-2025-04-14": {
+        "inputUsdPerMTok": 0.4,
+        "outputUsdPerMTok": 1.6,
+        "verified": false
+      },
+      "gpt-4o": {
+        "inputUsdPerMTok": 2.5,
+        "outputUsdPerMTok": 10,
+        "verified": false
+      }
     }
   },
-
   "fx": {
     "inrPerUsd": 88,
     "disclaimer": "Indicative INR conversion. USD is the contractual currency."
   },
-
   "semiAnnualDiscountPct": 10,
-  "legacyTestToCreditFactor": 1.0,
+  "legacyTestToCreditFactor": 1,
   "lowCreditWarnPct": 15,
   "reservationTtl": {
     "minMinutes": 90,
     "minutesPerStory": 6
   },
-
   "planTypes": {
     "byok": {
       "key": "byok",
@@ -87,7 +106,7 @@
           "priceUsdMonthly": 199,
           "credits": 250,
           "concurrentSites": 1,
-          "extraCreditUsd": 1.0,
+          "extraCreditUsd": 1,
           "engine": null,
           "highlighted": false,
           "custom": false,
@@ -157,7 +176,6 @@
         }
       ]
     },
-
     "managed": {
       "key": "managed",
       "label": "Managed AI",
@@ -248,7 +266,6 @@
       ]
     }
   },
-
   "internal": {
     "_comment": "SUPER-ADMIN ONLY. Never include this object in a company_admin or staff payload.",
     "costPerCreditCheapUsd": 0.31,
@@ -259,5 +276,13 @@
     "creditsPerServerMonth": 11000,
     "optimisationsShipped": false,
     "_optimisationNote": "The optimised cost anchors assume prompt caching, a 40-entry element-map cap, and Haiku routing for classification calls. None of that is implemented. While optimisationsShipped is false, modelled costs are ~60% higher than the optimised figures."
+  },
+  "perfTestFormula": {
+    "_comment": "The capacity meter for PERFORMANCE / load runs (perf_runs), the analogue of formula (web) and apiTestFormula (API scans). BYOK only, same as those. Managed perf runs bill from modelRates like every other Managed run. Existing meters are deliberately untouched by this block.",
+    "_calibration": "MODELLED from real runs on 2026-08-25, not yet measured against server cost — review before relying on it commercially. Observed: a direct 2-VU run took 70s engine time / ~40 VU-seconds; a 50-VU login load test ~500s engine / ~21000 VU-seconds; a 3-persona mixed run ~1400s engine (discovery dominates at ~5min per persona) / ~7000 VU-seconds. SECONDS_PER_CREDIT is kept at 236 deliberately — it is derived from internal.creditsPerServerMonth (2592000s over 11000 credits) and describes OUR cost basis, which does not change per product. What differs for perf is the concurrency surcharge below. VU_SECONDS_PER_ENGINE_SECOND=10 encodes that 10 concurrent virtual users cost about one extra engine-second per second: they share one process and one event loop, so concurrency is cheaper than linear but far from free. Under this model the runs above price at 1, ~11 and ~9 credits respectively. Re-calibrate if the loadgen worker stops using gevent greenlets, since that assumption is what makes concurrency sublinear.",
+    "SECONDS_PER_CREDIT": 236,
+    "VU_SECONDS_PER_ENGINE_SECOND": 10,
+    "MAX_BILLABLE_SECONDS_PER_RUN": 86400,
+    "OVERSIZED_CREDITS": 100
   }
 }

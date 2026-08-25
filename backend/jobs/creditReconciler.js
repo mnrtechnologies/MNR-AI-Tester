@@ -1,5 +1,6 @@
 const CreditReservation = require("../models/CreditReservation");
 const dbTestBilling = require("../services/dbTestBilling");
+const perfTestBilling = require("../services/perfTestBilling");
 const Subscription = require("../models/Subscription");
 const credits = require("../services/creditService");
 const usageBilling = require("../services/usageBilling");
@@ -36,6 +37,11 @@ const SWEEP_INTERVAL_MS =
 const BILLING_INTERVAL_MS =
   Number(process.env.CREDIT_BILLING_INTERVAL_MS) || 20 * 1000;
 const INVARIANT_INTERVAL_MS = 60 * 60 * 1000;
+// Perf runs are metered while they run (see perfTestBilling.meterRunningRuns).
+// Faster than the settlement passes because this IS the number the customer is
+// watching move during a load test.
+const PERF_METER_INTERVAL_MS =
+  Number(process.env.CREDIT_PERF_METER_INTERVAL_MS) || 15 * 1000;
 
 let sweepTimer = null;
 let invariantTimer = null;
@@ -44,12 +50,16 @@ let apiBillingTimer = null;
 let mobileBillingTimer = null;
 let dbBillingTimer = null;
 let specBillingTimer = null;
+let perfBillingTimer = null;
+let perfMeterTimer = null;
 let running = false;
 let billing = false;
 let billingApiRuns = false;
 let billingMobileRuns = false;
 let billingDbRuns = false;
 let billingSpecRuns = false;
+let billingPerfRuns = false;
+let meteringPerfRuns = false;
 
 async function sweepExpiredReservations() {
   if (running) return; // never overlap sweeps
@@ -192,6 +202,37 @@ async function billSpecTestRuns() {
   }
 }
 
+async function billPerfTestRuns() {
+  if (billingPerfRuns) return;
+  billingPerfRuns = true;
+  try {
+    await perfTestBilling.releaseStaleClaims();
+    const result = await perfTestBilling.billFinishedRuns({ log: true });
+    if (result.errors.length) {
+      console.warn();
+    }
+  } catch (err) {
+    console.error("⚠️ Perf-test billing pass failed:", err.message);
+  } finally {
+    billingPerfRuns = false;
+  }
+}
+
+async function meterPerfTestRuns() {
+  if (meteringPerfRuns) return;
+  meteringPerfRuns = true;
+  try {
+    const result = await perfTestBilling.meterRunningRuns({ log: true });
+    if (result.errors.length) {
+      console.warn(`⚠️ Perf-test metering pass had ${result.errors.length} error(s)`);
+    }
+  } catch (err) {
+    console.error("⚠️ Perf-test metering pass failed:", err.message);
+  } finally {
+    meteringPerfRuns = false;
+  }
+}
+
 async function verifyReservedInvariant() {
   try {
     const grouped = await CreditReservation.aggregate([
@@ -258,6 +299,8 @@ function start() {
   mobileBillingTimer = setInterval(billMobileRuns, BILLING_INTERVAL_MS);
   dbBillingTimer = setInterval(billDbTestRuns, BILLING_INTERVAL_MS);
   specBillingTimer = setInterval(billSpecTestRuns, BILLING_INTERVAL_MS);
+  perfBillingTimer = setInterval(billPerfTestRuns, BILLING_INTERVAL_MS);
+  perfMeterTimer = setInterval(meterPerfTestRuns, PERF_METER_INTERVAL_MS);
   invariantTimer = setInterval(verifyReservedInvariant, INVARIANT_INTERVAL_MS);
   if (sweepTimer.unref) sweepTimer.unref();
   if (billingTimer.unref) billingTimer.unref();
@@ -265,12 +308,16 @@ function start() {
   if (mobileBillingTimer.unref) mobileBillingTimer.unref();
   if (dbBillingTimer.unref) dbBillingTimer.unref();
   if (specBillingTimer.unref) specBillingTimer.unref();
+  if (perfBillingTimer.unref) perfBillingTimer.unref();
+  if (perfMeterTimer.unref) perfMeterTimer.unref();
   if (invariantTimer.unref) invariantTimer.unref();
   console.log(
     `♻️  credit reconciler started (settle ${SWEEP_INTERVAL_MS / 1000}s, ` +
       `meter ${BILLING_INTERVAL_MS / 1000}s, api-scans ${BILLING_INTERVAL_MS / 1000}s, ` +
       `mobile ${BILLING_INTERVAL_MS / 1000}s, db-tests ${BILLING_INTERVAL_MS / 1000}s, ` +
-      `spec-tests ${BILLING_INTERVAL_MS / 1000}s)`,
+      `spec-tests ${BILLING_INTERVAL_MS / 1000}s, ` +
+      `perf-tests ${BILLING_INTERVAL_MS / 1000}s, ` +
+      `perf-live-meter ${PERF_METER_INTERVAL_MS / 1000}s)`,
   );
 }
 
@@ -281,6 +328,8 @@ function stop() {
   if (mobileBillingTimer) clearInterval(mobileBillingTimer);
   if (dbBillingTimer) clearInterval(dbBillingTimer);
   if (specBillingTimer) clearInterval(specBillingTimer);
+  if (perfBillingTimer) clearInterval(perfBillingTimer);
+  if (perfMeterTimer) clearInterval(perfMeterTimer);
   if (invariantTimer) clearInterval(invariantTimer);
   sweepTimer = null;
   billingTimer = null;
