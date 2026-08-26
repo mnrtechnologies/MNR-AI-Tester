@@ -56,14 +56,17 @@ const PHASES = [
  * leaving the user on a static acknowledgement for that long makes a working
  * system look hung.
  */
-const RunProgress = ({ response, run, estimate, charged, isTerminal, onReset }) => {
+const RunProgress = ({ response, run, estimate, charged, isTerminal, onReset, onCancel, isCancelling, cancelError }) => {
   const status = run?.status || response.status;
   const phase = run?.phase ?? 0;
   const failed = status === "failed";
+  const cancelled = status === "cancelled";
   const done = status === "completed";
 
   const tone = failed
     ? { bg: "bg-red-50", border: "border-red-200", text: "text-red-900", soft: "text-red-700" }
+    : cancelled
+    ? { bg: "bg-slate-50", border: "border-slate-200", text: "text-slate-900", soft: "text-slate-600" }
     : done
     ? { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-900", soft: "text-emerald-700" }
     : { bg: "bg-white", border: "border-slate-200", text: "text-slate-900", soft: "text-slate-600" };
@@ -75,6 +78,8 @@ const RunProgress = ({ response, run, estimate, charged, isTerminal, onReset }) 
           {isTerminal ? (
             failed ? (
               <span className="text-red-600 font-bold text-2xl">!</span>
+            ) : cancelled ? (
+              <span className="text-slate-500 font-bold text-2xl">×</span>
             ) : (
               <ShieldCheck className="text-emerald-600" size={28} />
             )
@@ -86,14 +91,18 @@ const RunProgress = ({ response, run, estimate, charged, isTerminal, onReset }) 
         <div className="flex-1 min-w-0">
           <h4 className={`${tone.text} font-bold text-xl mb-1`}>
             {failed
-              ? "Scan failed"
+              ? "Test failed"
+              : cancelled
+              ? "Test cancelled"
               : done
-              ? "Scan complete"
-              : run?.phase_label || "Scan queued"}
+              ? "Test complete"
+              : run?.phase_label || "Test queued"}
           </h4>
           <p className={`${tone.soft} mb-5`}>
             {failed
-              ? run?.error || "The scan stopped before finishing."
+              ? run?.error || "The test stopped before finishing."
+              : cancelled
+              ? "You cancelled this run before it finished."
               : done
               ? "Your report has been emailed and is available below."
               : "This runs in the background — you can leave this page, the report is emailed either way."}
@@ -181,7 +190,7 @@ const RunProgress = ({ response, run, estimate, charged, isTerminal, onReset }) 
           {done && (run?.s3_report_url || run?.s3_discovery_url) && (
             <div className="flex flex-wrap gap-3 mb-6">
               {run.s3_report_url && (
-                <Download href={run.s3_report_url} label="Vulnerability report" />
+                <Download href={run.s3_report_url} label="Test report" />
               )}
               {run.s3_discovery_url && (
                 <Download href={run.s3_discovery_url} label="API discovery" />
@@ -196,20 +205,44 @@ const RunProgress = ({ response, run, estimate, charged, isTerminal, onReset }) 
             Run ID: {response.run_id}
           </div>
 
-          <div className={`border-t ${tone.border} pt-6`}>
-            <button
-              onClick={onReset}
-              disabled={!isTerminal}
-              className={`px-6 py-2.5 rounded-xl font-semibold transition-all active:scale-95 shadow-sm ${
-                isTerminal
-                  ? failed
+          <div className={`border-t ${tone.border} pt-6 flex flex-wrap items-center gap-3`}>
+            {isTerminal ? (
+              <button
+                onClick={onReset}
+                className={`px-6 py-2.5 rounded-xl font-semibold transition-all active:scale-95 shadow-sm ${
+                  failed
                     ? "bg-red-600 hover:bg-red-700 text-white"
+                    : cancelled
+                    ? "bg-slate-600 hover:bg-slate-700 text-white"
                     : "bg-emerald-600 hover:bg-emerald-700 text-white"
-                  : "bg-slate-100 text-slate-400 cursor-not-allowed"
-              }`}
-            >
-              {isTerminal ? "Run another scan" : "Scan in progress…"}
-            </button>
+                }`}
+              >
+                Run another test
+              </button>
+            ) : (
+              <>
+                <button
+                  disabled
+                  className="px-6 py-2.5 rounded-xl font-semibold bg-slate-100 text-slate-400 cursor-not-allowed shadow-sm"
+                >
+                  Test in progress…
+                </button>
+                <button
+                  onClick={onCancel}
+                  disabled={isCancelling}
+                  className={`px-6 py-2.5 rounded-xl font-semibold transition-all active:scale-95 border ${
+                    isCancelling
+                      ? "border-slate-200 text-slate-400 cursor-not-allowed"
+                      : "border-red-200 text-red-600 hover:bg-red-50"
+                  }`}
+                >
+                  {isCancelling ? "Cancelling…" : "Cancel run"}
+                </button>
+                {cancelError && (
+                  <span className="text-sm text-red-600">{cancelError}</span>
+                )}
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -267,6 +300,8 @@ const APITesting = () => {
   // delta once the reconciler applies it. Snapshotted rather than derived: the
   // page never computes what a run costs, it only reports what actually moved.
   const [balanceAtStart, setBalanceAtStart] = useState(null);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState(null);
   const timers = useRef([]);
 
   const isManaged = account?.planType === "managed";
@@ -274,7 +309,10 @@ const APITesting = () => {
   const reserved = account?.reserved ?? 0;
   const unlimited = account?.unlimited === true;
 
-  const isTerminal = run?.status === "completed" || run?.status === "failed";
+  const isTerminal =
+    run?.status === "completed" ||
+    run?.status === "failed" ||
+    run?.status === "cancelled";
   const charged =
     balanceAtStart != null && isTerminal && balanceAtStart > balance
       ? balanceAtStart - balance
@@ -362,7 +400,7 @@ const APITesting = () => {
         if (preflight?.code === "INSUFFICIENT_CREDITS") {
           setCreditError(
             preflight.message ||
-              "You don't have enough credits to start an API security scan."
+              "You don't have enough credits to start an API test."
           );
           return;
         }
@@ -403,19 +441,46 @@ const APITesting = () => {
     }
   };
 
+  const handleCancel = async () => {
+    const runId = response?.run_id;
+    if (!runId || isCancelling) return;
+
+    setIsCancelling(true);
+    setCancelError(null);
+    try {
+      const res = await fetch(`${API}/api/runs/${runId}/cancel`, {
+        method: "POST",
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.detail || "Could not cancel the run.");
+      }
+
+      // Reflect the cancellation immediately rather than waiting for the
+      // next poll tick — the backend has already stopped the run.
+      setRun((prev) => ({ ...(prev || {}), status: "cancelled" }));
+    } catch (err) {
+      setCancelError(err.message);
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
   // Helper to reset the form state
   const resetForm = () => {
     clearTimers();
     setResponse(null);
     setError(null);
     setCreditError(null);
+    setCancelError(null);
     setRun(null);
     setBalanceAtStart(null);
   };
 
   return (
     <SubscriptionGuard
-      featureName="an API security scan"
+      featureName="an API test"
       requiredCredits={MIN_RUN_CREDITS}
     >
       <div className="max-w-5xl mx-auto space-y-8 pb-12 pt-6 px-4">
@@ -424,7 +489,7 @@ const APITesting = () => {
           <div className="z-10 max-w-xl">
             <div className="inline-flex items-center gap-2 bg-orange-100 text-orange-600 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-6">
               <ShieldCheck size={14} />
-              <span>AI Security Tester</span>
+              <span>AI API Tester</span>
             </div>
 
             <h1 className="text-4xl font-black text-slate-900 mb-4 tracking-tight">
@@ -432,7 +497,7 @@ const APITesting = () => {
             </h1>
             <p className="text-slate-500 text-lg leading-relaxed mb-0">
               Configure your target environment below to initiate an automated,
-              AI-driven security analysis of your API endpoints.
+              AI-driven test of your API endpoints.
             </p>
           </div>
 
@@ -503,7 +568,7 @@ const APITesting = () => {
           /* LOADING STATE */
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-16 flex flex-col items-center justify-center animate-in fade-in">
             <Loader2 className="w-16 h-16 text-orange-500 animate-spin mb-6" />
-            <h3 className="text-2xl font-bold text-slate-800 mb-2">Initializing Security Scan...</h3>
+            <h3 className="text-2xl font-bold text-slate-800 mb-2">Initializing API Test...</h3>
             <p className="text-slate-500 text-center max-w-md">
               Please wait while our AI Guardian safely connects to your endpoints and prepares the analysis.
             </p>
@@ -517,6 +582,9 @@ const APITesting = () => {
             charged={charged}
             isTerminal={isTerminal}
             onReset={resetForm}
+            onCancel={handleCancel}
+            isCancelling={isCancelling}
+            cancelError={cancelError}
           />
         ) : creditError ? (
           /* OUT OF CREDITS STATE — a wall the user can act on, not an error */
@@ -733,7 +801,7 @@ const APITesting = () => {
                   className="flex items-center gap-2 px-8 py-3 rounded-xl font-bold text-white transition-all shadow-sm bg-orange-500 hover:bg-orange-600 active:scale-95"
                 >
                   <Send className="w-5 h-5" />
-                  Start Security Scan
+                  Start API Test
                 </button>
               </div>
             </form>

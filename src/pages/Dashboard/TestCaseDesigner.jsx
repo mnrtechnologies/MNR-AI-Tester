@@ -406,7 +406,8 @@ export default function TestCaseDesigner() {
             </h2>
           </div>
           <p className="text-sm text-slate-500 mb-5 ml-8">
-            PDF, Word, text or Markdown, up to 10&nbsp;MB. No website needed —
+            PDF, Word, text or Markdown, up to 50&nbsp;MB. Diagrams, mockups and
+            screenshots inside the document are read too. No website needed —
             this runs entirely from the document.
           </p>
 
@@ -469,6 +470,9 @@ export default function TestCaseDesigner() {
                     {doc.chars?.toLocaleString()} characters read
                     {doc.features_preview?.length
                       ? ` · ${doc.features_preview.length} sections detected`
+                      : ""}
+                    {doc.images_found
+                      ? ` · ${doc.images_found} diagram${doc.images_found === 1 ? "" : "s"}/screenshot${doc.images_found === 1 ? "" : "s"} will be analysed too`
                       : ""}
                   </p>
                   {doc.features_preview?.length > 0 && (
