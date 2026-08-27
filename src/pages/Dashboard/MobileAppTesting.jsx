@@ -44,8 +44,10 @@ const getAuthHeader = () => {
 export default function MobileTestingDashboard() {
   const [activeTab, setActiveTab] = useState("logs");
   const [formData, setFormData] = useState({
+    name: "",
     email: "",
     password: "",
+    otp: "",
     apiKey: "",
     maxActions: 200,
   });
@@ -333,10 +335,18 @@ export default function MobileTestingDashboard() {
         maxActions: formData.maxActions,
         apiKey: formData.apiKey.trim(),
       };
-      if (formData.email || formData.password) {
+      if (
+        formData.email ||
+        formData.password ||
+        formData.otp ||
+        formData.name
+      ) {
         sessionBody.credentials = {
-          username: formData.email,
+          email: formData.email,
+          username: formData.email, // fallback for apps whose field guesses as "username" instead of "email"
           password: formData.password,
+          otp: formData.otp,
+          name: formData.name,
         };
       }
 
@@ -424,13 +434,20 @@ export default function MobileTestingDashboard() {
         maxActions: formData.maxActions,
         apiKey: formData.apiKey.trim(),
       };
-      if (formData.email || formData.password) {
+      if (
+        formData.email ||
+        formData.password ||
+        formData.otp ||
+        formData.name
+      ) {
         sessionBody.credentials = {
-          username: formData.email,
+          email: formData.email,
+          username: formData.email, // fallback for apps whose field guesses as "username" instead of "email"
           password: formData.password,
+          otp: formData.otp,
+          name: formData.name,
         };
       }
-
       const sessionRes = await fetch(`${API_URL}/sessions`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
@@ -911,6 +928,43 @@ export default function MobileTestingDashboard() {
                   <span>50</span>
                   <span>500</span>
                 </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block mb-1.5">
+                  Full Name{" "}
+                  <span className="text-slate-400 normal-case font-normal">
+                    (optional)
+                  </span>
+                </label>
+                <input
+                  type="text"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleInputChange}
+                  disabled={isSessionActive}
+                  placeholder="Test User"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block mb-1.5">
+                  OTP (fixed test code){" "}
+                  <span className="text-slate-400 normal-case font-normal">
+                    (optional)
+                  </span>
+                </label>
+                <input
+                  type="text"
+                  name="otp"
+                  value={formData.otp}
+                  onChange={handleInputChange}
+                  disabled={isSessionActive}
+                  placeholder="123456"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                />
               </div>
             </div>
 
