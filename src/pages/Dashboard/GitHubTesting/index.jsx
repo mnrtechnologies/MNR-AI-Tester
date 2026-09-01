@@ -10,6 +10,7 @@ import Sidebar from './components/Sidebar';
 import RepoOverview from './components/RepoOverview';
 import RepoPicker from './components/RepoPicker';
 import PathSelector from './components/PathSelector';
+import UploadCode from './components/UploadCode';
 import RunDetail from './components/RunDetail';
 
 // Keeps sidebar status current while a run is in flight, so navigation and
@@ -33,7 +34,7 @@ export default function GitHubTesting() {
   const [status, setStatus] = useState(null);
   const [loadingStatus, setLoadingStatus] = useState(true);
 
-  const [pane, setPane] = useState(PANE.CONNECT);
+  const [pane, setPane] = useState(PANE.NEW);
   const [repos, setRepos] = useState([]);
   const [runs, setRuns] = useState([]);
   const [activeRepo, setActiveRepo] = useState(null);   // full repo doc
@@ -52,7 +53,10 @@ export default function GitHubTesting() {
     try {
       const s = await apiFetch('/github/status');
       setStatus(s);
-      setPane((p) => (s.connected ? (p === PANE.CONNECT ? PANE.NEW : p) : PANE.CONNECT));
+      // Not being connected to GitHub is no longer a dead end — code can be
+      // uploaded from the user's machine instead — so the shell stays
+      // available either way and CONNECT is only ever a starting point.
+      setPane((p) => (p === PANE.CONNECT ? PANE.NEW : p));
     } catch {
       setStatus({ connected: false });
     } finally {
@@ -124,6 +128,25 @@ export default function GitHubTesting() {
   const configureExistingRepo = async (repo) => {
     setReindexing(true);
     try {
+      // An uploaded project has no branch to re-resolve and nothing to
+      // re-clone — the stored archive IS the code. Re-indexing it would mean
+      // asking the user to upload the same file again, so the saved tree is
+      // read back instead.
+      if (repo.source === 'upload') {
+        const tree = await apiFetch(`/repos/${repo.repoId}/tree`);
+        setIndexedRepo({
+          repoId: repo.repoId,
+          fullName: repo.fullName,
+          branch: 'upload',
+          source: 'upload',
+          tree: tree.tree,
+          detectedStack: tree.detectedStack,
+          commitSha: tree.lastIndexedCommit,
+        });
+        setPane(PANE.CONFIGURE);
+        return;
+      }
+
       const result = await apiFetch('/repos/index', {
         method: 'POST',
         body: JSON.stringify({
@@ -148,6 +171,19 @@ export default function GitHubTesting() {
     }
   };
 
+  const deleteUploadedRepo = async (repo) => {
+    if (!window.confirm(`Delete "${repo.fullName}"? The uploaded code is removed from the server and its runs can no longer be re-run.`)) return;
+    try {
+      await apiFetch(`/repos/${repo.repoId}`, { method: 'DELETE' });
+      toast.success('Project removed.');
+      setActiveRepo(null);
+      setPane(PANE.NEW);
+      refreshRepos();
+    } catch (err) {
+      toast.error(err.message || 'Could not remove that project.');
+    }
+  };
+
   const handleRunStarted = (runId) => {
     setActiveRunId(runId);
     setPane(PANE.RUN);
@@ -157,7 +193,10 @@ export default function GitHubTesting() {
   const handleDisconnected = () => {
     // Drop everything tied to the old account so a reconnect starts clean.
     setStatus({ connected: false });
-    setRepos([]);
+    // Uploaded projects belong to the user, not to the GitHub account, so
+    // they survive a disconnect. Re-reading the list keeps them and drops
+    // only what came from GitHub.
+    refreshRepos();
     setRuns([]);
     setActiveRepo(null);
     setActiveRunId(null);
@@ -188,13 +227,7 @@ export default function GitHubTesting() {
         </div>
       </header>
 
-      {!connected ? (
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-lg mx-auto mt-8">
-            <ConnectGitHub status={status} loadingStatus={loadingStatus} onStatusChange={refreshStatus} />
-          </div>
-        </div>
-      ) : (
+      {(
         <div className="flex-1 flex min-h-0">
           <Sidebar
             repos={repos}
@@ -208,12 +241,34 @@ export default function GitHubTesting() {
 
           <main className="flex-1 overflow-y-auto min-w-0">
             {pane === PANE.NEW && (
-              <div className="p-6 max-w-3xl">
-                <h2 className="text-base font-semibold text-gray-800 mb-1">Start a new run</h2>
-                <p className="text-xs text-gray-400 mb-4">
-                  Pick a repository and branch. It is read once so you can choose which files to test.
-                </p>
-                <RepoPicker onIndexed={handleIndexed} />
+              <div className="p-6 max-w-3xl space-y-5">
+                <div>
+                  <h2 className="text-base font-semibold text-gray-800 mb-1">Start a new run</h2>
+                  <p className="text-xs text-gray-400">
+                    Bring your code from GitHub or straight from your computer — everything after
+                    this point is the same either way.
+                  </p>
+                </div>
+
+                {/* Upload first: it is the path that needs no account and no
+                    setup, so it should not be buried under a connect flow. */}
+                <UploadCode onIndexed={handleIndexed} />
+
+                <div className="flex items-center gap-3">
+                  <div className="h-px bg-gray-200 flex-1" />
+                  <span className="text-[11px] uppercase tracking-wide text-gray-400">or</span>
+                  <div className="h-px bg-gray-200 flex-1" />
+                </div>
+
+                {connected ? (
+                  <RepoPicker onIndexed={handleIndexed} />
+                ) : (
+                  <ConnectGitHub
+                    status={status}
+                    loadingStatus={loadingStatus}
+                    onStatusChange={refreshStatus}
+                  />
+                )}
               </div>
             )}
 
@@ -224,6 +279,7 @@ export default function GitHubTesting() {
                 reindexing={reindexing}
                 onStartRun={() => configureExistingRepo(activeRepo)}
                 onReindex={() => configureExistingRepo(activeRepo)}
+                onDelete={() => deleteUploadedRepo(activeRepo)}
                 onSelectRun={openRun}
               />
             )}

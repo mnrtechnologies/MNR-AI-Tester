@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   Play, GitBranch, GitCommit, Bug, CheckCircle2, Wrench,
-  AlertOctagon, Clock, RefreshCw, Loader2,
+  AlertOctagon, Clock, RefreshCw, Loader2, Upload, Trash2,
 } from 'lucide-react';
 import { fmtRelative, fmtDuration } from '../api';
 
@@ -21,7 +21,7 @@ function Stat({ label, value, tone = 'text-gray-800', hint }) {
  * and re-indexed it every time, and nothing showed what it currently looks
  * like. Making it a place you can return to is the point of the sidebar.
  */
-export default function RepoOverview({ repo, runs, onStartRun, onSelectRun, onReindex, reindexing }) {
+export default function RepoOverview({ repo, runs, onStartRun, onSelectRun, onReindex, reindexing, onDelete }) {
   const latest = runs[0];
   const lastCompleted = runs.find((r) => r.status === 'completed');
   const s = lastCompleted?.summary || {};
@@ -33,13 +33,24 @@ export default function RepoOverview({ repo, runs, onStartRun, onSelectRun, onRe
         <div className="min-w-0">
           <h2 className="text-lg font-bold text-gray-800 truncate">{repo.fullName}</h2>
           <p className="text-xs text-gray-400 mt-1 flex items-center gap-3 flex-wrap">
-            <span className="inline-flex items-center gap-1">
-              <GitBranch size={11} /> {repo.lastIndexedBranch || repo.defaultBranch}
-            </span>
-            {repo.lastIndexedCommit && (
-              <span className="inline-flex items-center gap-1 font-mono">
-                <GitCommit size={11} /> {repo.lastIndexedCommit.slice(0, 7)}
+            {/* An upload has no branch and no commit — showing "upload" beside
+                a branch icon, or 7 chars of an archive hash dressed up as a
+                commit, would be inventing git metadata that does not exist. */}
+            {repo.source === 'upload' ? (
+              <span className="inline-flex items-center gap-1">
+                <Upload size={11} /> uploaded from your computer
               </span>
+            ) : (
+              <>
+                <span className="inline-flex items-center gap-1">
+                  <GitBranch size={11} /> {repo.lastIndexedBranch || repo.defaultBranch}
+                </span>
+                {repo.lastIndexedCommit && (
+                  <span className="inline-flex items-center gap-1 font-mono">
+                    <GitCommit size={11} /> {repo.lastIndexedCommit.slice(0, 7)}
+                  </span>
+                )}
+              </>
             )}
             {repo.indexedAt && (
               <span className="inline-flex items-center gap-1">
@@ -50,15 +61,31 @@ export default function RepoOverview({ repo, runs, onStartRun, onSelectRun, onRe
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={onReindex}
-            disabled={reindexing}
-            title="Re-read the repository at its latest commit"
-            className="flex items-center gap-1.5 text-sm text-gray-600 border rounded-lg px-3 py-1.5 hover:bg-gray-50 disabled:opacity-60"
-          >
-            {reindexing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-            Re-index
-          </button>
+          {/* Re-index means "fetch the latest commit", which an upload has no
+              notion of — its code only changes by uploading again. */}
+          {repo.source !== 'upload' && (
+            <button
+              onClick={onReindex}
+              disabled={reindexing}
+              title="Re-read the repository at its latest commit"
+              className="flex items-center gap-1.5 text-sm text-gray-600 border rounded-lg px-3 py-1.5 hover:bg-gray-50 disabled:opacity-60"
+            >
+              {reindexing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              Re-index
+            </button>
+          )}
+          {/* Only for uploads: it deletes the stored archive, which is the
+              only copy we hold. A GitHub repo can always be re-indexed from
+              source, so removing it needs no such affordance here. */}
+          {repo.source === 'upload' && onDelete && (
+            <button
+              onClick={onDelete}
+              title="Delete this uploaded project and its stored archive"
+              className="flex items-center gap-1.5 text-sm text-gray-500 border rounded-lg px-3 py-1.5 hover:bg-red-50 hover:text-red-600 hover:border-red-200"
+            >
+              <Trash2 size={14} /> Remove
+            </button>
+          )}
           <button
             onClick={onStartRun}
             className="flex items-center gap-1.5 bg-gray-900 text-white text-sm font-medium px-4 py-1.5 rounded-lg hover:bg-gray-800"

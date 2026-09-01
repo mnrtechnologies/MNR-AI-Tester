@@ -25,3 +25,5 @@ yarn-error.log*
 
 
 C:\Users\OrCon\Projects\MNR-AI-Tester\backend\.env
+# local run logs
+*.log
