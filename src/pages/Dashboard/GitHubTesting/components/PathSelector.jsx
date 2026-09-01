@@ -149,7 +149,10 @@ export default function PathSelector({ repo, onRunStarted, onKeyChange }) {
         method: 'POST',
         body: JSON.stringify({
           repoId: repo.repoId,
-          branch: repo.branch,
+          // Never send undefined: the field is required server-side, and a
+          // missing one produces a validation error rather than a useful
+          // message. Uploads have no real branch, hence the literal.
+          branch: repo.branch || (repo.source === 'upload' ? 'upload' : repo.defaultBranch),
           paths: [...selected],
           provider,
           apiKey: apiKey.trim(),
@@ -173,7 +176,9 @@ export default function PathSelector({ repo, onRunStarted, onKeyChange }) {
       <div className="lg:col-span-2 bg-white border rounded-xl">
         <div className="px-4 py-3 border-b">
           <h3 className="font-semibold text-gray-800">Select the code to test</h3>
-          <p className="text-xs text-gray-400">{repo.fullName} @ {repo.branch}</p>
+          <p className="text-xs text-gray-400">
+            {repo.fullName}{repo.source === 'upload' ? ' · uploaded' : ` @ ${repo.branch}`}
+          </p>
         </div>
         <div className="p-2 max-h-[480px] overflow-y-auto">
           <TreeNode node={repo.tree} depth={0} selected={selected} onToggle={handleToggle} />
