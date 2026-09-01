@@ -1,6 +1,7 @@
 const CreditReservation = require("../models/CreditReservation");
 const dbTestBilling = require("../services/dbTestBilling");
 const perfTestBilling = require("../services/perfTestBilling");
+const codeTestBilling = require("../services/codeTestBilling");
 const Subscription = require("../models/Subscription");
 const credits = require("../services/creditService");
 const usageBilling = require("../services/usageBilling");
@@ -50,6 +51,8 @@ let apiBillingTimer = null;
 let mobileBillingTimer = null;
 let dbBillingTimer = null;
 let specBillingTimer = null;
+let codeBillingTimer = null;
+let codeMeterTimer = null;
 let perfBillingTimer = null;
 let perfMeterTimer = null;
 let running = false;
@@ -60,6 +63,8 @@ let billingDbRuns = false;
 let billingSpecRuns = false;
 let billingPerfRuns = false;
 let meteringPerfRuns = false;
+let billingCodeRuns = false;
+let meteringCodeRuns = false;
 
 async function sweepExpiredReservations() {
   if (running) return; // never overlap sweeps
@@ -233,6 +238,46 @@ async function meterPerfTestRuns() {
   }
 }
 
+/**
+ * GitHub Code Testing settlement.
+ *
+ * Unlike every other capacity meter this one bills BOTH plan families -- code
+ * testing always runs on the customer's own provider key, so there is no token
+ * cost of ours for a Managed plan to pass through instead. See
+ * services/codeTestBilling.js.
+ */
+async function billCodeTestRuns() {
+  if (billingCodeRuns) return;
+  billingCodeRuns = true;
+  try {
+    await codeTestBilling.releaseStaleClaims();
+    const result = await codeTestBilling.billFinishedRuns({ log: true });
+    if (result.errors.length) {
+      console.warn(`⚠️ Code-test billing pass had ${result.errors.length} error(s)`);
+    }
+  } catch (err) {
+    console.error("⚠️ Code-test billing pass failed:", err.message);
+  } finally {
+    billingCodeRuns = false;
+  }
+}
+
+/** Charges a code-testing run as it proceeds, so the balance moves mid-run. */
+async function meterCodeTestRuns() {
+  if (meteringCodeRuns) return;
+  meteringCodeRuns = true;
+  try {
+    const result = await codeTestBilling.meterRunningRuns({ log: true });
+    if (result.errors.length) {
+      console.warn(`⚠️ Code-test metering pass had ${result.errors.length} error(s)`);
+    }
+  } catch (err) {
+    console.error("⚠️ Code-test metering pass failed:", err.message);
+  } finally {
+    meteringCodeRuns = false;
+  }
+}
+
 async function verifyReservedInvariant() {
   try {
     const grouped = await CreditReservation.aggregate([
@@ -301,6 +346,8 @@ function start() {
   specBillingTimer = setInterval(billSpecTestRuns, BILLING_INTERVAL_MS);
   perfBillingTimer = setInterval(billPerfTestRuns, BILLING_INTERVAL_MS);
   perfMeterTimer = setInterval(meterPerfTestRuns, PERF_METER_INTERVAL_MS);
+  codeBillingTimer = setInterval(billCodeTestRuns, BILLING_INTERVAL_MS);
+  codeMeterTimer = setInterval(meterCodeTestRuns, PERF_METER_INTERVAL_MS);
   invariantTimer = setInterval(verifyReservedInvariant, INVARIANT_INTERVAL_MS);
   if (sweepTimer.unref) sweepTimer.unref();
   if (billingTimer.unref) billingTimer.unref();
@@ -310,6 +357,8 @@ function start() {
   if (specBillingTimer.unref) specBillingTimer.unref();
   if (perfBillingTimer.unref) perfBillingTimer.unref();
   if (perfMeterTimer.unref) perfMeterTimer.unref();
+  if (codeBillingTimer.unref) codeBillingTimer.unref();
+  if (codeMeterTimer.unref) codeMeterTimer.unref();
   if (invariantTimer.unref) invariantTimer.unref();
   console.log(
     `♻️  credit reconciler started (settle ${SWEEP_INTERVAL_MS / 1000}s, ` +
@@ -317,7 +366,9 @@ function start() {
       `mobile ${BILLING_INTERVAL_MS / 1000}s, db-tests ${BILLING_INTERVAL_MS / 1000}s, ` +
       `spec-tests ${BILLING_INTERVAL_MS / 1000}s, ` +
       `perf-tests ${BILLING_INTERVAL_MS / 1000}s, ` +
-      `perf-live-meter ${PERF_METER_INTERVAL_MS / 1000}s)`,
+      `perf-live-meter ${PERF_METER_INTERVAL_MS / 1000}s, ` +
+      `code-tests ${BILLING_INTERVAL_MS / 1000}s, ` +
+      `code-live-meter ${PERF_METER_INTERVAL_MS / 1000}s)`,
   );
 }
 
@@ -330,6 +381,8 @@ function stop() {
   if (specBillingTimer) clearInterval(specBillingTimer);
   if (perfBillingTimer) clearInterval(perfBillingTimer);
   if (perfMeterTimer) clearInterval(perfMeterTimer);
+  if (codeBillingTimer) clearInterval(codeBillingTimer);
+  if (codeMeterTimer) clearInterval(codeMeterTimer);
   if (invariantTimer) clearInterval(invariantTimer);
   sweepTimer = null;
   billingTimer = null;
@@ -337,6 +390,8 @@ function stop() {
   mobileBillingTimer = null;
   dbBillingTimer = null;
   specBillingTimer = null;
+  codeBillingTimer = null;
+  codeMeterTimer = null;
   invariantTimer = null;
 }
 

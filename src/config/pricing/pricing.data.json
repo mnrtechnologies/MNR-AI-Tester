@@ -284,5 +284,15 @@
     "VU_SECONDS_PER_ENGINE_SECOND": 10,
     "MAX_BILLABLE_SECONDS_PER_RUN": 86400,
     "OVERSIZED_CREDITS": 100
+  },
+  "codeTestFormula": {
+    "_comment": "The capacity meter for GITHUB CODE TESTING runs (code_runs), the analogue of formula (web), apiTestFormula (API scans) and perfTestFormula. Unlike those, this one applies to BOTH plan families: code testing always runs on the CUSTOMER'S OWN provider key regardless of plan, so we never pay for its tokens and the usage meter would have nothing to pass through. Charging capacity here is the platform rule (meters.byok = capacity) applied correctly, not an exception to it.",
+    "_calibration": "MODELLED from 17 completed runs on 2026-08-31, NOT measured against server cost - review before relying on it commercially. It is deliberately NOT billed on wall-clock, for two measured reasons. First, wall-clock is contaminated by our own defects: one 22-file run took 8709s (145 min) purely to a timeout-retry storm, versus ~1400s for a comparable 31-file run - billing that would charge a customer for our bug. Second, correlation of wall-clock against work units is weak (r=0.58 for files, 0.58 for tests, 0.15 for tests executed; tokens correlate best at r=0.79 but the platform rule forbids billing BYOK per token). A linear fit gave seconds = 216 + 61.6*files with errors from -48% to +103%, which is not good enough to charge on. The per-unit numbers below are therefore modelled from the CLEAN portion of that fit, split across the two LLM-calling stages, and are intended to be replaced once facts.freshFilesAnalysed has been collected across enough runs - that field did not exist when this data was gathered, so historical runs cannot distinguish a 31-file run that did all 31 from one that reused 29 from cache. SECONDS_PER_CREDIT stays 236, derived from internal.creditsPerServerMonth (2592000s over 11000 credits): it describes OUR cost basis and must not diverge per product. Re-calibrate after the analysis and generation stages are made concurrent, since both are currently sequential and that is what dominates the per-file figures.",
+    "BASE_SECONDS_PER_RUN": 216,
+    "SECONDS_PER_FILE_ANALYSED": 35,
+    "SECONDS_PER_TEST_GENERATED": 30,
+    "SECONDS_PER_CREDIT": 236,
+    "MAX_BILLABLE_SECONDS_PER_RUN": 86400,
+    "OVERSIZED_CREDITS": 100
   }
 }

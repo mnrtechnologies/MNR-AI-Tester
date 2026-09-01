@@ -12,7 +12,8 @@ import {
   Menu,
   History,
   FileText,
-  Gauge
+  Gauge,
+  Github
 } from "lucide-react";
 import { useSelector } from "react-redux";
 
@@ -30,6 +31,7 @@ const Sidebar = () => {
     { name: "API Testing", icon: <Globe size={20} />, path: "/api-testing" },
     { name: "DB Testing", icon: <Database size={20} />, path: "/db-testing" },
     { name: "Performance Testing", icon: <Gauge size={20} />, path: "/performance-testing" },
+    { name: "GitHub Code Testing", icon: <Github size={20} />, path: "/github-testing" },
   ];
 
   if (user?.role === "company_admin") {
