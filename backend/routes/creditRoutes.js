@@ -13,6 +13,7 @@ const {
   authorizeRun,
   getSpecEstimate,
   authorizeSpecRun,
+  authorizeVaptRun,
   settleRun,
   releaseRun,
   grantCredits,
@@ -65,6 +66,10 @@ router.post("/authorize-run", auth, authorizeRun);
 // is one model call each, so a real price can be quoted before the spend.
 router.get("/spec-estimate", auth, getSpecEstimate);
 router.post("/authorize-spec-run", auth, authorizeSpecRun);
+
+// Security testing (VAPT). Flat hold up front; the reconciler settles the real
+// cost from measured scan duration (vaptBilling).
+router.post("/authorize-vapt-run", auth, authorizeVaptRun);
 
 // Idempotent. The reconciler is the authoritative settler; this is the fast path.
 router.post("/settle", auth, settleRun);

@@ -8,6 +8,8 @@ const cm = require("../../src/config/pricing/creditMath");
 const { buildReservationLines } = require("../../src/config/pricing/settlementRules");
 const SpecTestRun = require("../models/SpecTestRun");
 const stm = require("../services/specTestMath");
+const VaptRun = require("../models/VaptRun");
+const vtm = require("../services/vaptTestMath");
 
 /* ------------------------------------------------------------------ *
  * Helpers
@@ -884,6 +886,153 @@ exports.authorizeSpecRun = async (req, res) => {
     });
   } catch (error) {
     console.error("Authorize Spec Run Error:", error);
+    return res.status(500).json({ success: false, message: "Server Error" });
+  }
+};
+
+/**
+ * POST /api/credits/authorize-vapt-run  { runId, targetUrl }
+ *
+ * The gate for a security scan. A scan has no cheap pre-phase to price from, so
+ * this holds a FLAT estimate and stamps the run authorized; the reconciler
+ * replaces the hold with the real charge from measured duration (vaptBilling).
+ *   200 authorized (or already authorized)
+ *   402 insufficient credits
+ *
+ * Upserts the vapt_run doc so the gate can run before the engine's own
+ * start_run — the engine's $setOnInsert then preserves `authorized`.
+ */
+exports.authorizeVaptRun = async (req, res) => {
+  try {
+    const { runId, targetUrl } = req.body;
+    if (!runId) {
+      return res.status(400).json({ success: false, message: "runId is required" });
+    }
+
+    const ctx = await resolveBillingContext(req);
+    if (ctx.error) return fail(res, ctx.error);
+
+    const { subscription, user } = ctx;
+    const idempotencyKey = `${runId}:vapt`;
+
+    const existing = await CreditReservation.findOne({ idempotencyKey }).lean();
+    if (existing) {
+      return res.status(200).json({
+        success: true,
+        message: "This run is already authorized.",
+        data: {
+          alreadyAuthorized: true,
+          authorizationId: existing._id,
+          runId,
+          creditsHeld: existing.credits,
+          expiresAt: existing.expiresAt,
+        },
+      });
+    }
+
+    // The engine may not have created the run yet — create it here and claim
+    // ownership. If it exists for someone else, refuse.
+    const existingRun = await VaptRun.findOne({ run_id: runId }).lean();
+    if (existingRun && String(existingRun.user_id) !== String(req.user.id)) {
+      return res.status(403).json({ success: false, message: "This run belongs to another user." });
+    }
+    await VaptRun.updateOne(
+      { run_id: runId },
+      {
+        $setOnInsert: {
+          run_id: runId,
+          user_id: String(req.user.id),
+          source: "security_testing",
+          target_url: targetUrl || null,
+          status: "queued",
+          created_at: new Date().toISOString(),
+        },
+      },
+      { upsert: true },
+    );
+
+    const estimate = vtm.estimateVaptRun();
+    const amount = estimate.credits;
+    const snapshot = credits.getAccountSnapshot(subscription);
+
+    if (!credits.ENFORCED) {
+      await VaptRun.updateOne(
+        { run_id: runId },
+        { $set: { authorized: true, authorized_credits: 0, authorized_at: new Date() } },
+      );
+      return res.status(200).json({
+        success: true,
+        message: "Enforcement disabled - no credits held.",
+        data: { enforced: false, creditsHeld: 0, wouldHold: amount, runId },
+      });
+    }
+
+    if (snapshot.balance < amount && !snapshot.unlimited && !snapshot.overageEnabled) {
+      return insufficient(res, { required: amount, available: snapshot.balance, subscription, snapshot });
+    }
+
+    let reservation;
+    try {
+      reservation = await CreditReservation.create({
+        companyId: subscription.companyId,
+        subscriptionId: subscription._id,
+        userId: user._id,
+        parentSession: runId,
+        scope: "vapt",
+        idempotencyKey,
+        credits: amount,
+        lines: [],
+        status: "held",
+        expiresAt: new Date(Date.now() + cm.reservationTtlMinutes(amount * 3) * 60 * 1000),
+        note: `Security testing scan for ${targetUrl || "a target"}`,
+      });
+    } catch (err) {
+      if (err && err.code === 11000) {
+        const winner = await CreditReservation.findOne({ idempotencyKey }).lean();
+        return res.status(200).json({
+          success: true,
+          message: "This run is already authorized.",
+          data: { alreadyAuthorized: true, authorizationId: winner?._id, runId, creditsHeld: winner?.credits },
+        });
+      }
+      throw err;
+    }
+
+    const held = await credits.holdCredits(subscription._id, amount, {
+      reservationId: reservation._id,
+      parentSession: runId,
+      actorUserId: user._id,
+      actorRole: req.user.role,
+      note: "Security testing hold",
+    });
+
+    if (!held) {
+      await CreditReservation.deleteOne({ _id: reservation._id, status: "held" });
+      const fresh = await credits.getActiveSubscription(user.companyId);
+      return insufficient(res, { required: amount, available: fresh ? fresh.credits.balance : 0, subscription, snapshot });
+    }
+
+    // The engine reads this before running — it is unauthenticated, so the
+    // decision reaches it through the shared DB, not the browser request.
+    await VaptRun.updateOne(
+      { run_id: runId },
+      {
+        $set: {
+          authorized: true,
+          authorized_credits: amount,
+          authorized_at: new Date(),
+          authorization_id: reservation._id,
+        },
+      },
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: `Held ${amount} credit${amount === 1 ? "" : "s"} for this scan. Unused credits are returned automatically.`,
+      data: { authorizationId: reservation._id, runId, creditsHeld: amount, estimate, expiresAt: reservation.expiresAt },
+    });
+  } catch (error) {
+    console.error("Authorize VAPT Run Error:", error);
     return res.status(500).json({ success: false, message: "Server Error" });
   }
 };

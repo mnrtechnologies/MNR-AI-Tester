@@ -8,6 +8,7 @@ const usageBilling = require("../services/usageBilling");
 const apiTestRunBilling = require("../services/apiTestRunBilling");
 const mobileCreditBilling = require("../services/mobileCreditBilling");
 const specTestBilling = require("../services/specTestBilling");
+const vaptBilling = require("../services/vaptBilling");
 /**
  * creditReconciler — the authoritative settler.
  *
@@ -51,6 +52,7 @@ let apiBillingTimer = null;
 let mobileBillingTimer = null;
 let dbBillingTimer = null;
 let specBillingTimer = null;
+let vaptBillingTimer = null;
 let codeBillingTimer = null;
 let codeMeterTimer = null;
 let perfBillingTimer = null;
@@ -61,6 +63,7 @@ let billingApiRuns = false;
 let billingMobileRuns = false;
 let billingDbRuns = false;
 let billingSpecRuns = false;
+let billingVaptRuns = false;
 let billingPerfRuns = false;
 let meteringPerfRuns = false;
 let billingCodeRuns = false;
@@ -207,6 +210,22 @@ async function billSpecTestRuns() {
   }
 }
 
+async function billVaptTestRuns() {
+  if (billingVaptRuns) return;
+  billingVaptRuns = true;
+  try {
+    await vaptBilling.releaseStaleClaims();
+    const result = await vaptBilling.billFinishedRuns({ log: true });
+    if (result.errors.length) {
+      console.warn(`⚠️ VAPT billing had ${result.errors.length} failures`);
+    }
+  } catch (err) {
+    console.error("⚠️ VAPT billing pass failed:", err.message);
+  } finally {
+    billingVaptRuns = false;
+  }
+}
+
 async function billPerfTestRuns() {
   if (billingPerfRuns) return;
   billingPerfRuns = true;
@@ -344,6 +363,7 @@ function start() {
   mobileBillingTimer = setInterval(billMobileRuns, BILLING_INTERVAL_MS);
   dbBillingTimer = setInterval(billDbTestRuns, BILLING_INTERVAL_MS);
   specBillingTimer = setInterval(billSpecTestRuns, BILLING_INTERVAL_MS);
+  vaptBillingTimer = setInterval(billVaptTestRuns, BILLING_INTERVAL_MS);
   perfBillingTimer = setInterval(billPerfTestRuns, BILLING_INTERVAL_MS);
   perfMeterTimer = setInterval(meterPerfTestRuns, PERF_METER_INTERVAL_MS);
   codeBillingTimer = setInterval(billCodeTestRuns, BILLING_INTERVAL_MS);
@@ -355,6 +375,7 @@ function start() {
   if (mobileBillingTimer.unref) mobileBillingTimer.unref();
   if (dbBillingTimer.unref) dbBillingTimer.unref();
   if (specBillingTimer.unref) specBillingTimer.unref();
+  if (vaptBillingTimer && vaptBillingTimer.unref) vaptBillingTimer.unref();
   if (perfBillingTimer.unref) perfBillingTimer.unref();
   if (perfMeterTimer.unref) perfMeterTimer.unref();
   if (codeBillingTimer.unref) codeBillingTimer.unref();
@@ -379,6 +400,7 @@ function stop() {
   if (mobileBillingTimer) clearInterval(mobileBillingTimer);
   if (dbBillingTimer) clearInterval(dbBillingTimer);
   if (specBillingTimer) clearInterval(specBillingTimer);
+  if (vaptBillingTimer) clearInterval(vaptBillingTimer);
   if (perfBillingTimer) clearInterval(perfBillingTimer);
   if (perfMeterTimer) clearInterval(perfMeterTimer);
   if (codeBillingTimer) clearInterval(codeBillingTimer);
@@ -390,6 +412,7 @@ function stop() {
   mobileBillingTimer = null;
   dbBillingTimer = null;
   specBillingTimer = null;
+  vaptBillingTimer = null;
   codeBillingTimer = null;
   codeMeterTimer = null;
   invariantTimer = null;
