@@ -40,6 +40,7 @@ import UpgradePlan from "./components/Dashboard/UpgradePlan.jsx";
 import RegressionTesting from "./pages/Dashboard/RegressionTesting.jsx";
 import PerfTesting from "./pages/Dashboard/PerfTesting/index.jsx";
 import GitHubTesting from "./pages/Dashboard/GitHubTesting/index.jsx";
+import SecurityTesting from "./pages/Dashboard/SecurityTesting.jsx";
 
 // Layout for Dashboard pages ONLY
 const DashboardLayout = ({ children }) => (
@@ -393,6 +394,18 @@ function App() {
           <ProtectedRoute>
             <DashboardLayout>
               <APITesting />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* --- /security-testing Route --- */}
+      <Route
+        path="/security-testing"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <SecurityTesting />
             </DashboardLayout>
           </ProtectedRoute>
         }
