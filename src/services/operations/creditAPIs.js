@@ -17,6 +17,7 @@ const {
   AUTHORIZE_RUN_API,
   SPEC_ESTIMATE_API,
   AUTHORIZE_SPEC_RUN_API,
+  AUTHORIZE_VAPT_RUN_API,
   SETTLE_RUN_API,
   RELEASE_RUN_API,
   GRANT_CREDITS_API,
@@ -221,6 +222,27 @@ export const authorizeSpecRun = async (runId, { acknowledgedOversized = false } 
       "POST",
       AUTHORIZE_SPEC_RUN_API,
       { runId, acknowledgedOversized },
+      authHeader()
+    );
+    return { ok: true, data: response.data.data, message: response.data.message };
+  } catch (error) {
+    return toResult(error);
+  }
+};
+
+/**
+ * The gate for a security-testing (VAPT) scan. Holds a flat estimate and stamps
+ * the run authorized so the engine will run it; the reconciler settles the real
+ * cost from measured duration afterward.
+ *
+ * ok:true -> proceed to start the scan.  402 -> not enough credits.
+ */
+export const authorizeVaptRun = async (runId, targetUrl) => {
+  try {
+    const response = await apiConnector(
+      "POST",
+      AUTHORIZE_VAPT_RUN_API,
+      { runId, targetUrl },
       authHeader()
     );
     return { ok: true, data: response.data.data, message: response.data.message };

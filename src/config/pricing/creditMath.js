@@ -282,6 +282,34 @@ function isOversizedSpecRun(requirements) {
   return (Number(requirements) || 0) > SF.MAX_REQUIREMENTS_PER_RUN;
 }
 
+/* ------------------------------------------------------------------ *
+ * Security Testing (vapt_run)
+ *
+ * BYOK worker-seconds meter, same family as spec — the customer brings their
+ * own model key, so charging per token would double-bill. Unlike spec there is
+ * no cheap pre-phase to estimate from (the scan IS the work), so the gate holds
+ * a flat default and settlement charges the real measured duration. Reuses the
+ * spec seconds-per-credit rate so the two stay consistent.
+ * ------------------------------------------------------------------ */
+
+const VAPT_DEFAULT_HOLD_SECONDS = 180; // ~3-min typical scan, held up front
+
+/** ESTIMATE — flat hold quoted at the gate (a scan has no pre-run metric). */
+function estimateVaptRun() {
+  return {
+    credits: Math.max(1, Math.ceil(VAPT_DEFAULT_HOLD_SECONDS / SF.SECONDS_PER_CREDIT)),
+    basis: "flat_hold",
+    secondsPerCredit: SF.SECONDS_PER_CREDIT,
+  };
+}
+
+/** SETTLEMENT — what the scan actually cost, from measured worker occupancy. */
+function creditsForVaptDuration(durationMs) {
+  const seconds = Math.max(0, Number(durationMs) || 0) / 1000;
+  if (seconds === 0) return 0;
+  return Math.max(1, Math.ceil(seconds / SF.SECONDS_PER_CREDIT));
+}
+
 module.exports = {
   PRICING,
   CONSTANTS: F,
@@ -294,6 +322,9 @@ module.exports = {
   creditsForSpecRun,
   creditsForSpecDuration,
   isOversizedSpecRun,
+
+  estimateVaptRun,
+  creditsForVaptDuration,
   MAX_REQUIREMENTS_PER_RUN: SF.MAX_REQUIREMENTS_PER_RUN,
   SPEC_SECONDS_PER_CREDIT: SF.SECONDS_PER_CREDIT,
   isOversized,

@@ -3,7 +3,7 @@ import { useSelector } from "react-redux";
 import { Link } from "react-router-dom";
 import { ShieldCheck, Loader2, Download, AlertTriangle, Coins } from "lucide-react";
 import SubscriptionGuard from "../../components/UI/SubscriptionGuard";
-import { creditPreflight } from "../../services/operations/creditAPIs";
+import { creditPreflight, authorizeVaptRun } from "../../services/operations/creditAPIs";
 
 // The VAPT engine runs as its own FastAPI + Celery service (separate from
 // the Node auth backend), same as every other AI test engine — point this at
@@ -354,7 +354,32 @@ const SecurityTesting = () => {
         throw new Error(preflight?.message || "Could not verify your credit balance.");
       }
 
+      // run_id is the shared key across the VAPT engine, S3, and the Mongo
+      // `vapt_run` doc Express bills from — generate one per run.
+      const runId =
+        (typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `vapt-${Date.now()}`);
+
+      // ── Credit gate: hold credits + authorize the run ──────────
+      // The real gate (creditPreflight above is only a balance check). This
+      // holds a flat estimate and stamps the run authorized in Mongo; the
+      // reconciler settles the true cost from measured duration afterward.
+      const auth = await authorizeVaptRun(runId, form.target_url);
+      if (!auth.ok) {
+        if (auth.code === "INSUFFICIENT_CREDITS") {
+          setCreditError(
+            auth.message || "You don't have enough credits to start a security test."
+          );
+        } else {
+          setError(auth.message || "Could not authorize this run.");
+        }
+        return;
+      }
+
       const payload = {
+        run_id: runId,
+        user_id: user?._id || user?.id || "",
         target_url: form.target_url,
         authorized: form.authorized,
         provider: form.provider,

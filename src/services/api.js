@@ -86,6 +86,7 @@ export const creditEndpoints = {
   AUTHORIZE_RUN_API: BASE_URL + "/credits/authorize-run",
   SPEC_ESTIMATE_API: BASE_URL + "/credits/spec-estimate",
   AUTHORIZE_SPEC_RUN_API: BASE_URL + "/credits/authorize-spec-run",
+  AUTHORIZE_VAPT_RUN_API: BASE_URL + "/credits/authorize-vapt-run",
   SETTLE_RUN_API: BASE_URL + "/credits/settle",
   RELEASE_RUN_API: BASE_URL + "/credits/release",
 
