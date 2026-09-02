@@ -23,7 +23,7 @@ const TERMINAL = new Set(['completed', 'failed', 'cancelled']);
 // of these is reachable at any time from the sidebar, so you can open an old
 // run while another is still going.
 const PANE = {
-  CONNECT: 'connect',   // no GitHub account linked yet
+  CONNECT: 'connect',   // legacy alias for NEW; kept so old state cannot blank the page
   NEW: 'new',           // choosing / indexing a repository
   REPO: 'repo',         // a repository's overview + its runs
   CONFIGURE: 'configure', // picking files and starting a run
@@ -75,8 +75,12 @@ export default function GitHubTesting() {
   const refreshRuns = useCallback(async () => {
     try {
       const list = await apiFetch('/runs');
-      setRuns(list);
-      return list;
+      // Guarded because a non-array here crashes the whole page on the next
+      // render (runs.some(...)), which shows as a blank screen with no clue
+      // what went wrong — the same failure mode as the dead CONNECT pane.
+      const safe = Array.isArray(list) ? list : [];
+      setRuns(safe);
+      return safe;
     } catch {
       return null;
     }
@@ -202,7 +206,11 @@ export default function GitHubTesting() {
     setActiveRunId(null);
     setIndexedRepo(null);
     setSessionKey('');
-    setPane(PANE.CONNECT);
+    // NOT PANE.CONNECT. Disconnecting GitHub must not strand the user:
+    // uploading from their own machine is still fully available, and sending
+    // them to a connect-only pane made the page look broken and forced a
+    // reconnect just to upload a file.
+    setPane(PANE.NEW);
   };
 
   const connected = status?.connected;
@@ -240,7 +248,10 @@ export default function GitHubTesting() {
           />
 
           <main className="flex-1 overflow-y-auto min-w-0">
-            {pane === PANE.NEW && (
+            {/* CONNECT is treated as NEW rather than given its own branch: it
+                has no separate screen any more, and a pane with no matching
+                branch renders an empty page with no way out. */}
+            {(pane === PANE.NEW || pane === PANE.CONNECT) && (
               <div className="p-6 max-w-3xl space-y-5">
                 <div>
                   <h2 className="text-base font-semibold text-gray-800 mb-1">Start a new run</h2>
