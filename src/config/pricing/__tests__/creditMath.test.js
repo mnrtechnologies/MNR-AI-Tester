@@ -207,41 +207,41 @@ describe("tiers", () => {
 
   test("published tier figures match the spec", () => {
     expect(cm.getTier("byok", "starter")).toMatchObject({
-      priceUsdMonthly: 199,
+      priceUsdMonthly: 375,
       credits: 250,
       concurrentSites: 1,
       extraCreditUsd: 1.0,
     });
     expect(cm.getTier("byok", "growth")).toMatchObject({
-      priceUsdMonthly: 499,
+      priceUsdMonthly: 1000,
       credits: 1000,
       concurrentSites: 2,
       extraCreditUsd: 0.75,
     });
     expect(cm.getTier("byok", "scale")).toMatchObject({
-      priceUsdMonthly: 1299,
+      priceUsdMonthly: 2500,
       credits: 3500,
       concurrentSites: 3,
       extraCreditUsd: 0.5,
     });
     expect(cm.getTier("managed", "managed_starter")).toMatchObject({
-      priceUsdMonthly: 299,
-      credits: 200,
-      extraCreditUsd: 1.5,
+      priceUsdMonthly: 565,
+      credits: 250,
+      extraCreditUsd: 2.15,
     });
     expect(cm.getTier("managed", "managed_growth")).toMatchObject({
-      priceUsdMonthly: 999,
-      credits: 800,
-      extraCreditUsd: 1.25,
+      priceUsdMonthly: 1900,
+      credits: 1000,
+      extraCreditUsd: 1.8,
     });
     expect(cm.getTier("managed", "managed_pro")).toMatchObject({
-      priceUsdMonthly: 1899,
-      credits: 320,
-      extraCreditUsd: 5.93,
+      priceUsdMonthly: 4125,
+      credits: 2500,
+      extraCreditUsd: 1.6,
     });
   });
 
-  test("Managed Pro is marked unavailable until hybrid routing ships", () => {
+  test("Managed Pro (Managed Scale) is marked unavailable until hybrid routing ships", () => {
     // The engine it is sold on does not exist in the AI backend yet.
     const pro = cm.getTier("managed", "managed_pro");
     expect(pro.available).toBe(false);

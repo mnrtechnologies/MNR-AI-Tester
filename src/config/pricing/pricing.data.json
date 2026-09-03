@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "1.2.0",
   "calibration": {
     "source": "modelled-not-measured",
     "lastReviewed": "2026-07-28",
@@ -127,7 +127,7 @@
         {
           "key": "starter",
           "name": "Starter",
-          "priceUsdMonthly": 199,
+          "priceUsdMonthly": 375,
           "credits": 250,
           "concurrentSites": 1,
           "extraCreditUsd": 1,
@@ -145,7 +145,7 @@
         {
           "key": "growth",
           "name": "Growth",
-          "priceUsdMonthly": 499,
+          "priceUsdMonthly": 1000,
           "credits": 1000,
           "concurrentSites": 2,
           "extraCreditUsd": 0.75,
@@ -164,7 +164,7 @@
         {
           "key": "scale",
           "name": "Scale",
-          "priceUsdMonthly": 1299,
+          "priceUsdMonthly": 2500,
           "credits": 3500,
           "concurrentSites": 3,
           "extraCreditUsd": 0.5,
@@ -210,49 +210,49 @@
         {
           "key": "managed_starter",
           "name": "Managed Starter",
-          "priceUsdMonthly": 299,
-          "credits": 200,
+          "priceUsdMonthly": 565,
+          "credits": 250,
           "concurrentSites": 1,
-          "extraCreditUsd": 1.5,
+          "extraCreditUsd": 2.15,
           "engine": "gpt-4.1-mini",
           "engineLabel": "GPT-4.1-mini",
           "highlighted": false,
           "custom": false,
           "features": [
-            "200 credits / month",
+            "250 credits / month",
             "1 site tested at a time",
             "AI keys included \u2014 nothing to configure",
-            "$1.50 per extra credit",
+            "$2.15 per extra credit",
             "Email support"
           ]
         },
         {
           "key": "managed_growth",
           "name": "Managed Growth",
-          "priceUsdMonthly": 999,
-          "credits": 800,
+          "priceUsdMonthly": 1900,
+          "credits": 1000,
           "concurrentSites": 2,
-          "extraCreditUsd": 1.25,
+          "extraCreditUsd": 1.8,
           "engine": "gpt-4.1-mini",
           "engineLabel": "GPT-4.1-mini",
           "highlighted": true,
           "custom": false,
           "features": [
-            "800 credits / month",
+            "1,000 credits / month",
             "2 sites tested at a time",
             "AI keys included \u2014 nothing to configure",
-            "$1.25 per extra credit",
+            "$1.80 per extra credit",
             "CI/CD pipeline integrations",
             "Priority email support"
           ]
         },
         {
           "key": "managed_pro",
-          "name": "Managed Pro",
-          "priceUsdMonthly": 1899,
-          "credits": 320,
+          "name": "Managed Scale",
+          "priceUsdMonthly": 4125,
+          "credits": 2500,
           "concurrentSites": 3,
-          "extraCreditUsd": 5.93,
+          "extraCreditUsd": 1.6,
           "engine": "hybrid-haiku-sonnet",
           "engineLabel": "Hybrid Claude (Haiku + Sonnet)",
           "highlighted": false,
@@ -260,10 +260,10 @@
           "available": false,
           "unavailableReason": "Hybrid Haiku+Sonnet routing is not implemented in the AI engine yet. Do not sell this tier until model routing ships \u2014 margins invert on the unoptimised Sonnet path.",
           "features": [
-            "320 credits / month on the premium engine",
+            "2,500 credits / month on the premium engine",
             "3 sites tested at a time",
             "Highest reliability on complex applications",
-            "$5.93 per extra credit",
+            "$1.60 per extra credit",
             "CI/CD pipeline integrations",
             "Dedicated account manager"
           ]

@@ -16,11 +16,11 @@ const pq = require("../purchaseQuote");
 describe("quotePlan — golden table (minor units)", () => {
   // planType, tierKey, INR monthly, INR semiAnnual, USD monthly, USD semiAnnual, credits
   const TABLE = [
-    ["byok", "starter", 1751200, 9460000, 19900, 107500, 250],
-    ["byok", "growth", 4391200, 23716000, 49900, 269500, 1000],
-    ["byok", "scale", 11431200, 61732000, 129900, 701500, 3500],
-    ["managed", "managed_starter", 2631200, 14212000, 29900, 161500, 200],
-    ["managed", "managed_growth", 8791200, 47476000, 99900, 539500, 800],
+    ["byok", "starter", 3300000, 17820000, 37500, 202500, 250],
+    ["byok", "growth", 8800000, 47520000, 100000, 540000, 1000],
+    ["byok", "scale", 22000000, 118800000, 250000, 1350000, 3500],
+    ["managed", "managed_starter", 4972000, 26848800, 56500, 305100, 250],
+    ["managed", "managed_growth", 16720000, 90288000, 190000, 1026000, 1000],
   ];
 
   test.each(TABLE)(
@@ -162,8 +162,8 @@ describe("quoteCredits — top-up pricing", () => {
     ["byok", "starter", 100, 8800],
     ["byok", "growth", 75, 6600],
     ["byok", "scale", 50, 4400],
-    ["managed", "managed_starter", 150, 13200],
-    ["managed", "managed_growth", 125, 11000],
+    ["managed", "managed_starter", 215, 18900],
+    ["managed", "managed_growth", 180, 15800],
   ];
 
   test.each(RATES)(
