@@ -36,17 +36,26 @@ function nonNegative(n) {
  * Modelled seconds of our capacity a run consumed, from the work it actually
  * performed.
  *
- * Cache hits contribute nothing: `freshFilesAnalysed` and `freshTestsGenerated`
- * count only units that cost an LLM call on THIS run, so resuming an
- * interrupted run charges for the remainder rather than the whole job again.
- * Executed tests are not a term at all — they correlated barely (r=0.15) with
- * real cost, and are dominated by the fixed base below.
+ * LLM cache hits contribute nothing: `freshFilesAnalysed` and
+ * `freshTestsGenerated` count only units that cost an LLM call on THIS run, so
+ * resuming an interrupted run charges for the remainder rather than the whole
+ * job again.
+ *
+ * Executed tests ARE a term, corrected from an earlier version that left them
+ * out on the grounds that they correlate weakly with wall-clock (r=0.15). That
+ * was the wrong test: correlation with wall-clock measures how well a unit
+ * PREDICTS duration, not whether it CONSUMES capacity. Execution consumes
+ * plenty — clone, dependency install, then the suite itself. Without this term
+ * a fully cached re-run priced at the base alone, so a large repo could occupy
+ * the runner for many minutes and bill a single credit; only fresh LLM work
+ * was visible to the meter, and a re-run has none by definition.
  */
 function billableSeconds(facts = {}) {
   const secs =
     P.BASE_SECONDS_PER_RUN +
     nonNegative(facts.freshFilesAnalysed) * P.SECONDS_PER_FILE_ANALYSED +
-    nonNegative(facts.freshTestsGenerated) * P.SECONDS_PER_TEST_GENERATED;
+    nonNegative(facts.freshTestsGenerated) * P.SECONDS_PER_TEST_GENERATED +
+    nonNegative(facts.testsExecuted) * P.SECONDS_PER_TEST_EXECUTED;
   return Math.min(secs, P.MAX_BILLABLE_SECONDS_PER_RUN);
 }
 
@@ -79,6 +88,11 @@ function liveFacts(doc = {}) {
   return {
     freshFilesAnalysed: nonNegative(f.freshFilesAnalysed),
     freshTestsGenerated: nonNegative(f.freshTestsGenerated),
+    // Written once, at completion — so mid-run this reads 0 and the live meter
+    // simply does not charge for execution yet. Settlement then trues up the
+    // difference. That ordering is deliberate: the meter must only ever
+    // under-state, because the debit path has no way to issue a refund.
+    testsExecuted: nonNegative(f.testsExecuted),
   };
 }
 
@@ -102,10 +116,19 @@ function priceCodeRun(doc = {}) {
  * Assumes every selected file yields one test file, which is the worst case —
  * files with no testable logic generate none. Over-estimating is the right
  * direction for a quote shown before the customer commits.
+ *
+ * Executed tests have to be guessed too, since the count only exists once the
+ * suite has run. ESTIMATED_TESTS_PER_FILE sits just above the observed rate so
+ * the quote stays an upper bound: a quote that came in UNDER the eventual
+ * charge is the one customers are entitled to complain about.
  */
 function estimateCreditsForSelection(fileCount) {
   const n = nonNegative(fileCount);
-  return creditsForRun({ freshFilesAnalysed: n, freshTestsGenerated: n });
+  return creditsForRun({
+    freshFilesAnalysed: n,
+    freshTestsGenerated: n,
+    testsExecuted: n * P.ESTIMATED_TESTS_PER_FILE,
+  });
 }
 
 module.exports = {

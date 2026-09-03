@@ -3,7 +3,7 @@
   "calibration": {
     "source": "modelled-not-measured",
     "lastReviewed": "2026-07-28",
-    "note": "The `formula` block is modelled, not measured: EXPLORATION_CALLS and CALLS_PER_STORY come from the engine's loop ceilings (semantic_tester.py max_iter, orchestrator.py max_steps), not from token logs. It meters BYOK plans, where a credit represents CAPACITY rather than cost, so an approximation is acceptable. Managed plans do not use it — they bill from `modelRates` against tokens the engine actually reported."
+    "note": "The `formula` block is modelled, not measured: EXPLORATION_CALLS and CALLS_PER_STORY come from the engine's loop ceilings (semantic_tester.py max_iter, orchestrator.py max_steps), not from token logs. It meters BYOK plans, where a credit represents CAPACITY rather than cost, so an approximation is acceptable. Managed plans do not use it \u2014 they bill from `modelRates` against tokens the engine actually reported."
   },
   "meters": {
     "byok": "capacity",
@@ -26,22 +26,26 @@
   },
   "specTestFormula": {
     "_comment": "The capacity meter for TEST CASE DESIGN (spec_test_run), the analogue of `formula` for web and `apiTestFormula` for API scans. BYOK only. Managed spec runs bill from modelRates like every other Managed run.",
-    "_calibration": "PARTLY MEASURED. gpt-4.1-mini: 20.6s per requirement, from 2 production runs (23 requirements, 141 test cases) via scripts/calibrate_rates.py on 2026-08-24 — a small sample, so re-run it as more documents go through. The first provisional guess was 10s and was half the truth, which under-held credits. claude-sonnet-4-6 is still UNMEASURED and carries a placeholder; run a document with an Anthropic key to fix it. Re-run after any change to the designer prompt or the models used.",
+    "_calibration": "MEASURED, and revised UPWARD on 2026-09-02. gpt-4.1-mini is 34s per requirement. The previous 20.6s came from 2 runs (23 requirements) on 2026-08-24 and was ~65% low, so every spec run since has been under-quoted at the gate. Settlement charges real measured duration, so the money was not lost - it showed up as a gate-to-settlement gap, which is the shape of a hold that is too small to cover the work it authorises. This is the SECOND upward revision of this rate (10s -> 20.6s -> 34s), each from a sample of 2-3 runs, so treat any figure here as provisional until scripts/calibrate_rates.py has 20+ runs behind it. SECONDS_PER_REQUIREMENT_DEFAULT is 40 and must stay ABOVE every measured entry: it prices models nobody has timed, and the failure that costs money is quoting an unknown model optimistically. The old default of 25 sat BELOW the measured 4.1-mini figure, which is backwards. claude-sonnet-4-6 is still UNMEASURED and now carries that default as its placeholder; run a document with an Anthropic key to replace it. Re-run after any change to the designer prompt or the models used.",
     "SECONDS_PER_REQUIREMENT_BY_MODEL": {
-      "gpt-4.1-mini-2025-04-14": 20.6,
-      "claude-sonnet-4-6": 25
+      "gpt-4.1-mini-2025-04-14": 34,
+      "claude-sonnet-4-6": 40
     },
-    "SECONDS_PER_REQUIREMENT_DEFAULT": 25,
+    "SECONDS_PER_REQUIREMENT_DEFAULT": 40,
     "SECONDS_PER_CREDIT": 236,
     "MAX_REQUIREMENTS_PER_RUN": 300
   },
   "usdPerCredit": 0.5,
   "modelRates": {
-    "_note": "USD per 1,000,000 tokens. Anthropic rates are from the published price list. OpenAI rates are UNVERIFIED — confirm against openai.com/api/pricing before enabling Managed billing, because gpt-4.1-mini is the default engine for Managed Starter and Growth.",
+    "_note": "USD per 1,000,000 tokens. OpenAI rates were VERIFIED against developers.openai.com/api/docs/pricing on 2026-09-02: gpt-4o 2.50/10.00, gpt-4.1-mini 0.40/1.60, gpt-5.1 1.25/10.00 - the two rates already in this file were correct all along, they were simply never confirmed, so Managed billing carried a permanent 'contains unverified rates' warning for no reason. Anthropic rates are from the published price list. Provider list prices change; re-confirm both lists and update _ratesVerifiedOn whenever a model is added.",
+    "_ratesVerifiedOn": {
+      "openai": "2026-09-02",
+      "anthropic": "2026-07-28"
+    },
     "_cacheMultipliers": {
       "read": 0.1,
       "write": 1.25,
-      "note": "Cache reads bill at ~0.1x the input rate; 5-minute-TTL cache writes at 1.25x. The engine does not use prompt caching yet, so these are zero in practice — see the caching lever in the pricing doc."
+      "note": "DEFAULTS. A model may override the read ratio with its own cacheReadMultiplier, and several do: 0.1 is the Anthropic ratio and is wrong for most OpenAI models. Verified 2026-09-02 - gpt-4o caches at 1.25 against a 2.50 input rate (0.5x, five times the default) and gpt-4.1-mini at 0.10 against 0.40 (0.25x); gpt-5.1 caches at 0.125 against 1.25, which is the 0.1x default. Every engine on the platform reports cacheReadTokens: 0 today (internal.optimisationsShipped is false), so these ratios bill nothing yet - which is exactly why they had to be right BEFORE caching ships rather than after. A flat 0.1 would have under-billed cached gpt-4o input by 80% on the first day the lever was pulled. Write ratios are Anthropic's 1.25x for 5-minute-TTL cache writes; OpenAI does not charge separately for cache writes, so its models set cacheWriteMultiplier to 1."
     },
     "models": {
       "claude-sonnet-4-6": {
@@ -72,12 +76,32 @@
       "gpt-4.1-mini-2025-04-14": {
         "inputUsdPerMTok": 0.4,
         "outputUsdPerMTok": 1.6,
-        "verified": false
+        "cacheReadMultiplier": 0.25,
+        "cacheWriteMultiplier": 1,
+        "verified": true
+      },
+      "gpt-4.1-mini": {
+        "_alias": "The engine reports the dated snapshot id, but a customer key pinned to the floating alias reports this. Same published rate; listing both keeps an alias off the unknown-model fallback path, which would price it as the most expensive model on the platform.",
+        "inputUsdPerMTok": 0.4,
+        "outputUsdPerMTok": 1.6,
+        "cacheReadMultiplier": 0.25,
+        "cacheWriteMultiplier": 1,
+        "verified": true
       },
       "gpt-4o": {
         "inputUsdPerMTok": 2.5,
         "outputUsdPerMTok": 10,
-        "verified": false
+        "cacheReadMultiplier": 0.5,
+        "cacheWriteMultiplier": 1,
+        "verified": true
+      },
+      "gpt-5.1": {
+        "_note": "Added 2026-09-02 after a production code run reported gpt-5.1 and found nothing in this table. usageMath.rateFor() caught it and applied the most-expensive-configured-rate fallback, so it was never billed as free - but the fallback is a safety net, not a price, and it flags every run it touches as rateUnverified.",
+        "inputUsdPerMTok": 1.25,
+        "outputUsdPerMTok": 10,
+        "cacheReadMultiplier": 0.1,
+        "cacheWriteMultiplier": 1,
+        "verified": true
       }
     }
   },
@@ -197,7 +221,7 @@
           "features": [
             "200 credits / month",
             "1 site tested at a time",
-            "AI keys included — nothing to configure",
+            "AI keys included \u2014 nothing to configure",
             "$1.50 per extra credit",
             "Email support"
           ]
@@ -216,7 +240,7 @@
           "features": [
             "800 credits / month",
             "2 sites tested at a time",
-            "AI keys included — nothing to configure",
+            "AI keys included \u2014 nothing to configure",
             "$1.25 per extra credit",
             "CI/CD pipeline integrations",
             "Priority email support"
@@ -234,7 +258,7 @@
           "highlighted": false,
           "custom": false,
           "available": false,
-          "unavailableReason": "Hybrid Haiku+Sonnet routing is not implemented in the AI engine yet. Do not sell this tier until model routing ships — margins invert on the unoptimised Sonnet path.",
+          "unavailableReason": "Hybrid Haiku+Sonnet routing is not implemented in the AI engine yet. Do not sell this tier until model routing ships \u2014 margins invert on the unoptimised Sonnet path.",
           "features": [
             "320 credits / month on the premium engine",
             "3 sites tested at a time",
@@ -279,20 +303,39 @@
   },
   "perfTestFormula": {
     "_comment": "The capacity meter for PERFORMANCE / load runs (perf_runs), the analogue of formula (web) and apiTestFormula (API scans). BYOK only, same as those. Managed perf runs bill from modelRates like every other Managed run. Existing meters are deliberately untouched by this block.",
-    "_calibration": "MODELLED from real runs on 2026-08-25, not yet measured against server cost — review before relying on it commercially. Observed: a direct 2-VU run took 70s engine time / ~40 VU-seconds; a 50-VU login load test ~500s engine / ~21000 VU-seconds; a 3-persona mixed run ~1400s engine (discovery dominates at ~5min per persona) / ~7000 VU-seconds. SECONDS_PER_CREDIT is kept at 236 deliberately — it is derived from internal.creditsPerServerMonth (2592000s over 11000 credits) and describes OUR cost basis, which does not change per product. What differs for perf is the concurrency surcharge below. VU_SECONDS_PER_ENGINE_SECOND=10 encodes that 10 concurrent virtual users cost about one extra engine-second per second: they share one process and one event loop, so concurrency is cheaper than linear but far from free. Under this model the runs above price at 1, ~11 and ~9 credits respectively. Re-calibrate if the loadgen worker stops using gevent greenlets, since that assumption is what makes concurrency sublinear.",
+    "_calibration": "MODELLED from real runs on 2026-08-25, not yet measured against server cost \u2014 review before relying on it commercially. Observed: a direct 2-VU run took 70s engine time / ~40 VU-seconds; a 50-VU login load test ~500s engine / ~21000 VU-seconds; a 3-persona mixed run ~1400s engine (discovery dominates at ~5min per persona) / ~7000 VU-seconds. SECONDS_PER_CREDIT is kept at 236 deliberately \u2014 it is derived from internal.creditsPerServerMonth (2592000s over 11000 credits) and describes OUR cost basis, which does not change per product. What differs for perf is the concurrency surcharge below. VU_SECONDS_PER_ENGINE_SECOND=10 encodes that 10 concurrent virtual users cost about one extra engine-second per second: they share one process and one event loop, so concurrency is cheaper than linear but far from free. Under this model the runs above price at 1, ~11 and ~9 credits respectively. Re-calibrate if the loadgen worker stops using gevent greenlets, since that assumption is what makes concurrency sublinear.",
     "SECONDS_PER_CREDIT": 236,
     "VU_SECONDS_PER_ENGINE_SECOND": 10,
     "MAX_BILLABLE_SECONDS_PER_RUN": 86400,
     "OVERSIZED_CREDITS": 100
   },
+  "dbTestFormula": {
+    "_comment": "The capacity meter for DATABASE TESTING runs (db_test_runs), the analogue of formula (web), apiTestFormula, specTestFormula, perfTestFormula, codeTestFormula and vaptFormula. BYOK only - the Go server holds no AI or database keys, so we never pay for its tokens. Constants lived in backend/services/dbTestMath.js until 2026-09-02, self-described there as guesswork.",
+    "_calibration": "The primary meter is MEASURED: the Go service has always reported durationMs (api/internal/services/usage.go, where the field was labelled 'kept for logging/future tiering, not pricing'). It is now what pricing uses, which makes DB testing consistent with every other duration-metered product and removes the need to calibrate a per-object rate at all. SECONDS_PER_CREDIT is 236, derived from internal.creditsPerServerMonth (2592000s over 11000 credits), the same figure every other meter carries. MAX_BILLABLE_SECONDS_PER_RUN matches perfTestFormula and codeTestFormula at 86400 - a run that exceeds a day is our defect, not a day of customer consumption. The FALLBACK_* rates below price only rows with no recorded duration (rows written before duration was used for pricing, or a run that died before recording it) and are MODELLED, not measured: 30s per generated test case is taken from codeTestFormula.SECONDS_PER_TEST_GENERATED, since both are one LLM call producing one test, and 0.5s per object scanned reflects a schema walk with no model call in it (the diagnostic job is explicitly 'no AI involved'). Replace the fallbacks with measured figures if rows without durations ever become common; they should be approaching dead code.",
+    "SECONDS_PER_CREDIT": 236,
+    "MAX_BILLABLE_SECONDS_PER_RUN": 86400,
+    "OVERSIZED_CREDITS": 100,
+    "FALLBACK_SECONDS_PER_TEST_CASE": 30,
+    "FALLBACK_SECONDS_PER_OBJECT": 0.5
+  },
+  "vaptFormula": {
+    "_comment": "The capacity meter for SECURITY TESTING / VAPT runs (vapt_run), the analogue of formula (web), apiTestFormula (API scans), specTestFormula (test design), perfTestFormula and codeTestFormula. BYOK-shaped: the customer brings their own model key, so charging per token would bill twice for the same call. These constants lived as literals in creditMath.js until 2026-09-02, which made VAPT the only product on the platform that could not be repriced without a code change and a deploy.",
+    "_calibration": "DEFAULT_HOLD_SECONDS is MODELLED, not measured. 180s is a typical short scan and is only the flat amount held at the gate, since a scan has no cheap pre-phase to estimate from. Settlement always charges measured duration, so a hold that is too big or too small self-corrects; what it actually decides is how much balance a customer must have before we let them start. SECONDS_PER_CREDIT is 236, derived from internal.creditsPerServerMonth (2592000s over 11000 credits): it describes OUR cost basis and is deliberately EQUAL to the other meters' rather than READ FROM specTestFormula, which is how it was implemented before - under that wiring a spec recalibration silently repriced security scans. MAX_BILLABLE_SECONDS_PER_RUN is the number this block exists to make explicit. Before it, the ceiling on a scan's price was whatever the VAPT worker's Celery task_time_limit happened to be (60 * 30, in webservice/celery_app.py of MNR_AI_Tester-AI_Backend-Security_Testing) - a billing ceiling set by accident, in another repository, by a constant chosen for reliability reasons. 1800 pins it to that same 30 minutes deliberately, so a scan that runs to the hard limit bills 8 credits and no more. Raise the Celery limit and this must be raised with it, as a decision rather than a side effect.",
+    "DEFAULT_HOLD_SECONDS": 180,
+    "SECONDS_PER_CREDIT": 236,
+    "MAX_BILLABLE_SECONDS_PER_RUN": 1800,
+    "OVERSIZED_CREDITS": 100
+  },
   "codeTestFormula": {
     "_comment": "The capacity meter for GITHUB CODE TESTING runs (code_runs), the analogue of formula (web), apiTestFormula (API scans) and perfTestFormula. Unlike those, this one applies to BOTH plan families: code testing always runs on the CUSTOMER'S OWN provider key regardless of plan, so we never pay for its tokens and the usage meter would have nothing to pass through. Charging capacity here is the platform rule (meters.byok = capacity) applied correctly, not an exception to it.",
-    "_calibration": "MODELLED from 17 completed runs on 2026-08-31, NOT measured against server cost - review before relying on it commercially. It is deliberately NOT billed on wall-clock, for two measured reasons. First, wall-clock is contaminated by our own defects: one 22-file run took 8709s (145 min) purely to a timeout-retry storm, versus ~1400s for a comparable 31-file run - billing that would charge a customer for our bug. Second, correlation of wall-clock against work units is weak (r=0.58 for files, 0.58 for tests, 0.15 for tests executed; tokens correlate best at r=0.79 but the platform rule forbids billing BYOK per token). A linear fit gave seconds = 216 + 61.6*files with errors from -48% to +103%, which is not good enough to charge on. The per-unit numbers below are therefore modelled from the CLEAN portion of that fit, split across the two LLM-calling stages, and are intended to be replaced once facts.freshFilesAnalysed has been collected across enough runs - that field did not exist when this data was gathered, so historical runs cannot distinguish a 31-file run that did all 31 from one that reused 29 from cache. SECONDS_PER_CREDIT stays 236, derived from internal.creditsPerServerMonth (2592000s over 11000 credits): it describes OUR cost basis and must not diverge per product. Re-calibrate after the analysis and generation stages are made concurrent, since both are currently sequential and that is what dominates the per-file figures.",
+    "_calibration": "MODELLED from 17 completed runs on 2026-08-31, NOT measured against server cost - review before relying on it commercially. It is deliberately NOT billed on wall-clock, for two measured reasons. First, wall-clock is contaminated by our own defects: one 22-file run took 8709s (145 min) purely to a timeout-retry storm, versus ~1400s for a comparable 31-file run - billing that would charge a customer for our bug. Second, correlation of wall-clock against work units is weak (r=0.58 for files, 0.58 for tests, 0.15 for tests executed; tokens correlate best at r=0.79 but the platform rule forbids billing BYOK per token). A linear fit gave seconds = 216 + 61.6*files with errors from -48% to +103%, which is not good enough to charge on. The per-unit numbers below are therefore modelled from the CLEAN portion of that fit, split across the two LLM-calling stages, and are intended to be replaced once facts.freshFilesAnalysed has been collected across enough runs - that field did not exist when this data was gathered, so historical runs cannot distinguish a 31-file run that did all 31 from one that reused 29 from cache. SECONDS_PER_CREDIT stays 236, derived from internal.creditsPerServerMonth (2592000s over 11000 credits): it describes OUR cost basis and must not diverge per product. Re-calibrate after the analysis and generation stages are made concurrent, since both are currently sequential and that is what dominates the per-file figures. REVISED 2026-09-02: SECONDS_PER_TEST_EXECUTED added. The original note dismissed executed tests because they correlate weakly with wall-clock (r=0.15) -- but that was the wrong test to apply. Correlation with wall-clock measures how well a unit PREDICTS duration; it says nothing about whether the unit CONSUMES capacity. Executing tests does consume it: the runner clones, installs dependencies (up to INSTALL_TIMEOUT_SECONDS, 900s) and runs the suite (up to TEST_TIMEOUT_SECONDS, 600s). With execution unpriced, a fully cached re-run of a large repo billed the 216s base alone -- up to 25 minutes of server time for 1 credit -- because none of that work is 'fresh'. Observed on run ed878a3f: 40 tests executed, costUsd 0, charged 1 credit. 2s/test matches apiTestFormula.SECONDS_PER_TEST so the platform prices an executed test the same everywhere. ESTIMATED_TESTS_PER_FILE=15 is only for the pre-run quote, which cannot know the real count; 15 is just above the observed 13-14 tests per file so the quote stays an upper bound rather than under-promising.",
     "BASE_SECONDS_PER_RUN": 216,
     "SECONDS_PER_FILE_ANALYSED": 35,
     "SECONDS_PER_TEST_GENERATED": 30,
     "SECONDS_PER_CREDIT": 236,
     "MAX_BILLABLE_SECONDS_PER_RUN": 86400,
-    "OVERSIZED_CREDITS": 100
+    "OVERSIZED_CREDITS": 100,
+    "SECONDS_PER_TEST_EXECUTED": 2,
+    "ESTIMATED_TESTS_PER_FILE": 15
   }
 }

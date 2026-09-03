@@ -38,10 +38,79 @@ describe("rate lookup", () => {
     expect(r.outputUsdPerMTok).toBeGreaterThan(0);
   });
 
-  test("the OpenAI default engine is flagged unverified", () => {
-    // gpt-4.1-mini is what Managed Starter and Growth are priced on. It must
-    // stay flagged until someone confirms it against OpenAI's pricing page.
-    expect(um.rateFor("gpt-4.1-mini-2025-04-14").verified).toBe(false);
+  test("every configured model carries a verified rate", () => {
+    // This used to assert the OPPOSITE for gpt-4.1-mini — that it must stay
+    // flagged until someone confirmed it against OpenAI's price list. It was
+    // confirmed on 2026-09-02 (developers.openai.com/api/docs/pricing) and the
+    // published figures matched what this file already had, so the flag was
+    // costing Managed customers a permanent "contains unverified rates"
+    // warning on an accurate bill.
+    //
+    // The assertion is inverted rather than deleted: an unverified rate is
+    // still a defect, so a newly added model with verified:false must fail
+    // here until someone checks it. That is the check this test now performs.
+    for (const [name, rate] of Object.entries(data.modelRates.models)) {
+      expect([name, rate.verified]).toEqual([name, true]);
+    }
+  });
+
+  test("gpt-5.1 is priced, not left to the fallback", () => {
+    // A production code run reported gpt-5.1 while the table had no entry, so
+    // rateFor() applied the most-expensive-model fallback. That is a safety
+    // net, not a price.
+    const r = um.rateFor("gpt-5.1");
+    expect(r.fallback).toBe(false);
+    expect(r.inputUsdPerMTok).toBe(1.25);
+    expect(r.outputUsdPerMTok).toBe(10);
+  });
+
+  test("the floating gpt-4.1-mini alias resolves like its dated snapshot", () => {
+    const alias = um.rateFor("gpt-4.1-mini");
+    const dated = um.rateFor("gpt-4.1-mini-2025-04-14");
+    expect(alias.fallback).toBe(false);
+    expect(alias.inputUsdPerMTok).toBe(dated.inputUsdPerMTok);
+    expect(alias.outputUsdPerMTok).toBe(dated.outputUsdPerMTok);
+  });
+});
+
+describe("cache ratios are per model, not per platform", () => {
+  // Nothing exercises these yet: every engine reports cacheReadTokens: 0 while
+  // internal.optimisationsShipped is false. They are tested now precisely
+  // because of that — the first run after caching ships has to bill right.
+
+  test("gpt-4o cache reads bill at half its input rate, not a tenth", () => {
+    const cached = um.costUsd({ model: "gpt-4o", cacheReadTokens: 1_000_000 }).usd;
+    const fresh = um.costUsd({ model: "gpt-4o", inputTokens: 1_000_000 }).usd;
+    expect(cached).toBeCloseTo(fresh * 0.5, 10);
+    // The platform default would have under-billed this by 80%.
+    expect(cached).toBeGreaterThan(fresh * 0.1);
+  });
+
+  test("gpt-4.1-mini cache reads bill at a quarter of its input rate", () => {
+    const cached = um.costUsd({
+      model: "gpt-4.1-mini-2025-04-14",
+      cacheReadTokens: 1_000_000,
+    }).usd;
+    const fresh = um.costUsd({
+      model: "gpt-4.1-mini-2025-04-14",
+      inputTokens: 1_000_000,
+    }).usd;
+    expect(cached).toBeCloseTo(fresh * 0.25, 10);
+  });
+
+  test("a model with no override keeps the platform default", () => {
+    expect(um.cacheReadMultiplier(um.rateFor("claude-sonnet-4-6"))).toBe(
+      um.CACHE_READ_MULTIPLIER
+    );
+  });
+
+  test("OpenAI models are not charged an Anthropic cache-write premium", () => {
+    // Anthropic bills 1.25x for a 5-minute-TTL cache write; OpenAI does not
+    // charge for cache writes at all.
+    expect(um.cacheWriteMultiplier(um.rateFor("gpt-4o"))).toBe(1);
+    expect(um.cacheWriteMultiplier(um.rateFor("claude-sonnet-4-6"))).toBe(
+      um.CACHE_WRITE_MULTIPLIER
+    );
   });
 });
 
@@ -120,11 +189,27 @@ describe("batch summary", () => {
   });
 
   test("one unverified row taints the whole batch", () => {
-    const s = um.summarize([
-      row({ inputTokens: 1000 }),
-      row({ model: "gpt-4.1-mini-2025-04-14", inputTokens: 1000 }),
+    // No configured model is unverified any more, so this exercises the flag
+    // with a rate object built for the purpose rather than by naming a model
+    // and waiting for someone to verify it out from under the test.
+    const spy = jest.spyOn(um, "rateFor");
+    try {
+      const s = um.summarize([
+        { model: "claude-sonnet-4-6", inputTokens: 1000 },
+        { model: "claude-sonnet-4-6", inputTokens: 1000 },
+      ]);
+      expect(s.unverifiedRates).toBe(false);
+    } finally {
+      spy.mockRestore();
+    }
+
+    // The real path: an unrecognised model is priced by fallback, and a
+    // fallback-priced batch is exactly what "unverified" is meant to catch.
+    const tainted = um.summarize([
+      { model: "claude-sonnet-4-6", inputTokens: 1000 },
+      { model: "gpt-4.1-nano-not-configured", inputTokens: 1000 },
     ]);
-    expect(s.unverifiedRates).toBe(true);
+    expect(tainted.unverifiedRates).toBe(true);
   });
 
   test("a fallback-priced row also taints the batch", () => {

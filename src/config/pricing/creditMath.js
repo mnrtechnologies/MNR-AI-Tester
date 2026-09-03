@@ -33,10 +33,22 @@
 
 const RAW_PRICING = require("./pricing.data.json");
 
-// 1. Determine the dynamic exchange rate from env, falling back to the JSON file
-const FX_INR_PER_USD = Number(
-  process.env.REACT_APP_FX_INR_PER_USD 
-);
+// 1. Determine the dynamic exchange rate from env, falling back to the JSON file.
+//
+// The fallback is load-bearing, not defensive noise. `Number(undefined)` is
+// NaN, NaN propagates silently through usdToInr(), and `JSON.stringify(NaN)`
+// is `null` — so an unset env var did not fail loudly. It shipped
+// `fx.inrPerUsd: null` from GET /api/credits/pricing and rendered every rupee
+// price in the product as "₹NaN", while the correct rate sat unread in
+// pricing.data.json.
+//
+// An explicit guard rather than `??`: `??` only catches null and undefined,
+// and the real failure modes here are NaN (unset, or a non-numeric value) and
+// 0 (an empty string coerces to 0) — both must fall back rather than convert
+// every price on the site to zero.
+const ENV_FX = Number(process.env.REACT_APP_FX_INR_PER_USD);
+const FX_INR_PER_USD =
+  Number.isFinite(ENV_FX) && ENV_FX > 0 ? ENV_FX : RAW_PRICING.fx.inrPerUsd;
 
 // 2. Clone and mutate the PRICING object so the rest of the file 
 // and external consumers use the injected live rate consistently.
@@ -288,26 +300,49 @@ function isOversizedSpecRun(requirements) {
  * BYOK worker-seconds meter, same family as spec — the customer brings their
  * own model key, so charging per token would double-bill. Unlike spec there is
  * no cheap pre-phase to estimate from (the scan IS the work), so the gate holds
- * a flat default and settlement charges the real measured duration. Reuses the
- * spec seconds-per-credit rate so the two stay consistent.
+ * a flat default and settlement charges the real measured duration.
+ *
+ * Its constants live in pricing.data.json under `vaptFormula`, like every other
+ * meter's. They used to be literals in this file, which made VAPT the one
+ * product on the platform that could not be repriced without a code change and
+ * a deploy. SECONDS_PER_CREDIT is 236 there — the same figure every other meter
+ * carries, because it is derived from internal.creditsPerServerMonth and
+ * describes OUR cost basis. It is deliberately EQUAL to spec's, not borrowed
+ * from it: reading it out of specTestFormula meant a spec recalibration
+ * silently repriced security scans.
  * ------------------------------------------------------------------ */
 
-const VAPT_DEFAULT_HOLD_SECONDS = 180; // ~3-min typical scan, held up front
+const VF = PRICING.vaptFormula;
 
 /** ESTIMATE — flat hold quoted at the gate (a scan has no pre-run metric). */
 function estimateVaptRun() {
   return {
-    credits: Math.max(1, Math.ceil(VAPT_DEFAULT_HOLD_SECONDS / SF.SECONDS_PER_CREDIT)),
+    credits: Math.max(1, Math.ceil(VF.DEFAULT_HOLD_SECONDS / VF.SECONDS_PER_CREDIT)),
     basis: "flat_hold",
-    secondsPerCredit: SF.SECONDS_PER_CREDIT,
+    secondsPerCredit: VF.SECONDS_PER_CREDIT,
   };
 }
 
-/** SETTLEMENT — what the scan actually cost, from measured worker occupancy. */
+/**
+ * SETTLEMENT — what the scan actually cost, from measured worker occupancy.
+ *
+ * Clamped at MAX_BILLABLE_SECONDS_PER_RUN, for the same reason every other
+ * duration meter clamps. Without it the ceiling on a scan's price was whatever
+ * the VAPT worker's Celery `task_time_limit` happened to be — 30 minutes, set
+ * in webservice/celery_app.py of another repository, for reasons that have
+ * nothing to do with billing. A run that hangs until its hard limit is our
+ * defect, and must not settle as 8 credits of customer consumption.
+ */
 function creditsForVaptDuration(durationMs) {
-  const seconds = Math.max(0, Number(durationMs) || 0) / 1000;
-  if (seconds === 0) return 0;
-  return Math.max(1, Math.ceil(seconds / SF.SECONDS_PER_CREDIT));
+  const raw = Math.max(0, Number(durationMs) || 0) / 1000;
+  if (raw === 0) return 0;
+  const seconds = Math.min(raw, VF.MAX_BILLABLE_SECONDS_PER_RUN);
+  return Math.max(1, Math.ceil(seconds / VF.SECONDS_PER_CREDIT));
+}
+
+/** A scan this expensive is worth a human glance before it is billed. */
+function isOversizedVaptRun(credits) {
+  return (Number(credits) || 0) > VF.OVERSIZED_CREDITS;
 }
 
 module.exports = {
@@ -325,6 +360,9 @@ module.exports = {
 
   estimateVaptRun,
   creditsForVaptDuration,
+  isOversizedVaptRun,
+  VAPT_SECONDS_PER_CREDIT: VF.SECONDS_PER_CREDIT,
+  VAPT_MAX_BILLABLE_SECONDS_PER_RUN: VF.MAX_BILLABLE_SECONDS_PER_RUN,
   MAX_REQUIREMENTS_PER_RUN: SF.MAX_REQUIREMENTS_PER_RUN,
   SPEC_SECONDS_PER_CREDIT: SF.SECONDS_PER_CREDIT,
   isOversized,

@@ -25,6 +25,7 @@ import toast from "react-hot-toast";
 
 import { useDispatch, useSelector } from "react-redux";
 import { fetchCreditAccount } from "../../services/operations/creditAPIs"; // ← adjust path to match your actual folder structure
+import { guardRun } from "../../services/operations/runGate";
 
 const API_URL = process.env.REACT_APP_AI_MOBILE_TESTER_BACKEND_URL;
 const UPLOAD_URL = process.env.REACT_APP_AI_MOBILE_UPLOAD_URL;
@@ -320,6 +321,17 @@ export default function MobileTestingDashboard() {
     const apkPath = uploadedApkInfo?.serverApkPath;
     if (!apkPath) return;
 
+    // A restart opens a NEW session, and a new session is separately metered —
+    // so it goes through the same gate as the first one. Without this, a user
+    // whose credits ran out during a run could be auto-restarted into further
+    // billable work by a watchdog they never triggered, as many times as the
+    // stream happened to drop.
+    if (!(await guardRun("a mobile test"))) {
+      addLog("✋ Not enough credits to restart — session stopped.");
+      setLoadingState(null);
+      return;
+    }
+
     silentReconnectRef.current = 0;
     addLog("↺ Stream dead — restarting session (no re-upload)…");
     setLoadingState("starting");
@@ -394,6 +406,23 @@ export default function MobileTestingDashboard() {
       toast.error("You must be logged in to start a session.");
       return;
     }
+
+    // ── Credit gate ─────────────────────────────────────────────
+    // Before the upload, not after. A session is metered by
+    // mobileCreditBilling once it finishes, and until now nothing on this page
+    // refused to start one — a user at zero credits could upload an APK, watch
+    // the agent explore the app, and be billed into a negative balance for
+    // work nobody had authorised.
+    //
+    // Placed ahead of the APK upload deliberately: the upload is tens of
+    // megabytes and its server-side handler unpacks and inspects the package.
+    // Refusing after all that would waste the user's bandwidth and our disk to
+    // reach the same answer we could have had first.
+    //
+    // Asked of the Node backend rather than decided from `creditsBalance`
+    // above: that number is display-only and gating on it would be theatre.
+    if (!(await guardRun("a mobile test"))) return;
+
     setLogs([]);
     setAssertions([]);
     setStats({ screens: 0, passed: 0, failed: 0 });
@@ -702,9 +731,22 @@ export default function MobileTestingDashboard() {
               </div>
 
               {creditsBalance !== null && (
-                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-orange-50 text-orange-700 border border-orange-200">
+                <div
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
+                    creditsBalance <= 0
+                      ? "bg-rose-50 text-rose-700 border-rose-200"
+                      : "bg-orange-50 text-orange-700 border-orange-200"
+                  }`}
+                  title={
+                    creditsBalance <= 0
+                      ? "You have no credits left. Starting a test will be refused."
+                      : "Credits meter our capacity - your provider key is billed separately by the provider."
+                  }
+                >
                   <Zap size={12} fill="currentColor" />
-                  {creditsBalance.toLocaleString()} credits left
+                  {creditsBalance <= 0
+                    ? "No credits left"
+                    : `${creditsBalance.toLocaleString()} credits left`}
                 </div>
               )}
 

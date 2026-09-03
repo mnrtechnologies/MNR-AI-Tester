@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiFetch, triggerDownload, fmtDate } from '../api';
+import { guardRun } from '../../../../services/operations/runGate';
 import { stCfg } from '../constants';
 import StatusPill from '../components/StatusPill';
 import ShimmerBar from '../components/ShimmerBar';
@@ -84,6 +85,9 @@ export default function AnalysisTab() {
     if (!connStr.trim()) { toast.error('Enter a connection string.'); return; }
     setJobSubmitting(true); setAnalysisJob(null);
     try {
+      // Billed per object scanned, so "no AI involved" does not mean free.
+      if (!(await guardRun('a database analysis'))) return;
+
       const d = await apiFetch('/analysis/run', {
         method: 'POST',
         body: JSON.stringify({ connection_string: connStr.trim() }),

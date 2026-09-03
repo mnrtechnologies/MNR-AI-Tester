@@ -20,6 +20,27 @@ const CACHE_READ_MULTIPLIER = data.modelRates._cacheMultipliers.read;
 const CACHE_WRITE_MULTIPLIER = data.modelRates._cacheMultipliers.write;
 
 /**
+ * Cache ratios are per model, defaulting to the shared figures above.
+ *
+ * The defaults are Anthropic's, and they are wrong for most of OpenAI's line:
+ * gpt-4o caches input at 0.5x its base rate and gpt-4.1-mini at 0.25x, not
+ * 0.1x. Billing every provider at a flat 0.1x would under-charge a cached
+ * gpt-4o token by 80%. Nothing exercises this yet — every engine reports
+ * cacheReadTokens: 0 while internal.optimisationsShipped is false — which is
+ * the whole reason to get it right now: the first run after caching ships
+ * must bill correctly, not be discovered wrong from a margin report later.
+ */
+function cacheReadMultiplier(rate) {
+  const m = Number(rate && rate.cacheReadMultiplier);
+  return Number.isFinite(m) && m >= 0 ? m : CACHE_READ_MULTIPLIER;
+}
+
+function cacheWriteMultiplier(rate) {
+  const m = Number(rate && rate.cacheWriteMultiplier);
+  return Number.isFinite(m) && m >= 0 ? m : CACHE_WRITE_MULTIPLIER;
+}
+
+/**
  * Look up a model's rates.
  *
  * An unrecognised model is priced at the MOST EXPENSIVE configured rate, not
@@ -48,10 +69,11 @@ function rateFor(model) {
  * Cost in USD of a single recorded call.
  *
  * Input tokens are split three ways because they bill at three different
- * rates: fresh input at full price, cache reads at a tenth, and cache writes
- * at a premium. The engine does no prompt caching today so the cache figures
- * are zero — but the arithmetic is here so that turning caching on shows up as
- * a cost drop rather than requiring a billing change.
+ * rates: fresh input at a discount, cache reads at a discount, and cache
+ * writes at a premium. Both discounts are per model — see cacheReadMultiplier.
+ * The engine does no prompt caching today so the cache figures are zero — but
+ * the arithmetic is here so that turning caching on shows up as a cost drop
+ * rather than requiring a billing change.
  */
 function costUsd(row) {
   const rate = rateFor(row.model);
@@ -63,8 +85,8 @@ function costUsd(row) {
 
   const usd =
     (inTok * rate.inputUsdPerMTok +
-      cacheRead * rate.inputUsdPerMTok * CACHE_READ_MULTIPLIER +
-      cacheWrite * rate.inputUsdPerMTok * CACHE_WRITE_MULTIPLIER +
+      cacheRead * rate.inputUsdPerMTok * cacheReadMultiplier(rate) +
+      cacheWrite * rate.inputUsdPerMTok * cacheWriteMultiplier(rate) +
       outTok * rate.outputUsdPerMTok) /
     1_000_000;
 
@@ -139,6 +161,8 @@ module.exports = {
   CACHE_READ_MULTIPLIER,
   CACHE_WRITE_MULTIPLIER,
   rateFor,
+  cacheReadMultiplier,
+  cacheWriteMultiplier,
   costUsd,
   toCredits,
   roundCredits,

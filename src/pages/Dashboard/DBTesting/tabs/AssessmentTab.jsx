@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiFetch, triggerDownload, fmtDate } from '../api';
+import { guardRun } from '../../../../services/operations/runGate';
 import { stCfg, ASSESS_PHASES } from '../constants';
 import StatusPill from '../components/StatusPill';
 import ShimmerBar from '../components/ShimmerBar';
@@ -110,6 +111,15 @@ export default function AssessmentTab() {
     if (!assessForm.replica_url.trim()) { toast.error('Replica URL is required.'); return; }
     setAssessSubmitting(true); setAssessment(null); setAssessDbTab('findings'); setAssessTestTab('test_results');
     try {
+      // A full assessment is billed on the test cases it generates
+      // (dbTestMath.priceDbTestRun), and until now nothing on this page
+      // checked whether the user could afford one — the charge simply landed
+      // after the work finished. The DB service's own Go middleware does
+      // refuse the request, so this is not the only gate; it is the one that
+      // fails the user in a second, on the button they pressed, instead of
+      // several seconds later as an opaque API error.
+      if (!(await guardRun('a database assessment'))) return;
+
       const d = await apiFetch('/analysis/assessments', {
         method: 'POST',
         body: JSON.stringify({

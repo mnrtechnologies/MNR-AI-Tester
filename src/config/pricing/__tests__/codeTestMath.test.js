@@ -94,10 +94,18 @@ describe("live metering", () => {
 });
 
 describe("pre-run estimate", () => {
-  test("assumes one test per file — the worst case, so quotes do not under-promise", () => {
-    expect(ctm.estimateCreditsForSelection(22)).toBe(
-      ctm.creditsForRun({ freshFilesAnalysed: 22, freshTestsGenerated: 22 }),
-    );
+  test("quotes at least the LLM work, plus an allowance for executing the suite", () => {
+    // Was an exact equality against files+tests alone. That stopped holding
+    // when execution became billable, and the equality was never the point:
+    // what a quote must guarantee is that it does not come in UNDER the
+    // eventual charge. Asserting the property rather than the arithmetic keeps
+    // that guarantee true across future recalibration.
+    const quoted = ctm.estimateCreditsForSelection(22);
+    const llmOnly = ctm.creditsForRun({
+      freshFilesAnalysed: 22,
+      freshTestsGenerated: 22,
+    });
+    expect(quoted).toBeGreaterThanOrEqual(llmOnly);
   });
 
   test("an empty selection still quotes the base", () => {
@@ -112,5 +120,58 @@ describe("platform consistency", () => {
     // platform's whole capacity model.
     expect(P.SECONDS_PER_CREDIT).toBe(PRICING.apiTestFormula.SECONDS_PER_CREDIT);
     expect(P.SECONDS_PER_CREDIT).toBe(PRICING.perfTestFormula.SECONDS_PER_CREDIT);
+  });
+});
+
+describe("executed tests are billed (regression: cached re-runs were near-free)", () => {
+  test("a fully cached re-run is NOT priced as an empty run", () => {
+    // The reported bug: every LLM result came from cache, so both fresh
+    // counters are 0 — yet the runner still cloned, installed and executed a
+    // real suite. Previously this priced at the base alone.
+    const cachedReRun = { facts: { testsExecuted: 400 } };
+    const emptyRun = { facts: {} };
+    expect(ctm.creditsForRun(cachedReRun.facts)).toBeGreaterThan(
+      ctm.creditsForRun(emptyRun.facts),
+    );
+  });
+
+  test("executing more tests costs more", () => {
+    const small = ctm.creditsForRun({ testsExecuted: 40 });
+    const large = ctm.creditsForRun({ testsExecuted: 4000 });
+    expect(large).toBeGreaterThan(small);
+  });
+
+  test("an executed test costs the same here as in an API scan", () => {
+    // One second of our capacity is one second wherever it is spent; a
+    // per-product rate would let customers arbitrage between engines.
+    const pricing = require("../pricing.data.json");
+    expect(pricing.codeTestFormula.SECONDS_PER_TEST_EXECUTED).toBe(
+      pricing.apiTestFormula.SECONDS_PER_TEST,
+    );
+  });
+
+  test("the observed 40-test cached run still costs 1 credit", () => {
+    // Run ed878a3f: 29 real seconds. The fix must not inflate small runs.
+    expect(ctm.creditsForRun({ testsExecuted: 40 })).toBe(1);
+  });
+
+  test("mid-run the meter ignores execution, then settlement trues it up", () => {
+    // testsExecuted is written only at completion, so the live meter must not
+    // see it early — the debit path cannot refund an overcharge.
+    const inFlight = ctm.liveFacts({ facts: { freshFilesAnalysed: 3 } });
+    expect(inFlight.testsExecuted).toBe(0);
+    const settled = ctm.liveFacts({ facts: { freshFilesAnalysed: 3, testsExecuted: 200 } });
+    expect(ctm.creditsForRun(settled)).toBeGreaterThan(ctm.creditsForRun(inFlight));
+  });
+
+  test("the pre-run quote stays an upper bound over a typical run", () => {
+    // 8 files really produced 5 test files and 112 executed tests.
+    const quoted = ctm.estimateCreditsForSelection(8);
+    const actual = ctm.creditsForRun({
+      freshFilesAnalysed: 8,
+      freshTestsGenerated: 5,
+      testsExecuted: 112,
+    });
+    expect(quoted).toBeGreaterThanOrEqual(actual);
   });
 });

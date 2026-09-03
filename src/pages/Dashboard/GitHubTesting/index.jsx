@@ -3,6 +3,7 @@ import { Github, ChevronLeft } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 import toast from 'react-hot-toast';
 import { apiFetch } from './api';
+import { guardRun } from '../../../services/operations/runGate';
 import ConnectGitHub from './components/ConnectGitHub';
 import GitHubAccountBadge from './components/GitHubAccountBadge';
 import CreditBalanceBadge from './components/CreditBalanceBadge';
@@ -128,8 +129,19 @@ export default function GitHubTesting() {
     refreshRepos();
   };
 
-  /** Re-read an already-known repo so the picker has a current tree. */
+  /**
+   * Re-read an already-known repo so the picker has a current tree.
+   *
+   * Gated even though this step is not itself billed. Indexing clones the
+   * repository and walks it server-side, which is real work, and it is the
+   * doorway to the configure pane whose Run button IS billed. Letting a user
+   * with no credits sit through a clone only to be refused at the last click
+   * is the worst ordering available; PathSelector still runs its own preflight
+   * immediately before starting the run, because that is the check that
+   * actually decides.
+   */
   const configureExistingRepo = async (repo) => {
+    if (!(await guardRun('a code test'))) return;
     setReindexing(true);
     try {
       // An uploaded project has no branch to re-resolve and nothing to
