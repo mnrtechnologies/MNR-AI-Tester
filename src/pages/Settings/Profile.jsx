@@ -74,10 +74,9 @@ const Profile = () => {
     );
   }
 
-  return (
+return (
     <div className="max-w-5xl mx-auto mt-4 space-y-6">
-    
-
+      
       {/* ------------------------------------------- */}
       {/* SECTION 1: PERSONAL INFORMATION FORM        */}
       {/* ------------------------------------------- */}
@@ -110,6 +109,25 @@ const Profile = () => {
         >
           {loading ? "Updating..." : "Save Changes"}
         </button>
+      </div>
+
+      {/* ------------------------------------------- */}
+      {/* SECTION 2: SUPPORT                          */}
+      {/* ------------------------------------------- */}
+      <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100">
+        <h2 className="text-lg font-bold text-slate-800 mb-2">Need Support?</h2>
+        <p className="text-sm text-slate-600 mb-4">
+          If you have any questions or are facing issues, feel free to reach out to our support team.
+        </p>
+        <div className="flex items-center space-x-2">
+          <span className="text-sm font-semibold text-slate-700">Email:</span>
+          <a 
+            href="mailto:support@mnrtechnologies.com" 
+            className="text-sm font-bold text-orange-500 hover:text-orange-600 hover:underline transition-all"
+          >
+            support@mnrtechnologies.com
+          </a>
+        </div>
       </div>
       
     </div>
