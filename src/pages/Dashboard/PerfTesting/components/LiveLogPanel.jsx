@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Terminal } from 'lucide-react';
 import { LOG_COLOR_CLASS } from '../constants';
 
-export default function LiveLogPanel({ logs }) {
+export default function LiveLogPanel({ logs, active, finished }) {
   const bottomRef = useRef(null);
 
   useEffect(() => {
@@ -18,7 +18,21 @@ export default function LiveLogPanel({ logs }) {
       </div>
       <div className="h-64 overflow-y-auto px-4 py-3 font-mono text-xs space-y-1">
         {logs.length === 0 ? (
-          <p className="text-slate-600 italic">Waiting for the run to start…</p>
+          // A finished run with no log lines is NOT "waiting to start" — its
+          // live log simply aged out of Redis (8h TTL, see redis_store.py).
+          // Showing the waiting message on a run that completed hours ago
+          // reads as though the run never began, and hides the fact that
+          // the evidence is merely expired rather than missing.
+          finished ? (
+            <p className="text-slate-600 italic">
+              This run has finished and its live log has expired (logs are kept for 8 hours).
+              The phase results and any failure reason below are stored permanently.
+            </p>
+          ) : active ? (
+            <p className="text-slate-600 italic">Waiting for the run to start…</p>
+          ) : (
+            <p className="text-slate-600 italic">No log lines for this run.</p>
+          )
         ) : (
           logs.map((l, i) => (
             <p key={i} className={`${LOG_COLOR_CLASS[l.color] || LOG_COLOR_CLASS.white} leading-relaxed break-words`}>

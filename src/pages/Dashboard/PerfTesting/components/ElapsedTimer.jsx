@@ -20,7 +20,7 @@ function fmtElapsed(ms) {
  * during that stretch, a run that's actually fine looks indistinguishable
  * from one that's stuck.
  */
-export default function ElapsedTimer({ since, active }) {
+export default function ElapsedTimer({ since, until, active }) {
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -33,10 +33,21 @@ export default function ElapsedTimer({ since, active }) {
   const startMs = new Date(since).getTime();
   if (Number.isNaN(startMs)) return null;
 
+  // A FINISHED run has a duration, not an elapsed time. Counting to `now`
+  // regardless of `until` meant a completed run kept ticking forever and
+  // reported how long ago it started rather than how long it took —
+  // observed reporting "2h 58m" for a run that failed after 4m 18s, which
+  // sent a real investigation looking for a timeout that never happened.
+  const endMs = !active && until ? new Date(until).getTime() : now;
+  const safeEndMs = Number.isNaN(endMs) ? now : endMs;
+
   return (
-    <span className="flex items-center gap-1.5 text-xs font-mono text-slate-500 tabular-nums">
+    <span
+      className="flex items-center gap-1.5 text-xs font-mono text-slate-500 tabular-nums"
+      title={active ? 'Time since this run started' : 'Total run duration'}
+    >
       <Clock size={12} className={active ? 'text-orange-500' : 'text-slate-400'} />
-      {fmtElapsed(now - startMs)}
+      {fmtElapsed(safeEndMs - startMs)}
     </span>
   );
 }

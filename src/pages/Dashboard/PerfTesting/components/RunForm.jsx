@@ -59,6 +59,7 @@ export default function RunForm({ disabled, onStarted }) {
   const [showPassword, setShowPassword] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [showCreds, setShowCreds] = useState(false);
+  const [credsDismissed, setCredsDismissed] = useState(false);
   const [showLoginPool, setShowLoginPool] = useState(false);
   const [loginPoolMode, setLoginPoolMode] = useState('paste'); // 'paste' | 'csv'
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -68,6 +69,7 @@ export default function RunForm({ disabled, onStarted }) {
   // and there's no way to tell which one your test actually needs.
   const [intent, setIntent] = useState('browse');
   const [showAllOptions, setShowAllOptions] = useState(false);
+
 
   // Mixed runs act on SEVERAL pages at once, so one URL box can't describe
   // them — each persona needs its own page, its own actions there, and its
@@ -116,6 +118,34 @@ export default function RunForm({ disabled, onStarted }) {
   const [autoCreateRunId, setAutoCreateRunId] = useState(null);
   const [autoCreateStatus, setAutoCreateStatus] = useState(null);
   const autoCreateActive = autoCreateRunId && !['completed', 'failed', 'cancelled'].includes(autoCreateStatus?.status);
+
+  // Does this run need to sign in as an EXISTING user? Asking up front
+  // matters because the engine will no longer invent credentials: a plan
+  // that needs a login and has none now stops before discovery, instead of
+  // typing a made-up address into the target's login form and reporting the
+  // resulting 100% rejection as though the target were broken.
+  const looksLikeLogin = (() => {
+    if (intent === 'login') return true;      // the whole point of that intent
+    if (intent === 'signup') return false;    // signup creates the account it uses
+    const text = `${form.prompt} ${form.target_url}`.toLowerCase();
+    if (/\b(sign\s*-?\s*up|signup|register|registration)\b/.test(text)) return false;
+    return /\b(log\s*-?\s*in|login|sign\s*-?\s*in|signin|dashboard|authenticated|logged[- ]in|my account|profile)\b/.test(text);
+  })();
+  // Three legitimate ways a run can hold real accounts, and the chosen
+  // intent decides which the form even offers (TEST_INTENT_OPTIONS.sections):
+  // one credential pair for browsing behind a login, a pasted pool of many,
+  // or auto-created accounts. Any one counts — having NONE is the problem.
+  const hasSingleLogin = Boolean(form.login_email.trim() && form.login_password.trim());
+  const hasPastedPool = Boolean(form.login_credentials_pool_text.trim());
+  const hasAutoCreate = (parseInt(autoCreateCount, 10) || 0) > 0;
+  const credentialsMissing =
+    looksLikeLogin && !hasSingleLogin && !hasPastedPool && !hasAutoCreate;
+
+  // Open the credentials section as soon as the run looks like a login test,
+  // unless the user has explicitly said it isn't one.
+  useEffect(() => {
+    if (credentialsMissing && !credsDismissed && visible('targetLogin')) setShowCreds(true);
+  }, [credentialsMissing, credsDismissed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!autoCreateRunId) return undefined;
@@ -215,6 +245,13 @@ export default function RunForm({ disabled, onStarted }) {
     if (!form.authorized_by_email.trim()) return toast.error('Authorization confirmation email is required.');
     const providerKey = form.llm_provider === 'openai' ? form.openai_api_key : form.anthropic_api_key;
     if (!providerKey.trim()) return toast.error(`${form.llm_provider === 'openai' ? 'OpenAI' : 'Anthropic'} API key is required for autonomous planning.`);
+    // Catch a missing login here rather than letting the backend's own
+    // guard catch it minutes later. Dismissable, because only the user can
+    // say for certain that their test doesn't need a session.
+    if (credentialsMissing && !credsDismissed) {
+      setShowCreds(true);
+      return toast.error('This looks like a login test — enter the target login credentials, or mark it as not a login test.');
+    }
 
     setSubmitting(true);
     try {
@@ -483,8 +520,13 @@ export default function RunForm({ disabled, onStarted }) {
             className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-slate-700 transition-colors">
             <ChevronDown size={13} className={`transition-transform duration-200 ${showCreds ? 'rotate-180' : ''}`} />
             <Lock size={12} /> Target Login Credentials
-            <span className="text-slate-400 font-normal normal-case">(optional — only if the flow needs a logged-in session)</span>
+            {credentialsMissing ? (
+              <span className="text-amber-600 font-semibold normal-case">— required for this test</span>
+            ) : (
+              <span className="text-slate-400 font-normal normal-case">(optional — only if the flow needs a logged-in session)</span>
+            )}
           </button>
+
           <AnimatePresence>
             {showCreds && (
               <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
@@ -724,6 +766,30 @@ export default function RunForm({ disabled, onStarted }) {
             className="rounded border-slate-300 text-orange-500 focus:ring-orange-500" />
           Show every option, regardless of what I picked above
         </label>
+
+        {/* Rendered here, outside every collapsible section, so it appears
+            whichever intent is selected — the sections that collect accounts
+            differ per intent, but "this run has no real account to use"
+            is a problem for all of them. The engine no longer invents one,
+            so surface it now rather than several minutes into a run that
+            fails at 100% errors looking like a fault on the target. */}
+        {credentialsMissing && !credsDismissed && (
+          <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+            <Lock size={14} className="text-amber-600 mt-0.5 shrink-0" />
+            <div className="text-[11px] leading-relaxed text-amber-800">
+              <span className="font-semibold">This test needs real login details.</span>{' '}
+              {intent === 'login'
+                ? 'Paste a list of existing accounts, or use Auto-Create to register new ones first.'
+                : 'Enter the login email and password for an account that already exists on the target.'}{' '}
+              The engine will not make up an email and password — an invented account cannot sign in,
+              so every request would fail and the result would tell you nothing about the target.
+              <button type="button" onClick={() => setCredsDismissed(true)}
+                className="ml-1 underline font-semibold hover:text-amber-900">
+                This isn't a login test
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="pt-1">
           <button type="submit" disabled={submitting || disabled}

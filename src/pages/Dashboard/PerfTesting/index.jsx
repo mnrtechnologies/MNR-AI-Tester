@@ -128,15 +128,30 @@ export default function PerfTesting() {
     setHistoricalMetricsByPhase({});
   };
 
+  // Cancelling is a REQUEST, not an instant stop: the engine sets a flag and
+  // each phase notices it at its next checkpoint. During discovery that can
+  // be up to ~90s away, because a Playwright step waits for the page to
+  // settle before the crawl loop looks at the flag again. Leaving the button
+  // unchanged for that whole window makes a cancel that is working look like
+  // one that was ignored — reported exactly that way in practice. Show the
+  // pending state and stop accepting further clicks.
+  const [cancelling, setCancelling] = useState(false);
+
   const cancelRun = async () => {
-    if (!activeRunId) return;
+    if (!activeRunId || cancelling) return;
+    setCancelling(true);
     try {
       await apiFetch(`/api/perf/runs/${activeRunId}/cancel`, { method: 'POST' });
-      toast.success('Cancellation requested.');
+      toast.success('Cancelling — the run stops at its next checkpoint (up to ~90s during discovery).');
     } catch (e) {
+      setCancelling(false);   // let them retry only if the request itself failed
       toast.error(e.message);
     }
   };
+
+  // Clear the pending state once the run actually reaches a terminal status,
+  // and whenever a different run becomes the active one.
+  useEffect(() => { setCancelling(false); }, [activeRunId]);
 
   const liveStatus = status?.status || fullRun?.status;
   const isTerminal = ['completed', 'failed', 'cancelled'].includes(liveStatus);
@@ -277,16 +292,22 @@ export default function PerfTesting() {
                   {liveStatus && <StatusPill status={liveStatus} />}
                   <span className="text-xs font-mono text-slate-400 truncate max-w-[220px]">{activeRunId}</span>
                   {status?.phase_label && <span className="text-xs text-slate-500">{status.phase_label}</span>}
-                  <ElapsedTimer since={fullRun?.created_at} active={isActive} />
+                  <ElapsedTimer since={fullRun?.created_at} until={fullRun?.completed_at} active={isActive} />
                 </div>
                 <div className="flex items-center gap-3">
                   {fullRun?.plan && (
                     <PhasePipeline plan={fullRun.plan} hasAuth={hasAuth} currentPhase={livePhase} runStatus={liveStatus} />
                   )}
                   {isActive && (
-                    <button onClick={cancelRun}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-rose-200 text-rose-600 text-xs font-bold hover:bg-rose-50 transition-colors shrink-0">
-                      <XCircle size={13} /> Cancel
+                    <button onClick={cancelRun} disabled={cancelling}
+                      title={cancelling ? 'Cancellation requested — the run stops at its next checkpoint' : 'Cancel this run'}
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-colors shrink-0 ${
+                        cancelling
+                          ? 'border-slate-200 text-slate-400 cursor-not-allowed'
+                          : 'border-rose-200 text-rose-600 hover:bg-rose-50'
+                      }`}>
+                      <XCircle size={13} className={cancelling ? 'animate-pulse' : ''} />
+                      {cancelling ? 'Cancelling…' : 'Cancel'}
                     </button>
                   )}
                 </div>
@@ -318,7 +339,11 @@ export default function PerfTesting() {
 
             <DiscoveredEndpointsPanel endpoints={discoveredEndpoints.length ? discoveredEndpoints : historicalEndpoints} />
 
-            <LiveLogPanel logs={logs.length ? logs : historicalLogs} />
+            <LiveLogPanel
+              logs={logs.length ? logs : historicalLogs}
+              active={isActive}
+              finished={['completed', 'failed', 'cancelled'].includes(liveStatus)}
+            />
 
             {loadingRun && !fullRun && <p className="text-center text-sm text-slate-400 py-4">Loading run…</p>}
 
