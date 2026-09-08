@@ -20,6 +20,7 @@ import ContactPage from "../components/UI/ContactPage";
 import { useNavigate } from "react-router-dom";
 import Footer from "../components/UI/Footer";
  import PricingCTA from "../components/UI/Pricing";
+import OurClients from "../components/UI/OurClients";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 50 },
@@ -208,6 +209,11 @@ const Home = () => {
       {/* ================= Plan Pricing  ================= */}
       <section id="pricing">
         <PricingCTA />
+      </section>
+
+      {/* ================= Our Clients ================= */}
+      <section id="clients">
+        <OurClients />
       </section>
 
       {/* ================= CONTACT ================= */}

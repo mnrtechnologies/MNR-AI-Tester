@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useSelector } from "react-redux"; // Added Redux hook
-import { useEffect } from "react";
+import { useEffect, useState } from "react"; // Added useState
+import { HelpCircle, X, Copy, Check } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import AppHeader from "./components/Layout/AppHeader.jsx";
 import Sidebar from "./components/Layout/Sidebar.jsx";
@@ -42,6 +43,97 @@ import PerfTesting from "./pages/Dashboard/PerfTesting/index.jsx";
 import GitHubTesting from "./pages/Dashboard/GitHubTesting/index.jsx";
 import SecurityTesting from "./pages/Dashboard/SecurityTesting.jsx";
 
+// --- SUPPORT BUTTON COMPONENT ---
+const SupportButton = () => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [copied, setCopied] = useState(false); // State for copy feedback
+
+  const handleCopyEmail = () => {
+    navigator.clipboard.writeText("support@mnrtechnologies.com");
+    setCopied(true);
+    // Reset the copy icon back after 2 seconds
+    setTimeout(() => {
+      setCopied(false);
+    }, 2000);
+  };
+
+  return (
+    <>
+      <button
+        onClick={() => setIsOpen(true)}
+        className="fixed bottom-8 right-8 bg-orange-500 hover:bg-orange-600 text-white p-4 rounded-full shadow-2xl transition-transform hover:scale-110 z-[9999] flex items-center justify-center border-4 border-white"
+        aria-label="Support"
+      >
+        <HelpCircle size={28} />
+      </button>
+
+      {isOpen && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden transform transition-all">
+            
+            {/* Modal Header */}
+            <div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <HelpCircle className="text-orange-500" size={20} />
+                Need Help?
+              </h3>
+              <button
+                onClick={() => setIsOpen(false)}
+                className="text-slate-400 hover:text-slate-700 bg-slate-200/50 hover:bg-slate-200 p-1.5 rounded-full transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            
+            {/* Modal Body */}
+            <div className="p-8 text-center space-y-4">
+              <div className="mx-auto w-16 h-16 bg-orange-100 text-orange-500 rounded-full flex items-center justify-center mb-2">
+                <HelpCircle size={32} />
+              </div>
+              <h4 className="text-xl font-bold text-slate-800">Any Query?</h4>
+              <p className="text-slate-500 text-sm">
+                If you have any questions or need assistance, feel free to drop us an email. Our team will get back to you shortly.
+              </p>
+              
+              {/* Email & Copy Button Wrapper */}
+              <div className="pt-4 pb-2 flex justify-center">
+                <div className="inline-flex items-center bg-orange-50 border border-orange-200 rounded-xl overflow-hidden shadow-sm">
+                  
+                  {/* Mailto Link */}
+                  <a
+                    href="mailto:support@mnrtechnologies.com"
+                    className="px-5 py-3 text-orange-600 font-bold hover:bg-orange-100 transition-colors"
+                  >
+                    support@mnrtechnologies.com
+                  </a>
+                  
+                  {/* Vertical Divider */}
+                  <div className="w-[1px] h-8 bg-orange-200"></div>
+                  
+                  {/* Copy Button */}
+                  <button
+                    onClick={handleCopyEmail}
+                    className="px-4 py-3 hover:bg-orange-100 transition-colors flex items-center justify-center group bg-white/50"
+                    title="Copy to clipboard"
+                  >
+                    {copied ? (
+                      <Check size={18} className="text-emerald-500" />
+                    ) : (
+                      <Copy size={18} className="text-orange-500 group-hover:text-orange-700 transition-colors" />
+                    )}
+                  </button>
+
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
 // Layout for Dashboard pages ONLY
 const DashboardLayout = ({ children }) => (
   <div className="flex flex-col h-screen overflow-hidden">
@@ -50,6 +142,7 @@ const DashboardLayout = ({ children }) => (
       <Sidebar />
       <main className="flex-1 overflow-y-auto bg-gray-50 p-6">{children}</main>
     </div>
+    <SupportButton/>
   </div>
 );
 
@@ -107,6 +200,8 @@ const CompanyAdminRoute = ({ children }) => {
   // 3. If they are completely loaded and NOT an Admin, redirect them.
   return <Navigate to="/dashboard" replace />;
 };
+
+//super admin
 const SuperAdminRoute = ({ children }) => {
   const { user } = useSelector((state) => state.profile);
   const hasToken = localStorage.getItem("token");
@@ -131,6 +226,7 @@ const SuperAdminRoute = ({ children }) => {
   // 3. If they are completely loaded and NOT an Admin, redirect them.
   return <Navigate to="/dashboard" replace />;
 };
+
 // Layout for Admin pages to keep the Footer at the bottom
 const AdminLayout = ({ children }) => (
   <div className="flex flex-col min-h-screen bg-slate-50">
@@ -138,6 +234,7 @@ const AdminLayout = ({ children }) => (
     {/* flex-grow pushes the footer to the bottom, pb-6 adds breathing room */}
     <main className="flex-grow pb-6">{children}</main>
     <Footer />
+    <SupportButton/>
   </div>
 );
 

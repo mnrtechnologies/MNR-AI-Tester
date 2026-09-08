@@ -329,13 +329,13 @@ export default function TestCaseDesigner() {
     >
       <div className="max-w-5xl mx-auto space-y-8 pb-12 pt-6 px-4">
         {/* HERO */}
-        <div className="bg-gradient-to-br from-white to-violet-50/40 rounded-3xl p-8 md:p-10 border border-violet-100 shadow-sm">
-          <div className="inline-flex items-center gap-2 bg-violet-100 text-violet-600 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-6">
+        <div className="bg-gradient-to-br from-white to-orange-50/40 rounded-3xl p-8 md:p-10 border border-orange-100 shadow-sm">
+          <div className="inline-flex items-center gap-2 bg-orange-100 text-orange-600 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-6">
             <FileText size={14} />
             <span>Pre-Development</span>
           </div>
           <h1 className="text-4xl font-black text-slate-900 mb-4 tracking-tight">
-            Test Case <span className="text-violet-500">Designer</span>
+            Test Case <span className="text-orange-500">Designer</span>
           </h1>
           <p className="text-slate-500 text-lg leading-relaxed max-w-2xl">
             Upload a business requirements document and get a full test case
@@ -348,8 +348,8 @@ export default function TestCaseDesigner() {
         {account && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-6 py-4 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center shrink-0">
-                <Coins className="text-violet-500" size={20} />
+              <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center shrink-0">
+                <Coins className="text-orange-500" size={20} />
               </div>
               <div>
                 <p className="text-sm font-semibold text-slate-800">
@@ -386,7 +386,7 @@ export default function TestCaseDesigner() {
               {user?.role === "company_admin" && (
                 <Link
                   to="/upgrade-plan"
-                  className="text-sm font-semibold text-violet-600 hover:text-violet-700 whitespace-nowrap"
+                  className="text-sm font-semibold text-orange-600 hover:text-orange-700 whitespace-nowrap"
                 >
                   Manage plan →
                 </Link>
@@ -398,7 +398,7 @@ export default function TestCaseDesigner() {
         {/* STEP 1 — UPLOAD */}
         <div className="bg-white rounded-2xl border border-slate-200 p-6 md:p-8 shadow-sm">
           <div className="flex items-center gap-2 mb-1">
-            <span className="w-6 h-6 rounded-full bg-violet-100 text-violet-600 text-xs font-bold flex items-center justify-center">
+            <span className="w-6 h-6 rounded-full bg-orange-100 text-orange-600 text-xs font-bold flex items-center justify-center">
               1
             </span>
             <h2 className="text-lg font-bold text-slate-900">
@@ -424,11 +424,11 @@ export default function TestCaseDesigner() {
               type="button"
               onClick={() => fileRef.current?.click()}
               disabled={uploading}
-              className="w-full border-2 border-dashed border-slate-200 hover:border-violet-300 hover:bg-violet-50/40 rounded-xl py-10 flex flex-col items-center gap-2 transition disabled:opacity-60"
+              className="w-full border-2 border-dashed border-slate-200 hover:border-orange-300 hover:bg-orange-50/40 rounded-xl py-10 flex flex-col items-center gap-2 transition disabled:opacity-60"
             >
               {uploading ? (
                 <>
-                  <Loader2 className="animate-spin text-violet-500" size={24} />
+                  <Loader2 className="animate-spin text-orange-500" size={24} />
                   <span className="text-sm text-slate-500">
                     Reading document…
                   </span>
@@ -503,7 +503,7 @@ export default function TestCaseDesigner() {
         {doc && (
           <div className="bg-white rounded-2xl border border-slate-200 p-6 md:p-8 shadow-sm">
             <div className="flex items-center gap-2 mb-1">
-              <span className="w-6 h-6 rounded-full bg-violet-100 text-violet-600 text-xs font-bold flex items-center justify-center">
+              <span className="w-6 h-6 rounded-full bg-orange-100 text-orange-600 text-xs font-bold flex items-center justify-center">
                 2
               </span>
               <h2 className="text-lg font-bold text-slate-900">
@@ -544,7 +544,7 @@ export default function TestCaseDesigner() {
                       placeholder="sk-..."
                       value={apiKey}
                       onChange={(e) => setApiKey(e.target.value)}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-300"
                     />
                   </div>
                   <div>
@@ -561,7 +561,7 @@ export default function TestCaseDesigner() {
                       placeholder="sk-ant-..."
                       value={anthropicApiKey}
                       onChange={(e) => setAnthropicApiKey(e.target.value)}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-300"
                     />
                   </div>
                 </div>
@@ -589,7 +589,7 @@ export default function TestCaseDesigner() {
                 type="button"
                 onClick={startAnalysis}
                 disabled={starting || !hasKey}
-                className="w-full bg-violet-600 hover:bg-violet-700 disabled:opacity-60 text-white font-semibold rounded-xl py-3 flex items-center justify-center gap-2 transition"
+                className="w-full bg-orange-600 hover:bg-orange-700 disabled:opacity-60 text-white font-semibold rounded-xl py-3 flex items-center justify-center gap-2 transition"
               >
                 {starting ? (
                   <>
@@ -608,7 +608,7 @@ export default function TestCaseDesigner() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-slate-600 flex items-center gap-2">
-                    <Loader2 className="animate-spin text-violet-500" size={16} />
+                    <Loader2 className="animate-spin text-orange-500" size={16} />
                     {run.stage || "working"}
                   </span>
                   {run.total ? (
@@ -619,7 +619,7 @@ export default function TestCaseDesigner() {
                 </div>
                 <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-violet-500 transition-all duration-500"
+                    className="h-full bg-orange-500 transition-all duration-500"
                     style={{ width: `${pct}%` }}
                   />
                 </div>
@@ -632,9 +632,9 @@ export default function TestCaseDesigner() {
 
         {/* STEP 3 — THE GATE: what it costs, before it is spent */}
         {isAnalysed && (
-          <div className="bg-white rounded-2xl border-2 border-violet-200 p-6 md:p-8 shadow-sm">
+          <div className="bg-white rounded-2xl border-2 border-orange-200 p-6 md:p-8 shadow-sm">
             <div className="flex items-center gap-2 mb-1">
-              <span className="w-6 h-6 rounded-full bg-violet-100 text-violet-600 text-xs font-bold flex items-center justify-center">
+              <span className="w-6 h-6 rounded-full bg-orange-100 text-orange-600 text-xs font-bold flex items-center justify-center">
                 3
               </span>
               <h2 className="text-lg font-bold text-slate-900">
@@ -675,7 +675,7 @@ export default function TestCaseDesigner() {
                     <div>
                       <p className="text-sm text-slate-800">
                         This will cost about{" "}
-                        <span className="font-bold text-violet-700">
+                        <span className="font-bold text-orange-700">
                           {estimate.credits} credit
                           {estimate.credits === 1 ? "" : "s"}
                         </span>
@@ -692,7 +692,7 @@ export default function TestCaseDesigner() {
                     {!estimate.sufficient && (
                       <Link
                         to="/upgrade-plan"
-                        className="text-sm font-semibold text-violet-600 hover:text-violet-700"
+                        className="text-sm font-semibold text-orange-600 hover:text-orange-700"
                       >
                         Top up →
                       </Link>
@@ -727,7 +727,7 @@ export default function TestCaseDesigner() {
                   confirmAndGenerate({ acknowledgedOversized: needsOversizedOk })
                 }
                 disabled={authorizing || !estimate}
-                className="flex-1 min-w-[220px] bg-violet-600 hover:bg-violet-700 disabled:opacity-60 text-white font-semibold rounded-xl py-3 flex items-center justify-center gap-2 transition"
+                className="flex-1 min-w-[220px] bg-orange-600 hover:bg-orange-700 disabled:opacity-60 text-white font-semibold rounded-xl py-3 flex items-center justify-center gap-2 transition"
               >
                 {authorizing ? (
                   <>
@@ -760,7 +760,7 @@ export default function TestCaseDesigner() {
         {(isRunning || isFailed) && (
           <div className="bg-white rounded-2xl border border-slate-200 p-6 md:p-8 shadow-sm">
             <div className="flex items-center gap-2 mb-1">
-              <span className="w-6 h-6 rounded-full bg-violet-100 text-violet-600 text-xs font-bold flex items-center justify-center">
+              <span className="w-6 h-6 rounded-full bg-orange-100 text-orange-600 text-xs font-bold flex items-center justify-center">
                 4
               </span>
               <h2 className="text-lg font-bold text-slate-900">
@@ -776,7 +776,7 @@ export default function TestCaseDesigner() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-slate-600 flex items-center gap-2">
-                    <Loader2 className="animate-spin text-violet-500" size={16} />
+                    <Loader2 className="animate-spin text-orange-500" size={16} />
                     {run.stage || "working"}
                   </span>
                   {run.total ? (
@@ -787,7 +787,7 @@ export default function TestCaseDesigner() {
                 </div>
                 <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-violet-500 transition-all duration-500"
+                    className="h-full bg-orange-500 transition-all duration-500"
                     style={{ width: `${pct}%` }}
                   />
                 </div>
@@ -923,13 +923,13 @@ function Stat({ label, value, accent }) {
     <div
       className={`rounded-xl border p-4 ${
         accent
-          ? "bg-violet-50 border-violet-200"
+          ? "bg-orange-50 border-orange-200"
           : "bg-slate-50 border-slate-200"
       }`}
     >
       <p
         className={`text-2xl font-black tabular-nums ${
-          accent ? "text-violet-600" : "text-slate-800"
+          accent ? "text-orange-600" : "text-slate-800"
         }`}
       >
         {value ?? 0}
