@@ -29,7 +29,7 @@ const HomeHeader = () => {
 
       {/* Navigation - Orange hover states */}
       <div className="hidden md:flex items-center gap-10">
-        {["Home", "Features", "About", "Contact","Pricing"].map((item) => (
+        {["Home", "Features", "About", "Contact","Pricing","Our Clients"].map((item) => (
           <button 
             key={item}
             onClick={() => handleScroll(item.toLowerCase())}
