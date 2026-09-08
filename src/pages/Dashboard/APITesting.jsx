@@ -287,6 +287,7 @@ const APITesting = () => {
   const [formData, setFormData] = useState({
     target_url: "",
     api_base_url: "",
+    spec_url: "",
     login_email: "",
     login_password: "",
     notify_email: "",
@@ -699,6 +700,26 @@ const APITesting = () => {
                     placeholder="https://api.yourdomain.com/v1"
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all text-slate-700"
                   />
+                </div>
+
+                {/* Swagger / OpenAPI URL */}
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                    Swagger / OpenAPI URL{" "}
+                    <span className="text-slate-400 font-normal">(optional)</span>
+                  </label>
+                  <input
+                    type="url"
+                    name="spec_url"
+                    value={formData.spec_url}
+                    onChange={handleChange}
+                    placeholder="https://api.yourdomain.com/swagger or .../openapi.json"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all text-slate-700"
+                  />
+                  <p className="text-xs text-slate-500">
+                    Paste your Swagger UI page or OpenAPI JSON/YAML link and we'll pull every
+                    endpoint straight from it instead of guessing where your docs live.
+                  </p>
                 </div>
 
                 {/* Login Email */}
