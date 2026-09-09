@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Gauge, Eye, EyeOff, Loader2, ChevronDown, Rocket, Lock, SlidersHorizontal, Users, Upload, KeyRound,
-  Globe, LogIn, UserPlus, Layers,
+  Globe, LogIn, UserPlus, Layers, Compass,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSelector } from 'react-redux';
@@ -12,9 +12,22 @@ import {
 } from '../constants';
 import CreatedCredentialsPanel from './CreatedCredentialsPanel';
 
-const INTENT_ICONS = { globe: Globe, login: LogIn, userPlus: UserPlus, layers: Layers };
+const INTENT_ICONS = { globe: Globe, login: LogIn, userPlus: UserPlus, layers: Layers, compass: Compass };
+
+// Real Chromium contexts, not HTTP virtual users — each costs hundreds of MB,
+// which is why the backend caps them far below MAX_VUS_PER_RUN. Ten is a
+// meaningful concurrency test on any ordinary host and a safe default to
+// suggest; limits.MAX_JOURNEY_CONCURRENT_SESSIONS is the real ceiling.
+const DEFAULT_JOURNEY_SESSIONS = 10;
+
+// One blank endpoint row. `body` is free text so a user can paste JSON
+// straight from their network tab; it is parsed and validated on submit
+// rather than fighting them character by character as they type.
+const emptyEndpoint = () => ({ method: 'GET', path: '', body: '', weight: 1 });
 
 const emptyForm = {
+  journey_concurrency: DEFAULT_JOURNEY_SESSIONS,
+  virtual_users: '',
   target_url: '',
   prompt: '',
   notify_email: '',
@@ -70,6 +83,47 @@ export default function RunForm({ disabled, onStarted }) {
   const [intent, setIntent] = useState('browse');
   const [showAllOptions, setShowAllOptions] = useState(false);
 
+  // Within "Every feature, timed" there are two ways to get endpoints:
+  // 'crawl' explores the site to find them, 'direct' takes them from the user.
+  // Direct skips discovery entirely — much faster, no LLM key, exact payloads
+  // — but nothing drives a browser, so there are no feature or navigation
+  // timings. That trade is stated in the UI before the run, not left to be
+  // discovered afterwards from empty panels.
+  const [journeyMode, setJourneyMode] = useState('crawl');
+  const [endpoints, setEndpoints] = useState([emptyEndpoint()]);
+  const directMode = intent === 'feature_journey' && journeyMode === 'direct';
+
+  const setEndpoint = (i, key) => (e) => setEndpoints((p) =>
+    p.map((row, idx) => (idx === i ? { ...row, [key]: e.target.value } : row)));
+  const addEndpoint = () => setEndpoints((p) => [...p, emptyEndpoint()]);
+  const removeEndpoint = (i) => setEndpoints((p) => p.filter((_, idx) => idx !== i));
+
+  /** Rows -> API payload. Returns {ok, endpoints} or {ok:false, error}. */
+  const buildDirectEndpoints = () => {
+    const out = [];
+    for (const [i, row] of endpoints.entries()) {
+      const path = (row.path || '').trim();
+      if (!path) continue;               // blank rows are simply ignored
+      let json_body;
+      const raw = (row.body || '').trim();
+      if (raw) {
+        try {
+          json_body = JSON.parse(raw);
+        } catch {
+          return { ok: false, error: `Endpoint ${i + 1} (${path}): body is not valid JSON.` };
+        }
+      }
+      out.push({
+        method: row.method || 'GET',
+        path,
+        weight: Math.max(parseInt(row.weight, 10) || 1, 1),
+        ...(json_body !== undefined ? { json_body } : {}),
+      });
+    }
+    if (!out.length) return { ok: false, error: 'Add at least one endpoint, or switch to exploring the site.' };
+    return { ok: true, endpoints: out };
+  };
+
 
   // Mixed runs act on SEVERAL pages at once, so one URL box can't describe
   // them — each persona needs its own page, its own actions there, and its
@@ -94,7 +148,17 @@ export default function RunForm({ disabled, onStarted }) {
     }));
   const weightTotal = flowsPayload.reduce((a, f) => a + f.weight, 0);
   const activeIntent = TEST_INTENT_OPTIONS.find((i) => i.id === intent) || TEST_INTENT_OPTIONS[0];
-  const visible = (section) => showAllOptions || activeIntent.sections.includes(section);
+  // Credential sections are dead weight in direct mode: the direct path
+  // dispatches straight to the smoke phase, so auth_bootstrap never runs and
+  // no browser ever signs in. Neither the target login nor the pool is read,
+  // so asking for them would be asking for passwords that go nowhere.
+  // They stay for the crawl path, where the pool genuinely gives each
+  // concurrent browser session its own identity.
+  const DIRECT_HIDES = ['targetLogin', 'loginPool', 'autoCreate', 'signupDomain'];
+  const visible = (section) => {
+    if (directMode && DIRECT_HIDES.includes(section)) return false;
+    return showAllOptions || activeIntent.sections.includes(section);
+  };
 
   // Whatever the chosen intent unlocks starts OPEN — a section that's only
   // shown because it's relevant shouldn't then need a second click to reach.
@@ -138,8 +202,11 @@ export default function RunForm({ disabled, onStarted }) {
   const hasSingleLogin = Boolean(form.login_email.trim() && form.login_password.trim());
   const hasPastedPool = Boolean(form.login_credentials_pool_text.trim());
   const hasAutoCreate = (parseInt(autoCreateCount, 10) || 0) > 0;
+  // Never in direct mode: nothing signs in, so a target URL that merely
+  // contains the word "login" must not raise a warning demanding credentials
+  // the run would never use.
   const credentialsMissing =
-    looksLikeLogin && !hasSingleLogin && !hasPastedPool && !hasAutoCreate;
+    !directMode && looksLikeLogin && !hasSingleLogin && !hasPastedPool && !hasAutoCreate;
 
   // Open the credentials section as soon as the run looks like a login test,
   // unless the user has explicitly said it isn't one.
@@ -240,11 +307,27 @@ export default function RunForm({ disabled, onStarted }) {
     } else if (!form.target_url.trim()) {
       return toast.error('Target URL is required.');
     }
-    if (!form.prompt.trim()) return toast.error('Describe what to test — this drives the autonomous planner.');
+    // A feature-journey run is the "just give me a URL" path: the engine finds
+    // the features itself, so demanding prose describing them would defeat the
+    // point. The backend synthesizes the planner objective for this intent.
+    if (!activeIntent.promptOptional && !form.prompt.trim()) {
+      return toast.error('Describe what to test — this drives the autonomous planner.');
+    }
+    let directPayload = null;
+    if (directMode) {
+      const built = buildDirectEndpoints();
+      if (!built.ok) return toast.error(built.error);
+      directPayload = built.endpoints;
+    }
     if (!form.notify_email.trim()) return toast.error('Notification email is required.');
     if (!form.authorized_by_email.trim()) return toast.error('Authorization confirmation email is required.');
+    // Direct mode names its own endpoints, so nothing is planned or discovered
+    // and no model is ever called — demanding a key there would block a run
+    // that has no use for one.
     const providerKey = form.llm_provider === 'openai' ? form.openai_api_key : form.anthropic_api_key;
-    if (!providerKey.trim()) return toast.error(`${form.llm_provider === 'openai' ? 'OpenAI' : 'Anthropic'} API key is required for autonomous planning.`);
+    if (!directMode && !providerKey.trim()) {
+      return toast.error(`${form.llm_provider === 'openai' ? 'OpenAI' : 'Anthropic'} API key is required for autonomous planning.`);
+    }
     // Catch a missing login here rather than letting the backend's own
     // guard catch it minutes later. Dismissable, because only the user can
     // say for certain that their test doesn't need a session.
@@ -292,6 +375,21 @@ export default function RunForm({ disabled, onStarted }) {
         // LOGGED OUT, or the site skips past the login form and the flow
         // can never be observed.
         test_intent: intent,
+        // Named endpoints replace discovery entirely — the backend
+        // synthesizes the plan and scenario from these and runs the direct
+        // path, so no crawl, no planner and no browser walk happen.
+        direct_endpoints: directPayload || undefined,
+        // Feature-journey only. Sent as a number the backend validates against
+        // MAX_JOURNEY_CONCURRENT_SESSIONS; omitted entirely for other intents
+        // so nothing carries a meaningless browser-session count.
+        // Blank means 'let the planner decide' — send undefined rather
+        // than 0, which the API would reject as below the minimum.
+        virtual_users: String(form.virtual_users).trim()
+          ? Number(form.virtual_users)
+          : undefined,
+        journey_concurrency: intent === 'feature_journey'
+          ? Number(form.journey_concurrency) || DEFAULT_JOURNEY_SESSIONS
+          : undefined,
         // Persona rows — mixed runs only. Each carries its own page and its
         // own actions, so discovery can visit them separately.
         mixed_flows: intent === 'mixed' && flowsPayload.length ? flowsPayload : undefined,
@@ -418,12 +516,151 @@ export default function RunForm({ disabled, onStarted }) {
 
         <div>
           <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block mb-1.5">
-            What should be tested? *
-            <span className="text-slate-400 normal-case font-normal"> — describe the real flow (selections, forms, what a user does), and how much load</span>
+            What should be tested?{activeIntent.promptOptional ? '' : ' *'}
+            <span className="text-slate-400 normal-case font-normal">
+              {activeIntent.promptOptional
+                ? ' — optional here; add anything specific you want covered'
+                : ' — describe the real flow (selections, forms, what a user does), and how much load'}
+            </span>
           </label>
-          <textarea value={form.prompt} onChange={set('prompt')} disabled={disabled} rows={4} required
+          <textarea value={form.prompt} onChange={set('prompt')} disabled={disabled} rows={activeIntent.promptOptional ? 2 : 4}
+            required={!activeIntent.promptOptional}
             placeholder={activeIntent.promptPlaceholder}
             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-orange-500 outline-none transition-all resize-none disabled:opacity-50" />
+
+          <div className="mt-3">
+            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block mb-1.5">
+              Virtual users
+              <span className="text-slate-400 normal-case font-normal"> — how much HTTP load to apply</span>
+            </label>
+            <input type="number" min={1} max={1500} disabled={disabled}
+              placeholder="leave blank to let the planner decide"
+              value={form.virtual_users} onChange={set('virtual_users')}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-orange-500 outline-none transition-all disabled:opacity-50" />
+            <p className="text-[11px] text-slate-400 mt-1.5">
+              Applied to the load phase; stress and spike scale up from it proportionally.
+              Left blank, the level is inferred from your prompt.
+            </p>
+          </div>
+
+          {intent === 'feature_journey' && (
+            <div className="mt-4 p-4 rounded-2xl border border-slate-200 bg-slate-50/60">
+              <p className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2.5">
+                How should we find the endpoints?
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {[
+                  {
+                    id: 'crawl',
+                    title: 'Explore my site',
+                    blurb: 'Drives a real browser through the app, finds the features and the API calls behind them, and times each one.',
+                    cost: 'Needs an OpenAI key · 15–20 min',
+                  },
+                  {
+                    id: 'direct',
+                    title: "I'll give you the endpoints",
+                    blurb: 'Skips exploring. Sends load straight to the endpoints you name, with the exact payloads you provide.',
+                    cost: 'No key needed · ~1 min to results',
+                  },
+                ].map((opt) => {
+                  const active = journeyMode === opt.id;
+                  return (
+                    <button
+                      key={opt.id} type="button" disabled={disabled}
+                      onClick={() => setJourneyMode(opt.id)}
+                      className={`text-left p-3 rounded-xl border transition-all disabled:opacity-50
+                        ${active ? 'border-orange-400 bg-white shadow-sm ring-1 ring-orange-100'
+                                 : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                    >
+                      <p className={`text-[13px] font-bold ${active ? 'text-orange-600' : 'text-slate-700'}`}>
+                        {opt.title}
+                      </p>
+                      <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">{opt.blurb}</p>
+                      <p className="text-[10px] text-slate-400 mt-1.5 font-medium">{opt.cost}</p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {directMode && (
+                <div className="mt-4">
+                  {/* Said before the run, not after: the journey panels will be
+                      empty in this mode and the user should know why up front. */}
+                  <div className="flex gap-2 p-3 rounded-xl bg-amber-50 border border-amber-100 mb-3">
+                    <SlidersHorizontal size={14} className="text-amber-500 shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-amber-900 leading-relaxed">
+                      No browser runs in this mode, so you get throughput, error rates and response
+                      times <b>per endpoint</b> &mdash; but <b>no feature, navigation or interaction
+                      timings</b>, because nothing walks the app.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                      Endpoints
+                    </p>
+                    <button type="button" onClick={addEndpoint} disabled={disabled}
+                      className="text-[11px] font-bold text-orange-500 hover:text-orange-600 disabled:opacity-50">
+                      + Add endpoint
+                    </button>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {endpoints.map((row, i) => (
+                      <div key={i} className="p-3 rounded-xl border border-slate-200 bg-white">
+                        <div className="flex gap-2">
+                          <select value={row.method} onChange={setEndpoint(i, 'method')} disabled={disabled}
+                            className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-2 text-xs font-mono focus:ring-2 focus:ring-orange-500 outline-none disabled:opacity-50">
+                            {['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((mth) => (
+                              <option key={mth} value={mth}>{mth}</option>
+                            ))}
+                          </select>
+                          <input value={row.path} onChange={setEndpoint(i, 'path')} disabled={disabled}
+                            placeholder="/api/chatbot"
+                            className="flex-1 min-w-0 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-orange-500 outline-none disabled:opacity-50" />
+                          <input type="number" min={1} value={row.weight} onChange={setEndpoint(i, 'weight')} disabled={disabled}
+                            title="Share of traffic relative to the other endpoints"
+                            className="w-16 bg-slate-50 border border-slate-200 rounded-lg px-2 py-2 text-sm text-center focus:ring-2 focus:ring-orange-500 outline-none disabled:opacity-50" />
+                          {endpoints.length > 1 && (
+                            <button type="button" onClick={() => removeEndpoint(i)} disabled={disabled}
+                              className="px-2 text-slate-300 hover:text-rose-500 disabled:opacity-50" title="Remove">
+                              &times;
+                            </button>
+                          )}
+                        </div>
+                        {['POST', 'PUT', 'PATCH'].includes(row.method) && (
+                          <textarea value={row.body} onChange={setEndpoint(i, 'body')} disabled={disabled} rows={2}
+                            placeholder={'{"conversation_id": "abc", "query": "What are the symptoms of flu?"}'}
+                            className="w-full mt-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono focus:ring-2 focus:ring-orange-500 outline-none resize-none disabled:opacity-50" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-2">
+                    Weight is each endpoint&rsquo;s share of the traffic. Paste the real JSON body
+                    from your network tab &mdash; a wrong shape means you load-test a 400.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeIntent.promptOptional && !directMode && (
+            <div className="mt-3">
+              <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block mb-1.5">
+                Concurrent browser sessions
+                <span className="text-slate-400 normal-case font-normal"> — real browsers, not virtual users</span>
+              </label>
+              <input type="number" min={1} max={500} disabled={disabled}
+                value={form.journey_concurrency} onChange={set('journey_concurrency')}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-orange-500 outline-none transition-all disabled:opacity-50" />
+              <p className="text-[11px] text-slate-400 mt-1.5">
+                Each is a full Chromium context costing hundreds of MB, so this is capped
+                far below the virtual-user limit. Without a credential pool they all share
+                one login — fine for a first look, but not a true multi-user test.
+              </p>
+            </div>
+          )}
         </div>
 
         <div>
@@ -483,7 +720,10 @@ export default function RunForm({ disabled, onStarted }) {
             <input type={showApiKey ? 'text' : 'password'} disabled={disabled}
               value={form.llm_provider === 'openai' ? form.openai_api_key : form.anthropic_api_key}
               onChange={set(form.llm_provider === 'openai' ? 'openai_api_key' : 'anthropic_api_key')}
-              placeholder={form.llm_provider === 'openai' ? 'sk-proj-…' : 'sk-ant-api03-…'} required
+              placeholder={directMode
+                ? 'not needed — you supplied the endpoints'
+                : (form.llm_provider === 'openai' ? 'sk-proj-…' : 'sk-ant-api03-…')}
+              required={!directMode}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 pr-10 text-sm font-mono focus:ring-2 focus:ring-orange-500 outline-none transition-all disabled:opacity-50" />
             <button type="button" onClick={() => setShowApiKey((v) => !v)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
@@ -717,7 +957,13 @@ export default function RunForm({ disabled, onStarted }) {
           </div>
         )}
 
-        {/* Collapsible: advanced overrides */}
+        {/* Collapsible: advanced overrides.
+            Hidden for "Every feature, timed": everything in here (pages to
+            audit, network throttling, signup domain) is either inferred by the
+            planner or meaningless for this intent, and the form is long enough
+            without options that change nothing. "Show every option" still
+            brings it back for anyone who wants it. */}
+        {(intent !== 'feature_journey' || showAllOptions) && (
         <div>
           <button type="button" onClick={() => setShowAdvanced((v) => !v)}
             className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-slate-700 transition-colors">
@@ -756,6 +1002,7 @@ export default function RunForm({ disabled, onStarted }) {
             )}
           </AnimatePresence>
         </div>
+        )}
 
         {/* Escape hatch — an unusual combination (e.g. a login pool AND a
             reset pool in one run) is legitimate, so nothing the intent

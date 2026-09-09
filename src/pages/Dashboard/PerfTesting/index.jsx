@@ -7,7 +7,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
 import SubscriptionGuard from '../../../components/UI/SubscriptionGuard';
 import { fetchCreditAccount } from '../../../services/operations/creditAPIs';
-import { apiFetch } from './api';
+import { apiFetch, getJourneyMetrics } from './api';
 import { PHASE_ORDER, LOADGEN_PHASES, PHASE_EXPECTATIONS } from './constants';
 import usePerfRunSocket from './hooks/usePerfRunSocket';
 import StatusPill from './components/StatusPill';
@@ -21,6 +21,9 @@ import CoverageCaveatBanner from './components/CoverageCaveatBanner';
 import RunForm from './components/RunForm';
 import ResultsPanel from './components/ResultsPanel';
 import RecentRuns from './components/RecentRuns';
+import LiveExplorationPanel from './components/LiveExplorationPanel';
+import JourneyTimingPanel from './components/JourneyTimingPanel';
+import SessionHealthPanel from './components/SessionHealthPanel';
 
 // A performance run is charged on what it actually consumed once it
 // finishes (engine seconds plus a concurrency surcharge for the load it
@@ -60,7 +63,11 @@ export default function PerfTesting() {
   const [historicalLogs, setHistoricalLogs] = useState([]);
   const [historicalEndpoints, setHistoricalEndpoints] = useState([]);
   const [historicalMetricsByPhase, setHistoricalMetricsByPhase] = useState({});
-  const { logs, status, metricsByPhase, discoveredEndpoints, connectionError, done } = usePerfRunSocket(
+  // Feature-journey results. Null for every other test type, which is why the
+  // journey panels below simply render nothing rather than needing the page to
+  // branch on test_intent.
+  const [journeyMetrics, setJourneyMetrics] = useState(null);
+  const { logs, status, metricsByPhase, discoveredEndpoints, screenshots, journeyTransitions, connectionError, done } = usePerfRunSocket(
     fullRun && ['completed', 'failed', 'cancelled'].includes(fullRun.status) ? null : activeRunId
   );
 
@@ -101,6 +108,24 @@ export default function PerfTesting() {
   useEffect(() => {
     if (activeRunId) fetchFullRun(activeRunId);
   }, [activeRunId, fetchFullRun]);
+
+  // The server's aggregate is authoritative once a run is terminal: it saw
+  // every session, including any whose transitions were trimmed from the live
+  // feed. Requested unconditionally — non-journey runs come back with nulls,
+  // and a failure here must never disturb a run that otherwise succeeded.
+  useEffect(() => {
+    setJourneyMetrics(null);
+    if (!activeRunId) return undefined;
+    let cancelled = false;
+    const terminal = ['completed', 'failed', 'cancelled'].includes(fullRun?.status);
+    if (!done && !terminal) return undefined;
+    getJourneyMetrics(activeRunId)
+      .then((d) => {
+        if (!cancelled && (d?.baseline || d?.under_load)) setJourneyMetrics(d);
+      })
+      .catch(() => { /* not a journey run, or results not stored — panels stay hidden */ });
+    return () => { cancelled = true; };
+  }, [activeRunId, done, fullRun?.status]);
 
   useEffect(() => {
     if (done && activeRunId) {
@@ -187,6 +212,19 @@ export default function PerfTesting() {
     return () => clearInterval(id);
   }, [isActive, dispatch]);
   const displayedRun = fullRun && ['completed', 'failed', 'cancelled'].includes(fullRun.status) ? fullRun : null;
+
+  // How much HTTP load was on the target while the under-load journey walked
+  // it. "Under load" on its own is half a number — a feature being 2x slower
+  // means nothing until you know whether that was under 20 users or 1000.
+  // Prefer what the load phase ACTUALLY sustained (vus_avg) over what the plan
+  // asked for: the engine clamps to limits.MAX_VUS_PER_RUN and a phase can end
+  // early, so the requested figure can overstate what the target really saw.
+  const loadVus = (() => {
+    const actual = fullRun?.phase_results?.load?.vus_avg;
+    if (actual) return Math.round(actual);
+    const planned = (fullRun?.plan?.phases || []).find((p) => p.phase === 'load')?.vus_end;
+    return planned || fullRun?.requested_virtual_users || null;
+  })();
   // Every loadgen phase that has ever produced a sample stays rendered, in
   // canonical run order — moving on to the next phase (e.g. smoke -> load)
   // no longer makes the previous one's chart disappear, it just stops being
@@ -194,6 +232,17 @@ export default function PerfTesting() {
   const loadgenPhasesWithData = PHASE_ORDER
     .map((p) => p.id)
     .filter((id) => LOADGEN_PHASES.has(id) && (metricsByPhase[id]?.length || historicalMetricsByPhase[id]?.length));
+
+  // Discovery is the long, opaque part of a run — often 5-20 minutes during
+  // which the exploration IS the only thing happening and every results panel
+  // is still empty. So give the live view the whole width until the load
+  // charts have something to show, then hand the space over to them.
+  // `explorationCollapsed` lets the user override either way; it is only
+  // consulted when set, so the automatic behaviour holds until they touch it.
+  const [explorationCollapsed, setExplorationCollapsed] = useState(null);
+  const focusExploration = explorationCollapsed === null
+    ? loadgenPhasesWithData.length === 0
+    : !explorationCollapsed;
 
   return (
     <SubscriptionGuard featureName="a performance test" requiredCredits={MIN_RUN_CREDITS}>
@@ -211,7 +260,13 @@ export default function PerfTesting() {
 
       <Toaster position="top-right" />
 
-      <div className="max-w-5xl mx-auto space-y-5 pb-12 pt-4 px-4">
+      {/* Widened from max-w-5xl: a feature-journey run has two things to show
+          at once — a live screenshot you WATCH and results you READ — and
+          stacking both in a single narrow column meant scrolling past the
+          screenshot to see any timing, then back up to see what the agent was
+          doing. The run view below splits them into two columns on large
+          screens; everything else still centres in the same reading width. */}
+      <div className="max-w-7xl mx-auto space-y-5 pb-12 pt-4 px-4">
 
         {/* Header */}
         <div className="bg-white rounded-3xl px-8 py-7 shadow-xl border border-slate-200">
@@ -324,8 +379,59 @@ export default function PerfTesting() {
 
             {fullRun?.coverage_caveat && !displayedRun && <CoverageCaveatBanner caveat={fullRun.coverage_caveat} />}
 
-            {loadgenPhasesWithData.length > 0 && (
-              <div className="space-y-4">
+            {/* Two tracks, side by side on a wide screen.
+                LEFT is what you watch while it runs — the screenshot and the
+                log — and it sticks, so it stays on screen while you read the
+                results instead of scrolling away from the thing still moving.
+                RIGHT is what accumulates and gets read afterwards.
+                Below lg they collapse back to one column in the same order. */}
+            {/* Full width while exploring — see focusExploration above. */}
+            {focusExploration && (
+              <LiveExplorationPanel
+                screenshots={screenshots}
+                wide
+                onToggleSize={() => setExplorationCollapsed(true)}
+              />
+            )}
+
+            <div className={`grid grid-cols-1 gap-4 items-start ${
+              focusExploration ? '' : 'lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)]'}`}>
+
+              {/* Bounded to the viewport so `sticky` actually works: the
+                  screenshot plus a 256px log can exceed screen height, and a
+                  sticky element taller than the viewport just scrolls off the
+                  bottom and never comes back. Overflowing inside keeps the
+                  live frame pinned no matter how tall the rail gets. */}
+              <div className={`space-y-4 ${focusExploration ? '' :
+                'lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:pr-1'}`}>
+                {!focusExploration && (
+                  <LiveExplorationPanel
+                    screenshots={screenshots}
+                    onToggleSize={() => setExplorationCollapsed(false)}
+                  />
+                )}
+
+                <LiveLogPanel
+                  logs={logs.length ? logs : historicalLogs}
+                  active={isActive}
+                  finished={['completed', 'failed', 'cancelled'].includes(liveStatus)}
+                />
+              </div>
+
+              <div className="space-y-4 min-w-0">
+                <JourneyTimingPanel
+                  transitions={journeyTransitions}
+                  journeyMetrics={journeyMetrics}
+                  loadVus={loadVus}
+                  browserSessions={
+                    (journeyMetrics?.under_load || journeyMetrics?.baseline)?.achieved_concurrency
+                  }
+                />
+
+                <SessionHealthPanel
+                  metrics={journeyMetrics?.under_load || journeyMetrics?.baseline}
+                />
+
                 {loadgenPhasesWithData.map((phase) => (
                   <LiveMetricsChart
                     key={phase}
@@ -334,20 +440,18 @@ export default function PerfTesting() {
                     live={phase === livePhase}
                   />
                 ))}
+
+                <DiscoveredEndpointsPanel
+                  endpoints={discoveredEndpoints.length ? discoveredEndpoints : historicalEndpoints}
+                />
+
+                {loadingRun && !fullRun && (
+                  <p className="text-center text-sm text-slate-400 py-4">Loading run…</p>
+                )}
+
+                {displayedRun && <ResultsPanel run={displayedRun} />}
               </div>
-            )}
-
-            <DiscoveredEndpointsPanel endpoints={discoveredEndpoints.length ? discoveredEndpoints : historicalEndpoints} />
-
-            <LiveLogPanel
-              logs={logs.length ? logs : historicalLogs}
-              active={isActive}
-              finished={['completed', 'failed', 'cancelled'].includes(liveStatus)}
-            />
-
-            {loadingRun && !fullRun && <p className="text-center text-sm text-slate-400 py-4">Loading run…</p>}
-
-            {displayedRun && <ResultsPanel run={displayedRun} />}
+            </div>
           </motion.div>
         )}
 

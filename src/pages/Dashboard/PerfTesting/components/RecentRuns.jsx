@@ -9,6 +9,10 @@ const TYPE_CHIP = 'px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500 text-[10
 export default function RecentRuns({ onSelect, refreshKey }) {
   const [runs, setRuns] = useState([]);
   const [loading, setLoading] = useState(false);
+  // Collapsed by default. History is reference material you go looking for,
+  // not something you need while watching a run — and left open it added
+  // twenty rows of scrolling below the results every single time.
+  const [open, setOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -22,20 +26,39 @@ export default function RecentRuns({ onSelect, refreshKey }) {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load, refreshKey]);
+  // Fetch only once opened, so a collapsed panel costs nothing. refreshKey
+  // still re-fetches, but only while it is actually being shown.
+  useEffect(() => { if (open) load(); }, [open, load, refreshKey]);
 
   return (
-    <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-          <Clock size={12} /> Recent Runs
-        </h3>
-        <button onClick={load} className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1 transition-colors">
-          <RefreshCw size={11} /> Refresh
+    <div className="bg-white rounded-3xl px-6 py-4 shadow-sm border border-slate-200">
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider
+                     hover:text-slate-600 transition-colors rounded
+                     focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400"
+        >
+          <Clock size={12} />
+          Recent Runs
+          <ChevronRight
+            size={13}
+            className={`transition-transform ${open ? 'rotate-90' : ''}`}
+          />
+          {!open && runs.length > 0 && (
+            <span className="text-slate-300 font-normal normal-case">{runs.length}</span>
+          )}
         </button>
+        {open && (
+          <button onClick={load} className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1 transition-colors">
+            <RefreshCw size={11} /> Refresh
+          </button>
+        )}
       </div>
 
-      {loading ? (
+      {!open ? null : loading ? (
         <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-slate-300" /></div>
       ) : runs.length === 0 ? (
         <p className="text-center text-sm text-slate-400 py-8">No runs yet — start your first test above.</p>

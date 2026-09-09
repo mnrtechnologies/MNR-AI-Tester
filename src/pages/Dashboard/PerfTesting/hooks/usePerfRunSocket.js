@@ -14,6 +14,20 @@ import { wsUrl } from '../api';
 const MAX_LOGS = 500;
 const MAX_SAMPLES_PER_PHASE = 400; // 400 * 3s tick ~= 20min of visible history
 const MAX_DISCOVERED_ENDPOINTS = 200; // generous — real runs have seen single digits to a few dozen
+// Every frame the socket delivers is kept, so the whole run stays browsable
+// in the strip rather than only the newest handful. The backend's own Redis
+// ring is capped at 12 (redis_store.push_screenshot) purely to bound what a
+// RECONNECT replays — frames are pushed once each, so accumulating them here
+// is what makes the earlier ones reachable at all.
+//
+// The cost is real and this is where it lands: a frame is ~150KB of base64,
+// so a long crawl holds tens of MB in the tab. 150 covers a full 60-step
+// crawl (two frames per step) plus the journey passes, and is the point at
+// which browsing history stops being worth more memory.
+const MAX_SCREENSHOTS = 150;
+// One row per (session x hop). A 20-feature journey at 200 sessions is 4000
+// rows, and the panel only ever renders aggregates, so keep the tail.
+const MAX_JOURNEY_TRANSITIONS = 4000;
 
 // The backend pushes a `status` message every 1.5s UNCONDITIONALLY, for the
 // entire lifetime of a run — over a 20min load phase that's 800+ messages,
@@ -53,6 +67,9 @@ export default function usePerfRunSocket(runId) {
   // { [phase]: [{t, vus, rps, p95_ms, error_rate_pct}, ...] }
   const [metricsByPhase, setMetricsByPhase] = useState({});
   const [discoveredEndpoints, setDiscoveredEndpoints] = useState([]);
+  // Feature-journey runs only (test_intent = 'feature_journey').
+  const [screenshots, setScreenshots] = useState([]);
+  const [journeyTransitions, setJourneyTransitions] = useState([]);
   const [connectionError, setConnectionError] = useState(null);
   const [done, setDone] = useState(false);
   const wsRef = useRef(null);
@@ -63,6 +80,8 @@ export default function usePerfRunSocket(runId) {
     setStatus(null);
     setMetricsByPhase({});
     setDiscoveredEndpoints([]);
+    setScreenshots([]);
+    setJourneyTransitions([]);
     setConnectionError(null);
     setDone(false);
     lastStatusRef.current = null;
@@ -149,6 +168,18 @@ export default function usePerfRunSocket(runId) {
         }));
       } else if (msg.type === 'endpoints') {
         setDiscoveredEndpoints((prev) => [...prev, ...msg.endpoints].slice(-MAX_DISCOVERED_ENDPOINTS));
+      } else if (msg.type === 'screenshots') {
+        // Frames carry a monotonic seq because the backend's store is a
+        // trimmed ring, not an append-only list — deduping on it means a
+        // reconnect that replays overlapping frames cannot double them up.
+        setScreenshots((prev) => {
+          const seen = new Set(prev.map((s) => s.seq));
+          const added = msg.screenshots.filter((s) => !seen.has(s.seq));
+          return added.length ? [...prev, ...added].slice(-MAX_SCREENSHOTS) : prev;
+        });
+      } else if (msg.type === 'journey') {
+        setJourneyTransitions((prev) =>
+          [...prev, ...msg.transitions].slice(-MAX_JOURNEY_TRANSITIONS));
       } else if (msg.type === 'error') {
         setConnectionError(msg.message);
       } else if (msg.type === 'done') {
@@ -181,5 +212,5 @@ export default function usePerfRunSocket(runId) {
     };
   }, [runId, reset]);
 
-  return { logs, status, metricsByPhase, discoveredEndpoints, connectionError, done, reset };
+  return { logs, status, metricsByPhase, discoveredEndpoints, screenshots, journeyTransitions, connectionError, done, reset };
 }

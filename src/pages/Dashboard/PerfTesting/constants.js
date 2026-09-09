@@ -82,6 +82,22 @@ export const TEST_INTENT_OPTIONS = [
     promptPlaceholder: 'e.g. 100 new users register at the same time by submitting the signup form. Ramp over 60s.',
   },
   {
+    id: 'feature_journey',
+    icon: 'compass',
+    label: 'Every feature, timed',
+    description: 'Explores the site itself, then times how long each feature takes to reach — idle and under load.',
+    // No loginPool here: this intent signs in once with the target login
+    // above and reuses that session. A pool of many identities belongs to the
+    // 'login itself' intent, where the login endpoint IS the thing under test.
+    sections: ['targetLogin'],
+    // The only intent that does not need a prompt: the engine discovers the
+    // features and the objective is fixed, so the backend synthesizes one
+    // (see app.py::_effective_prompt). The placeholder says so rather than
+    // inviting prose that would be ignored.
+    promptOptional: true,
+    promptPlaceholder: 'Optional — the engine explores the site and times every feature on its own.',
+  },
+  {
     id: 'mixed',
     icon: 'layers',
     label: 'Mixed / something else',
@@ -108,6 +124,52 @@ export const PHASE_EXPECTATIONS = {
   discovery: "Driving a real browser through the target to find its actual API calls — this is the slowest phase, often 5-20+ minutes depending on how many steps and pages are involved. Cancel works throughout.",
   auth: 'Logging into the target to capture a session — usually under 30 seconds.',
   scenario_generation: 'Turning the plan and discovered endpoints into a load-test scenario — usually under a minute.',
+};
+
+/**
+ * What each load phase actually did, and how to read its result.
+ *
+ * The results table used to be raw column headers — `error_rate_pct`, `p95_ms`,
+ * `rps_avg` — with nothing saying what a phase was for or whether its numbers
+ * were good. A stress phase producing errors is a SUCCESS (finding the ceiling
+ * is its job); a load phase producing the same errors is a serious problem.
+ * Without that context the same row means opposite things and the reader
+ * cannot tell which.
+ */
+export const LOAD_PHASE_INFO = {
+  smoke: {
+    // `question` leads each card: naming the question a phase answers is the
+    // fastest way to make its numbers mean something. "Smoke" and "spike" are
+    // industry words that tell an outsider nothing on their own.
+    question: 'Is the test itself valid?',
+    what: 'A deliberately tiny run — a handful of users for a few seconds — before anything else. It proves the engine found the right endpoints, the login works, and the app accepts the payloads being sent.',
+    reading: 'This should always be clean. Failures here mean the TEST was wrong, not that your app is slow — and everything after it would have been measuring nothing.',
+    errorsAreExpected: false,
+  },
+  load: {
+    question: 'Can it handle a normal day?',
+    what: 'Your expected everyday traffic — users ramped up gradually, then held steady at that level for the duration.',
+    reading: 'This is the phase to judge normal operation by. Whatever you see here is what real users experience on an ordinary day, so errors or slow responses matter most in this row.',
+    errorsAreExpected: false,
+  },
+  stress: {
+    question: 'Where does it break?',
+    what: 'Traffic deliberately pushed well past the expected level — typically several times the load phase — until the app starts to struggle.',
+    reading: 'Errors here are the POINT, not a failure. This phase exists to find your ceiling, so what matters is how far it got before degrading, not whether it degraded.',
+    errorsAreExpected: true,
+  },
+  spike: {
+    question: 'Can it survive a sudden rush?',
+    what: 'Traffic jumping straight to a high level with no ramp — the shape of a product launch, a marketing email going out, or a link going viral.',
+    reading: 'Gradual growth gives autoscaling and caches time to react; a spike does not. Recovering afterwards matters as much as surviving the moment itself.',
+    errorsAreExpected: true,
+  },
+  soak: {
+    question: 'Does it degrade over time?',
+    what: 'Ordinary load held for a long stretch — often hours rather than minutes.',
+    reading: 'Hunts for slow leaks (memory, database connections, caches) that only surface after sustained running. The signal is response times drifting upward while the load stays flat.',
+    errorsAreExpected: false,
+  },
 };
 
 export const LOG_COLOR_CLASS = {
