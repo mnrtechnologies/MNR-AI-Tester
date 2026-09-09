@@ -14,19 +14,12 @@ import CreatedCredentialsPanel from './CreatedCredentialsPanel';
 
 const INTENT_ICONS = { globe: Globe, login: LogIn, userPlus: UserPlus, layers: Layers, compass: Compass };
 
-// Real Chromium contexts, not HTTP virtual users — each costs hundreds of MB,
-// which is why the backend caps them far below MAX_VUS_PER_RUN. Ten is a
-// meaningful concurrency test on any ordinary host and a safe default to
-// suggest; limits.MAX_JOURNEY_CONCURRENT_SESSIONS is the real ceiling.
-const DEFAULT_JOURNEY_SESSIONS = 10;
-
 // One blank endpoint row. `body` is free text so a user can paste JSON
 // straight from their network tab; it is parsed and validated on submit
 // rather than fighting them character by character as they type.
 const emptyEndpoint = () => ({ method: 'GET', path: '', body: '', weight: 1 });
 
 const emptyForm = {
-  journey_concurrency: DEFAULT_JOURNEY_SESSIONS,
   virtual_users: '',
   target_url: '',
   prompt: '',
@@ -387,9 +380,6 @@ export default function RunForm({ disabled, onStarted }) {
         virtual_users: String(form.virtual_users).trim()
           ? Number(form.virtual_users)
           : undefined,
-        journey_concurrency: intent === 'feature_journey'
-          ? Number(form.journey_concurrency) || DEFAULT_JOURNEY_SESSIONS
-          : undefined,
         // Persona rows — mixed runs only. Each carries its own page and its
         // own actions, so discovery can visit them separately.
         mixed_flows: intent === 'mixed' && flowsPayload.length ? flowsPayload : undefined,
@@ -645,22 +635,6 @@ export default function RunForm({ disabled, onStarted }) {
             </div>
           )}
 
-          {activeIntent.promptOptional && !directMode && (
-            <div className="mt-3">
-              <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block mb-1.5">
-                Concurrent browser sessions
-                <span className="text-slate-400 normal-case font-normal"> — real browsers, not virtual users</span>
-              </label>
-              <input type="number" min={1} max={500} disabled={disabled}
-                value={form.journey_concurrency} onChange={set('journey_concurrency')}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-orange-500 outline-none transition-all disabled:opacity-50" />
-              <p className="text-[11px] text-slate-400 mt-1.5">
-                Each is a full Chromium context costing hundreds of MB, so this is capped
-                far below the virtual-user limit. Without a credential pool they all share
-                one login — fine for a first look, but not a true multi-user test.
-              </p>
-            </div>
-          )}
         </div>
 
         <div>

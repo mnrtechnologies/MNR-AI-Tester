@@ -23,7 +23,6 @@ import ResultsPanel from './components/ResultsPanel';
 import RecentRuns from './components/RecentRuns';
 import LiveExplorationPanel from './components/LiveExplorationPanel';
 import JourneyTimingPanel from './components/JourneyTimingPanel';
-import SessionHealthPanel from './components/SessionHealthPanel';
 
 // A performance run is charged on what it actually consumed once it
 // finishes (engine seconds plus a concurrency surcharge for the load it
@@ -423,13 +422,6 @@ export default function PerfTesting() {
                   transitions={journeyTransitions}
                   journeyMetrics={journeyMetrics}
                   loadVus={loadVus}
-                  browserSessions={
-                    (journeyMetrics?.under_load || journeyMetrics?.baseline)?.achieved_concurrency
-                  }
-                />
-
-                <SessionHealthPanel
-                  metrics={journeyMetrics?.under_load || journeyMetrics?.baseline}
                 />
 
                 {loadgenPhasesWithData.map((phase) => (

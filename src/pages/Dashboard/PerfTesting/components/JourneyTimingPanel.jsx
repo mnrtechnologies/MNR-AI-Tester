@@ -74,7 +74,7 @@ function fromServer(baseline, underLoad) {
   });
 }
 
-export default function JourneyTimingPanel({ transitions, journeyMetrics, loadVus, browserSessions }) {
+export default function JourneyTimingPanel({ transitions, journeyMetrics, loadVus }) {
   const rows = useMemo(() => {
     if (journeyMetrics?.baseline || journeyMetrics?.under_load) {
       return fromServer(journeyMetrics.baseline, journeyMetrics.under_load);
@@ -83,6 +83,10 @@ export default function JourneyTimingPanel({ transitions, journeyMetrics, loadVu
   }, [transitions, journeyMetrics]);
 
   if (!rows.length) return null;
+
+  // Every measured figure rests on a single observation, so the percentiles
+  // are really just that one number wearing a percentile's name.
+  const thinSamples = rows.every((r) => (r.idleN || 0) <= 1 && (r.loadedN || 0) <= 1);
 
   // Only rows that actually produced a measurement set the scale. Including
   // failed rows (whose percentile is 0) left the axis reading "0ms 0ms 1ms" on
@@ -127,9 +131,14 @@ export default function JourneyTimingPanel({ transitions, journeyMetrics, loadVu
 
       {/* The measurement conditions, stated once. A "2x slower" verdict means
           nothing without them: 2x under 20 users and 2x under 1000 are
-          completely different findings, and a single browser session cannot
-          produce a percentile worth the name. */}
-      {(loadVus || browserSessions) && (
+          completely different findings.
+
+          The thin-sample caveat is derived from the sample counts themselves
+          rather than from any setting. A percentile computed from a single
+          measurement is not a percentile, and saying so is the difference
+          between a number the reader can act on and one that merely looks
+          authoritative. */}
+      {(loadVus || thinSamples) && (
         <p className="text-[11px] text-slate-500 mb-1 flex flex-wrap gap-x-3 gap-y-0.5">
           {loadVus && (
             <span>
@@ -137,13 +146,9 @@ export default function JourneyTimingPanel({ transitions, journeyMetrics, loadVu
               users hitting the API during the loaded pass
             </span>
           )}
-          {browserSessions && (
-            <span>
-              measured from <b className="font-semibold text-slate-700">{browserSessions}</b> real
-              browser session{browserSessions === 1 ? '' : 's'}
-              {browserSessions === 1 && (
-                <span className="text-amber-600"> &mdash; one sample per figure, treat as indicative</span>
-              )}
+          {thinSamples && (
+            <span className="text-amber-600">
+              one sample per figure &mdash; treat as indicative
             </span>
           )}
         </p>
