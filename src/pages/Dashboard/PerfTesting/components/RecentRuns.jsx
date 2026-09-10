@@ -95,7 +95,7 @@ export default function RecentRuns({ onSelect, refreshKey }) {
                     )}
                     {breachCount > 0 && (
                       <span className="text-[11px] font-bold text-rose-600 bg-rose-50 border border-rose-200 rounded-md px-1.5 py-0.5">
-                        {breachCount} breach{breachCount === 1 ? '' : 'es'}
+                        {breachCount} target{breachCount === 1 ? '' : 's'} missed
                       </span>
                     )}
                     {isClean && <CheckCircle2 size={13} className="text-emerald-500" />}

@@ -179,10 +179,17 @@ export default function ResultsPanel({ run }) {
         </div>
       )}
 
-      {/* SLA verdict — only meaningful once at least one phase actually ran AND
-          the run didn't fail; sla_breaches is computed by llm_analysis, which a
-          failed run never reaches, so an empty breach list there doesn't mean
-          "thresholds were met," just that they were never checked. */}
+      {/* Verdict against the run's targets — only meaningful once at least one
+          phase actually ran AND the run didn't fail; sla_breaches is computed
+          by llm_analysis, which a failed run never reaches, so an empty list
+          there doesn't mean "targets were met," just that they were never
+          checked.
+
+          Worded as "targets missed" rather than "SLA breaches": the reader of
+          this page is often not the person who set the thresholds, and
+          "breach" reads as a compliance failure with consequences attached
+          when it means something much simpler — a number came out higher than
+          the one we were aiming for. */}
       {phaseRows.length > 0 && run.status !== 'failed' && (
         <div className={`flex items-start gap-3 rounded-2xl px-5 py-4 border ${
           breaches.length ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'
@@ -192,7 +199,9 @@ export default function ResultsPanel({ run }) {
             : <CheckCircle2 size={18} className="text-emerald-500 shrink-0 mt-0.5" />}
           <div className="flex-1">
             <p className={`text-xs font-bold uppercase tracking-wider mb-1 ${breaches.length ? 'text-rose-800' : 'text-emerald-800'}`}>
-              {breaches.length ? `${breaches.length} SLA breach${breaches.length === 1 ? '' : 'es'}` : 'All SLA thresholds met'}
+              {breaches.length
+                ? `${breaches.length} performance target${breaches.length === 1 ? '' : 's'} missed`
+                : 'Every performance target met'}
             </p>
             {breaches.length > 0 && (
               <ul className="text-sm text-rose-700 space-y-0.5">

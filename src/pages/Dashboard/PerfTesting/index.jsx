@@ -14,6 +14,8 @@ import StatusPill from './components/StatusPill';
 import ShimmerBar from './components/ShimmerBar';
 import ElapsedTimer from './components/ElapsedTimer';
 import PhasePipeline from './components/PhasePipeline';
+import RunNarrator from './components/RunNarrator';
+import EndpointPlanPanel from './components/EndpointPlanPanel';
 import LiveLogPanel from './components/LiveLogPanel';
 import LiveMetricsChart from './components/LiveMetricsChart';
 import DiscoveredEndpointsPanel from './components/DiscoveredEndpointsPanel';
@@ -238,6 +240,25 @@ export default function PerfTesting() {
   // charts have something to show, then hand the space over to them.
   // `explorationCollapsed` lets the user override either way; it is only
   // consulted when set, so the automatic behaviour holds until they touch it.
+  // A direct-endpoints run is identifiable from the scenario the backend
+  // built: planning/direct_plan.py names its single user class
+  // "DirectEndpoints". Detecting it from the artefact rather than from a
+  // request flag means a run reopened days later still renders correctly,
+  // with no extra field to persist.
+  const directMode =
+    (fullRun?.scenario?.user_classes || []).some((u) => u.name === 'DirectEndpoints');
+
+  // The newest sample of whichever loadgen phase is live — what the narrator
+  // reports as "right now". Falls back to the stored samples so a reopened
+  // run still shows its final state instead of dashes.
+  const latestSample = (() => {
+    if (!livePhase || !LOADGEN_PHASES.has(livePhase)) return null;
+    const series = metricsByPhase[livePhase]?.length
+      ? metricsByPhase[livePhase]
+      : historicalMetricsByPhase[livePhase] || [];
+    return series.length ? series[series.length - 1] : null;
+  })();
+
   const [explorationCollapsed, setExplorationCollapsed] = useState(null);
   const focusExploration = explorationCollapsed === null
     ? loadgenPhasesWithData.length === 0
@@ -350,7 +371,7 @@ export default function PerfTesting() {
                 </div>
                 <div className="flex items-center gap-3">
                   {fullRun?.plan && (
-                    <PhasePipeline plan={fullRun.plan} hasAuth={hasAuth} currentPhase={livePhase} runStatus={liveStatus} />
+                    <PhasePipeline plan={fullRun.plan} hasAuth={hasAuth} currentPhase={livePhase} runStatus={liveStatus} directMode={directMode} />
                   )}
                   {isActive && (
                     <button onClick={cancelRun} disabled={cancelling}
@@ -368,9 +389,6 @@ export default function PerfTesting() {
               </div>
 
               {isActive && <div className="mt-4"><ShimmerBar /></div>}
-              {isActive && PHASE_EXPECTATIONS[livePhase] && (
-                <p className="mt-2.5 text-xs text-slate-400 leading-relaxed">{PHASE_EXPECTATIONS[livePhase]}</p>
-              )}
               {connectionError && (
                 <p className="mt-3 text-xs text-rose-500 flex items-center gap-1.5"><RefreshCw size={11} /> {connectionError}</p>
               )}
@@ -385,11 +403,22 @@ export default function PerfTesting() {
                 RIGHT is what accumulates and gets read afterwards.
                 Below lg they collapse back to one column in the same order. */}
             {/* Full width while exploring — see focusExploration above. */}
-            {focusExploration && (
+            {focusExploration && !directMode && (
               <LiveExplorationPanel
                 screenshots={screenshots}
                 wide
                 onToggleSize={() => setExplorationCollapsed(true)}
+              />
+            )}
+
+            {isActive && (
+              <RunNarrator
+                phase={livePhase}
+                phaseLabel={status?.phase_label || fullRun?.phase_label}
+                status={liveStatus}
+                latestSample={latestSample}
+                targetVus={loadVus}
+                directMode={directMode}
               />
             )}
 
@@ -403,7 +432,9 @@ export default function PerfTesting() {
                   live frame pinned no matter how tall the rail gets. */}
               <div className={`space-y-4 ${focusExploration ? '' :
                 'lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:pr-1'}`}>
-                {!focusExploration && (
+                {directMode ? (
+                  <EndpointPlanPanel scenario={fullRun?.scenario} virtualUsers={loadVus} />
+                ) : !focusExploration && (
                   <LiveExplorationPanel
                     screenshots={screenshots}
                     onToggleSize={() => setExplorationCollapsed(false)}

@@ -3,6 +3,7 @@ import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts';
 import { Activity, CheckCircle2 } from 'lucide-react';
+import { LOAD_PHASE_INFO } from '../constants';
 
 const AXIS_STYLE = { fontSize: 11, fill: '#94a3b8' };
 
@@ -49,6 +50,20 @@ export default function LiveMetricsChart({ phase, samples, live = true }) {
         )}
       </div>
 
+      {/* The question this phase answers, and only that. The two charts below
+          are identical for every phase, so without it there is no way to tell a
+          smoke run from a stress run except by the word in the header.
+
+          The full explanation deliberately lives elsewhere: RunNarrator shows
+          it while the phase is live, and ResultsPanel's phase cards show it
+          once the run is done. Repeating it here put the same paragraph on
+          screen twice at once. */}
+      {LOAD_PHASE_INFO[phase]?.question && (
+        <p className="text-xs font-semibold text-slate-600 -mt-1 mb-3">
+          {LOAD_PHASE_INFO[phase].question}
+        </p>
+      )}
+
       {data.length === 0 ? (
         <div className="py-8 text-center">
           <Activity size={20} className="mx-auto text-slate-300 mb-2" />
@@ -57,7 +72,12 @@ export default function LiveMetricsChart({ phase, samples, live = true }) {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Throughput &amp; Virtual Users</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Throughput &amp; Virtual Users</p>
+            <p className="text-[10px] text-slate-400 mb-2 leading-snug">
+              Blue is how many users are active; orange is how many requests a second your
+              server handled. Orange should climb with blue &mdash; when it flattens while blue
+              keeps rising, the server has stopped keeping up.
+            </p>
             <ResponsiveContainer width="100%" height={200}>
               <LineChart data={data} margin={{ top: 5, right: 10, left: -15, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -73,7 +93,12 @@ export default function LiveMetricsChart({ phase, samples, live = true }) {
           </div>
 
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">p95 Latency &amp; Error Rate</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Response Time &amp; Errors</p>
+            <p className="text-[10px] text-slate-400 mb-2 leading-snug">
+              Purple is how long the slowest 1 in 20 requests took; red is the share that
+              failed outright. A purple line drifting upward is the system straining before
+              it breaks.
+            </p>
             <ResponsiveContainer width="100%" height={200}>
               <LineChart data={data} margin={{ top: 5, right: 10, left: -15, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
