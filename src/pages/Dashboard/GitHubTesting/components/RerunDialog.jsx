@@ -16,13 +16,41 @@ import EnvVarsEditor, { envVarsToObject } from './EnvVarsEditor';
  * re-run — kept in React state only, never written to localStorage, since a
  * provider key sitting in browser storage is a real leak surface.
  */
-export default function RerunDialog({ run, sessionKey, keyRejected, onKeyChange, onClose, onStarted }) {
+export default function RerunDialog({
+  run, analysisCount = 0, testCount = 0, sessionKey, keyRejected, onKeyChange, onClose, onStarted,
+}) {
   const [apiKey, setApiKey] = useState(sessionKey || '');
   const [envVars, setEnvVars] = useState([]);
   const [useOriginalCommit, setUseOriginalCommit] = useState(false);
+  const [fromStage, setFromStage] = useState('analyzing');
   const [starting, setStarting] = useState(false);
 
   const providerLabel = run.provider === 'anthropic' ? 'Claude' : 'OpenAI';
+  // Starting later reuses this run's output, which only matches the commit it
+  // was produced from -- so those modes always pin it (the backend enforces this too).
+  const partial = fromStage !== 'analyzing';
+  const shortSha = (run.commitSha || '').slice(0, 7);
+
+  const stageOptions = [
+    {
+      value: 'analyzing',
+      label: 'Full re-run',
+      hint: 'Analyse, generate and execute again. Work already done on the same commit is reused automatically.',
+      enabled: true,
+    },
+    {
+      value: 'generating',
+      label: 'Regenerate tests',
+      hint: `Keep the Business Logic (${analysisCount} files), write the tests again and run them.`,
+      enabled: analysisCount > 0,
+    },
+    {
+      value: 'executing',
+      label: 'Run tests only',
+      hint: `Keep the Business Logic and the ${testCount} generated tests; just execute them again. Use this after fixing a setup problem.`,
+      enabled: testCount > 0,
+    },
+  ];
 
   const start = async () => {
     if (!apiKey.trim()) {
@@ -51,7 +79,8 @@ export default function RerunDialog({ run, sessionKey, keyRejected, onKeyChange,
         body: JSON.stringify({
           apiKey: apiKey.trim(),
           envVars: envVarsToObject(envVars),
-          useOriginalCommit,
+          useOriginalCommit: partial || useOriginalCommit,
+          fromStage,
         }),
       });
       onKeyChange?.(apiKey.trim());
@@ -89,24 +118,65 @@ export default function RerunDialog({ run, sessionKey, keyRejected, onKeyChange,
             <p><span className="text-gray-400">Provider:</span> {providerLabel}</p>
           </div>
 
-          <label className="flex items-start gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={useOriginalCommit}
-              onChange={(e) => setUseOriginalCommit(e.target.checked)}
-              className="accent-orange-500 mt-0.5"
-            />
-            <span className="text-xs">
-              <span className="font-medium text-gray-700 flex items-center gap-1">
-                <GitCommit size={11} /> Pin to the original commit
+          <div>
+            <p className="text-xs font-medium text-gray-500 mb-1">Start from</p>
+            <div className="space-y-2">
+              {stageOptions.map((opt) => (
+                <label
+                  key={opt.value}
+                  className={`flex items-start gap-2 border rounded-lg p-2.5 ${
+                    !opt.enabled
+                      ? 'opacity-50 cursor-not-allowed'
+                      : fromStage === opt.value
+                        ? 'border-orange-400 bg-orange-50/40 cursor-pointer'
+                        : 'cursor-pointer hover:bg-gray-50'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="fromStage"
+                    value={opt.value}
+                    checked={fromStage === opt.value}
+                    disabled={!opt.enabled}
+                    onChange={() => setFromStage(opt.value)}
+                    className="accent-orange-500 mt-0.5"
+                  />
+                  <span className="text-xs">
+                    <span className="font-medium text-gray-700 block">{opt.label}</span>
+                    <span className="block text-gray-400 mt-0.5">
+                      {opt.enabled ? opt.hint : 'Not available: the previous run has nothing to reuse for this.'}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {partial ? (
+            <p className="text-xs text-gray-400 flex items-start gap-1">
+              <GitCommit size={11} className="mt-0.5 shrink-0" />
+              Uses the original commit ({shortSha}), because the reused work was produced from that version of the code.
+            </p>
+          ) : (
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={useOriginalCommit}
+                onChange={(e) => setUseOriginalCommit(e.target.checked)}
+                className="accent-orange-500 mt-0.5"
+              />
+              <span className="text-xs">
+                <span className="font-medium text-gray-700 flex items-center gap-1">
+                  <GitCommit size={11} /> Pin to the original commit
+                </span>
+                <span className="block text-gray-400 mt-0.5">
+                  {useOriginalCommit
+                    ? `Reproduces the original result exactly (${shortSha}).`
+                    : 'Off: runs against the latest commit on this branch — use this to check whether a fix worked.'}
+                </span>
               </span>
-              <span className="block text-gray-400 mt-0.5">
-                {useOriginalCommit
-                  ? `Reproduces the original result exactly (${(run.commitSha || '').slice(0, 7)}).`
-                  : 'Off: runs against the latest commit on this branch — use this to check whether a fix worked.'}
-              </span>
-            </span>
-          </label>
+            </label>
+          )}
 
           <div>
             <label className={`text-xs font-medium block mb-1 ${keyRejected ? 'text-amber-700' : 'text-gray-500'}`}>

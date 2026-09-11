@@ -408,6 +408,8 @@ export default function RunDetail({ runId, onOpenRun, sessionKey, onKeyChange })
       {showRerun && (
         <RerunDialog
           run={run}
+          analysisCount={analyses?.length || 0}
+          testCount={tests?.length || 0}
           // Don't prefill a key the provider just rejected -- offering the
           // known-bad value back invites hitting Re-run and failing again.
           sessionKey={authFailure ? '' : sessionKey}
